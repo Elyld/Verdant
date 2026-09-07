@@ -1,0 +1,26 @@
+services:
+  garden:
+    build: .
+    image: verdant-garden-log:latest
+    container_name: verdant-garden-log
+    restart: unless-stopped
+    ports:
+      - "3113:8000"
+    environment:
+      GARDEN_DATA_DIR: /data
+      GARDEN_UPLOAD_DIR: /uploads
+      GARDEN_DATABASE_URL: sqlite:////data/garden.db
+    volumes:
+      # SQLite database file + uploaded images persist on the host.
+      - ./data:/data
+      - ./uploads:/uploads
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4).status==200 else 1)
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3

@@ -1,0 +1,138 @@
+/* Verdant — component classes layered on top of Tailwind CDN utilities.
+   Palette: sage green (#688d61 family), navy blue (#233d5c family), beige (#f8f2e6 family). */
+
+.leaf-bg {
+  background-image:
+    radial-gradient(circle at 12% 8%, rgba(104, 141, 97, 0.14), transparent 42%),
+    radial-gradient(circle at 88% 0%, rgba(35, 61, 92, 0.12), transparent 38%);
+}
+
+.card {
+  background-color: #fdfbf6;
+  border: 1px solid #efe4cd;
+  border-radius: 1rem;
+  padding: 1.25rem;
+  box-shadow: 0 10px 30px -18px rgba(20, 35, 55, 0.45);
+}
+
+.lbl {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #233d5c;
+}
+
+.inp {
+  width: 100%;
+  border: 1px solid #e3d3b0;
+  border-radius: 0.6rem;
+  background-color: #ffffff;
+  padding: 0.55rem 0.75rem;
+  color: #142337;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.inp::placeholder { color: #9aa8b8; }
+.inp:focus {
+  outline: none;
+  border-color: #688d61;
+  box-shadow: 0 0 0 3px rgba(104, 141, 97, 0.22);
+}
+
+.btn-primary {
+  border-radius: 0.6rem;
+  background-color: #41593d;
+  padding: 0.6rem 1.1rem;
+  font-weight: 600;
+  color: #f8f2e6;
+  transition: background-color 0.15s, transform 0.05s;
+}
+.btn-primary:hover { background-color: #334631; }
+.btn-primary:active { transform: translateY(1px); }
+.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.btn-ghost {
+  border-radius: 0.6rem;
+  border: 1px solid #e3d3b0;
+  background: transparent;
+  padding: 0.6rem 1rem;
+  font-weight: 600;
+  color: #233d5c;
+}
+.btn-ghost:hover { background-color: #f8f2e6; }
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  background-color: #e2ebdf;
+  padding: 0.1rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #41593d;
+}
+
+.th {
+  padding: 0.6rem 0.9rem;
+  text-align: left;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.td { padding: 0.65rem 0.9rem; vertical-align: top; color: #1b3049; }
+
+.tab-btn { color: #c6d8c1; }
+.tab-btn:hover { color: #f8f2e6; }
+.tab-btn[aria-selected="true"] {
+  background-color: #f8f2e6;
+  color: #1b3049;
+  box-shadow: 0 4px 14px -6px rgba(0, 0, 0, 0.5);
+}
+
+.range-sage { accent-color: #688d61; }
+
+/* Minimal markdown typography for rendered post bodies */
+.md { color: #1b3049; line-height: 1.65; }
+.md h1, .md h2, .md h3 {
+  font-family: Georgia, Cambria, serif;
+  color: #142337;
+  font-weight: 600;
+  margin: 1rem 0 0.4rem;
+}
+.md h1 { font-size: 1.4rem; }
+.md h2 { font-size: 1.2rem; }
+.md h3 { font-size: 1.05rem; }
+.md p { margin: 0.55rem 0; }
+.md ul, .md ol { margin: 0.55rem 0 0.55rem 1.35rem; }
+.md ul { list-style: disc; }
+.md ol { list-style: decimal; }
+.md code {
+  background-color: #f8f2e6;
+  border: 1px solid #efe4cd;
+  border-radius: 0.3rem;
+  padding: 0.05rem 0.3rem;
+  font-size: 0.875em;
+}
+.md pre {
+  background-color: #142337;
+  color: #e2ebdf;
+  border-radius: 0.6rem;
+  padding: 0.85rem;
+  overflow-x: auto;
+  margin: 0.7rem 0;
+}
+.md pre code { background: none; border: 0; color: inherit; padding: 0; }
+.md blockquote {
+  border-left: 3px solid #a4c09d;
+  color: #41593d;
+  padding-left: 0.8rem;
+  margin: 0.7rem 0;
+  font-style: italic;
+}
+.md a { color: #2f4f75; text-decoration: underline; text-decoration-color: #a4c09d; }
+.md hr { border: 0; border-top: 1px solid #efe4cd; margin: 1rem 0; }
