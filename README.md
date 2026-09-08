@@ -148,18 +148,12 @@ Covers post/fertilization/observation CRUD, multi-image upload and static
 serving, cascade file cleanup, non-image and traversal-filename rejection,
 validation bounds, and the stats aggregate.
 
-## Versioning
-
-The version lives in one place: `app/version.py`. Bump it with every change
-(minor for features, patch for fixes). It feeds:
-
-- the `version` shown on the FastAPI app (visible at `/docs`)
-- `GET /api/health` → `{"status":"ok","version":"1.1.0"}`
-- the footer pill on every page (HTML `data-version` must match)
-- the docker image tag in `docker-compose.yml`
 
 Changelog:
 - **1.1.0** — Albums: create/upload/URL-import photo collections; "Pull from
   album" picker on new entries; `GARDEN_PUBLIC_URL`; version shown in UI + API.
 - **1.0.0** — Initial release: posts, fertilization + observation logs,
   multi-image uploads, stats, Docker.
+
+
+  **THIS IS 100% VIBE CODED** This is just my own personal project, I have no coding knowledge.
