@@ -1,7 +1,7 @@
 services:
   garden:
     build: .
-    image: verdant-garden-log:latest
+    image: verdant-garden-log:1.1.0
     container_name: verdant-garden-log
     restart: unless-stopped
     ports:
@@ -10,6 +10,9 @@ services:
       GARDEN_DATA_DIR: /data
       GARDEN_UPLOAD_DIR: /uploads
       GARDEN_DATABASE_URL: sqlite:////data/garden.db
+      # Base URL used to resolve relative URLs in "Import from URL".
+      # Set to your server's real address, e.g. https://photos.yourdomain.com
+      GARDEN_PUBLIC_URL: http://localhost:3113
     volumes:
       # SQLite database file + uploaded images persist on the host.
       - ./data:/data

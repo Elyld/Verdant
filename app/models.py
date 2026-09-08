@@ -87,3 +87,34 @@ class ObservationLog(SQLModel, table=True):
         cascade_delete=True,
         sa_relationship_kwargs={"order_by": "ObservationImage.id"},
     )
+
+
+# --------------------------------------------------------------------------- #
+# Albums (imported photo collections, e.g. "2026 Garden")
+# --------------------------------------------------------------------------- #
+class Album(SQLModel, table=True):
+    __tablename__ = "albums"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(index=True)
+    created_at: datetime = Field(default_factory=utcnow)
+
+    images: List["AlbumImage"] = Relationship(
+        back_populates="album",
+        cascade_delete=True,
+        sa_relationship_kwargs={"order_by": "AlbumImage.id"},
+    )
+
+
+class AlbumImage(SQLModel, table=True):
+    __tablename__ = "album_images"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    album_id: int = Field(foreign_key="albums.id", index=True, ondelete="CASCADE")
+    file_path: str
+    title: str = ""
+    original_name: str = ""
+    source_url: str = ""
+    imported_at: datetime = Field(default_factory=utcnow)
+
+    album: Optional["Album"] = Relationship(back_populates="images")

@@ -148,7 +148,7 @@
   }
 
   // ─────────────────────────── state ───────────────────────────
-  const state = { posts: [], ferts: [], obs: [], search: '', plantFilter: '' };
+  const state = { posts: [], ferts: [], obs: [], search: '', plantFilter: '', albums: [] };
 
   // ─────────────────────────── stats ───────────────────────────
   const STAT_CARDS = [
@@ -354,6 +354,73 @@
     return api.upload(endpoint, form);
   }
 
+  // ─────────────────────────── albums & URL import ───────────────────────────
+  async function loadAlbums() {
+    try {
+      state.albums = await api.get('/api/albums');
+      renderAlbumSelects();
+    } catch { /* albums are optional until used */ }
+  }
+
+  function renderAlbumSelects() {
+    const sel = $('#post-album-select');
+    if (!sel) return;
+    const current = sel.value;
+    sel.innerHTML = '<option value="">Choose an album…</option>' +
+      state.albums.map((a) => `<option value="${a.id}">${esc(a.name)} (${a.images.length})</option>`).join('');
+    if (current && state.albums.some((a) => a.id === Number(current))) sel.value = current;
+  }
+
+  function wireAlbumPicker() {
+    const loadBtn = $('#post-album-load');
+    const grid = $('#post-album-grid');
+    if (!loadBtn || !grid) return;
+    loadBtn.addEventListener('click', async () => {
+      const id = $('#post-album-select').value;
+      if (!id) { toast('Pick an album first', 'info'); return; }
+      loadBtn.disabled = true;
+      try {
+        const album = await api.get(`/api/albums/${id}`);
+        grid.classList.remove('hidden');
+        grid.innerHTML = (album.images || []).length
+          ? album.images.map((img) => `
+            <label class="relative cursor-pointer overflow-hidden rounded-lg ring-1 ring-beige-300 has-[:checked]:ring-sage-600 has-[:checked]:ring-2">
+              <input type="checkbox" class="absolute z-10 m-1 accent-sage-600" data-album-image="${img.id}" value="${esc(img.title)}" />
+              <img src="${esc(img.file_path)}" alt="${esc(img.title || 'album photo')}" loading="lazy" class="h-20 w-full object-cover" />
+            </label>`).join('')
+          : '<p class="col-span-3 text-sm text-navy-400">This album is empty — import from URL below.</p>';
+      } catch (e) {
+        toast(`Could not load album: ${e.message}`, 'err');
+      } finally {
+        loadBtn.disabled = false;
+      }
+    });
+  }
+
+  function wireUrlImport() {
+    const btn = $('#post-import-urls');
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      const raw = $('#post-import-url-input').value.trim();
+      const urls = raw.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
+      if (!urls.length) { toast('Paste at least one image URL', 'info'); return; }
+      btn.disabled = true;
+      try {
+        const res = await api.post('/api/import/urls', { urls });
+        const albumId = res.album.id;
+        await loadAlbums();
+        const sel = $('#post-album-select');
+        sel.value = String(albumId);
+        toast(`Imported ${res.created} photo${res.created === 1 ? '' : 's'} into "${res.album.name}"${res.failed ? ` (${res.failed} failed)` : ''}`, res.failed ? 'info' : 'ok');
+        $('#post-album-load').click();
+      } catch (e) {
+        toast(`Import failed: ${e.message}`, 'err');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
   // ─────────────────────────── wiring ───────────────────────────
   function wirePostForm() {
     const form = $('#post-form');
@@ -367,7 +434,11 @@
         </li>`).join('');
     };
     picker.addEventListener('change', renderPreview);
-    form.addEventListener('reset', () => setTimeout(() => { preview.innerHTML = ''; }, 0));
+    form.addEventListener('reset', () => setTimeout(() => {
+      preview.innerHTML = '';
+      const grid = $('#post-album-grid');
+      if (grid) { grid.innerHTML = ''; grid.classList.add('hidden'); }
+    }, 0));
 
     form.addEventListener('submit', async (ev) => {
       ev.preventDefault();
@@ -386,6 +457,20 @@
             toast(`Entry saved, but photos failed: ${e.message}`, 'err');
           }
         }
+
+        // copy any checked album photos into the new post
+        const albumGrid = $('#post-album-grid');
+        const checked = albumGrid ? $$('[data-album-image]:checked', albumGrid) : [];
+        if (checked.length) {
+          const albumId = $('#post-album-select').value;
+          const image_ids = checked.map((el) => Number(el.dataset.albumImage));
+          try {
+            await api.post(`/api/posts/${post.id}/from-album`, { album_id: Number(albumId), image_ids });
+          } catch (e) {
+            toast(`Entry saved, but album photos failed: ${e.message}`, 'err');
+          }
+        }
+
         form.reset();
         preview.innerHTML = '';
         toast('Entry published 🌿', 'ok');
@@ -563,9 +648,15 @@
     wireObsForm();
     wireFilters();
     wireDelegatedEvents();
+    wireAlbumPicker();
+    wireUrlImport();
     activateTab(localStorage.getItem('verdant.tab') || 'blog');
 
-    Promise.all([loadPosts(), loadFerts(), loadObs(), renderStats()]);
+    Promise.all([loadPosts(), loadFerts(), loadObs(), renderStats(), loadAlbums()]);
+
+    const v = document.documentElement.dataset.version;
+    const ve = $('#app-version');
+    if (v && ve) ve.textContent = `v${v}`;
   }
 
   document.addEventListener('DOMContentLoaded', boot);

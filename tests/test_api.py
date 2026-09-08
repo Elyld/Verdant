@@ -6,12 +6,15 @@ from __future__ import annotations
 
 import io
 import os
+import socket
 import struct
 import tempfile
+import threading
 import zlib
 from pathlib import Path
 
 import pytest
+import uvicorn
 
 TMP = Path(tempfile.mkdtemp(prefix="garden-test-"))
 os.environ["GARDEN_DATA_DIR"] = str(TMP / "data")
@@ -52,9 +55,34 @@ def client():
         yield c
 
 
+@pytest.fixture(scope="module")
+def live_server():
+    """Run the real app on a real TCP port so URL-import can fetch over HTTP."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()
+
+    config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    for _ in range(100):
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.2):
+                break
+        except OSError:
+            threading.Event().wait(0.05)
+    yield f"http://127.0.0.1:{port}"
+    server.should_exit = True
+    thread.join(timeout=5)
+
+
 # --------------------------------------------------------------------------- #
 def test_health(client):
-    assert client.get("/api/health").json() == {"status": "ok"}
+    body = client.get("/api/health").json()
+    assert body["status"] == "ok"
+    assert "version" in body
 
 
 def test_index_served(client):
@@ -214,3 +242,59 @@ def test_404s(client):
     assert client.get("/api/posts/999999").status_code == 404
     assert client.get("/api/observations/999999").status_code == 404
     assert client.get("/api/fertilizations/999999").status_code == 404
+
+
+def test_albums_and_url_import(client, live_server):
+    # create empty album
+    res = client.post("/api/albums", data={"name": "2026 Garden"})
+    assert res.status_code == 201, res.text
+    album = res.json()["album"]
+    assert album["images"] == []
+
+    # upload a file into it
+    up = client.post(
+        f"/api/albums/{album['id']}/import",
+        json={"urls": [f"{live_server}/uploads/posts/999/none.png"]},
+    )
+    # (that URL 404s, so created=0, failed=1 — good path coverage)
+    assert up.status_code == 201
+    assert up.json()["created"] == 0
+    assert up.json()["failed"] == 1
+
+    # url import with a real local file: serve one we uploaded to a post first
+    post = client.post("/api/posts", json={"title": "src"}).json()
+    up2 = client.post(
+        f"/api/posts/{post['id']}/images",
+        files=[("files", ("x.png", io.BytesIO(png_bytes()), "image/png"))],
+    )
+    src_url = up2.json()["images"][0]["file_path"]
+
+    res = client.post("/api/import/urls", json={"urls": [f"{live_server}{src_url}"]})
+    assert res.status_code == 201, res.text
+    body = res.json()
+    assert body["created"] == 1
+    new_album = body["album"]
+    img = new_album["images"][0]
+    assert img["file_path"].startswith("/uploads/albums/")
+
+    # pull it into a post
+    copied = client.post(
+        f"/api/posts/{post['id']}/from-album",
+        json={"album_id": new_album["id"], "image_ids": [img["id"]]},
+    )
+    assert copied.status_code == 201, copied.text
+    assert copied.json() == 1
+    after = client.get(f"/api/posts/{post['id']}").json()
+    assert len(after["images"]) == 2
+
+    # delete album cleans files
+    disk = Path(os.environ["GARDEN_UPLOAD_DIR"]) / img["file_path"].removeprefix("/uploads/")
+    assert disk.exists()
+    assert client.delete(f"/api/albums/{new_album['id']}").status_code == 204
+    assert not disk.exists()
+
+
+def test_health_reports_version(client):
+    body = client.get("/api/health").json()
+    assert body["status"] == "ok"
+    assert "version" in body

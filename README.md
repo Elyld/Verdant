@@ -1,4 +1,4 @@
-# 🌿 Verdant — Gardening Blog & Observation Log
+# 🌿 Verdant — Gardening Blog & Observation Log (v1.1.0)
 
 Self-hosted garden journal: markdown blog posts with photo galleries, fertilization
 records, and plant observation logs. FastAPI + SQLite + a single-page Tailwind
@@ -96,6 +96,13 @@ Deleting a post or observation cascades to its images and removes the files from
 | `DELETE` | `/api/observations/{id}/images/{img_id}` | Delete one image |
 | `GET`    | `/api/stats`                       | Counts, average health, last watered |
 | `GET`    | `/api/health`                      | Healthcheck |
+| `GET`    | `/api/albums`                      | List albums with images |
+| `POST`   | `/api/albums`                      | Create album (multipart `name`, optional `files`) |
+| `GET`    | `/api/albums/{id}`                 | Read album with images |
+| `DELETE` | `/api/albums/{id}`                 | Delete album + files |
+| `POST`   | `/api/albums/{id}/import`          | Import URLs into album (`{"urls":[...]}`) |
+| `POST`   | `/api/import/urls`                 | Import URLs into existing/new album |
+| `POST`   | `/api/posts/{id}/from-album`       | Copy album images into a post (`{"album_id":n,"image_ids":[...]}`) |
 
 Example:
 
@@ -128,6 +135,7 @@ curl -s -X POST localhost:8000/api/posts/$ID/images \
 | `GARDEN_UPLOAD_DIR`   | `./uploads` | Image storage root |
 | `GARDEN_DATABASE_URL` | `sqlite:///<data>/garden.db` | Full DB URL |
 | `GARDEN_PORT`         | `8000`      | Host port (compose only) |
+| `GARDEN_PUBLIC_URL`   | `http://localhost` | Base URL used to resolve relative URLs in "Import from URL" |
 
 ## Tests
 
@@ -139,3 +147,19 @@ pytest -q
 Covers post/fertilization/observation CRUD, multi-image upload and static
 serving, cascade file cleanup, non-image and traversal-filename rejection,
 validation bounds, and the stats aggregate.
+
+## Versioning
+
+The version lives in one place: `app/version.py`. Bump it with every change
+(minor for features, patch for fixes). It feeds:
+
+- the `version` shown on the FastAPI app (visible at `/docs`)
+- `GET /api/health` → `{"status":"ok","version":"1.1.0"}`
+- the footer pill on every page (HTML `data-version` must match)
+- the docker image tag in `docker-compose.yml`
+
+Changelog:
+- **1.1.0** — Albums: create/upload/URL-import photo collections; "Pull from
+  album" picker on new entries; `GARDEN_PUBLIC_URL`; version shown in UI + API.
+- **1.0.0** — Initial release: posts, fertilization + observation logs,
+  multi-image uploads, stats, Docker.

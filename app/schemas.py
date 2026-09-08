@@ -110,3 +110,48 @@ class Stats(BaseModel):
     images: int
     avg_health: Optional[float] = None
     last_watered: Optional[Date] = None
+
+
+# --------------------------------- Albums --------------------------------- #
+class AlbumImageRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    file_path: str
+    title: str
+    original_name: str
+    source_url: str
+    imported_at: datetime
+
+
+class AlbumImageRef(BaseModel):
+    """Reference to an already-imported album image (for copying into posts)."""
+
+    image_id: int
+    title: str = ""
+
+
+class AlbumRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    created_at: datetime
+    images: List[AlbumImageRead] = []
+
+
+class AlbumCreateResult(BaseModel):
+    album: AlbumRead
+    created: int
+    failed: int
+    errors: List[str] = []
+
+
+class AlbumImportFromAlbum(BaseModel):
+    album_id: int
+    image_ids: List[int]
+
+
+class ImportFromUrlRequest(BaseModel):
+    urls: List[str] = Field(min_length=1)
+    album_id: Optional[int] = None
