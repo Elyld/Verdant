@@ -1,7 +1,7 @@
 services:
   garden:
     build: .
-    image: verdant-garden-log:1.1.0
+    image: verdant-garden-log:1.2.0
     container_name: verdant-garden-log
     restart: unless-stopped
     ports:
@@ -13,6 +13,9 @@ services:
       # Base URL used to resolve relative URLs in "Import from URL".
       # Set to your server's real address, e.g. https://photos.yourdomain.com
       GARDEN_PUBLIC_URL: http://localhost:3113
+      # Optional: enables "Import from Immich" (Account Settings -> API Keys in Immich).
+      IMMICH_BASE_URL: ""
+      IMMICH_API_KEY: ""
     volumes:
       # SQLite database file + uploaded images persist on the host.
       - ./data:/data

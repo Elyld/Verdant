@@ -1,4 +1,4 @@
-# 🌿 Verdant — Gardening Blog & Observation Log (v1.1.0)
+# 🌿 Verdant — Gardening Blog & Observation Log (v1.2.0)
 
 Self-hosted garden journal: markdown blog posts with photo galleries, fertilization
 records, and plant observation logs. FastAPI + SQLite + a single-page Tailwind
@@ -103,6 +103,9 @@ Deleting a post or observation cascades to its images and removes the files from
 | `POST`   | `/api/albums/{id}/import`          | Import URLs into album (`{"urls":[...]}`) |
 | `POST`   | `/api/import/urls`                 | Import URLs into existing/new album |
 | `POST`   | `/api/posts/{id}/from-album`       | Copy album images into a post (`{"album_id":n,"image_ids":[...]}`) |
+| `GET`    | `/api/immich/status`               | Whether `IMMICH_BASE_URL`/`IMMICH_API_KEY` are set |
+| `GET`    | `/api/immich/albums`               | List albums from your Immich server |
+| `POST`   | `/api/immich/albums/{id}/import`   | Copy an Immich album's photos into a new local album |
 
 Example:
 
@@ -136,6 +139,8 @@ curl -s -X POST localhost:8000/api/posts/$ID/images \
 | `GARDEN_DATABASE_URL` | `sqlite:///<data>/garden.db` | Full DB URL |
 | `GARDEN_PORT`         | `8000`      | Host port (compose only) |
 | `GARDEN_PUBLIC_URL`   | `http://localhost` | Base URL used to resolve relative URLs in "Import from URL" |
+| `IMMICH_BASE_URL`     | (unset)     | Your Immich server URL, e.g. `http://192.168.0.50:2283` (enables Immich import) |
+| `IMMICH_API_KEY`      | (unset)     | Immich API key (Account Settings → API Keys) |
 
 ## Tests
 
@@ -150,6 +155,9 @@ validation bounds, and the stats aggregate.
 
 
 Changelog:
+- **1.2.0** — Immich integration: browse albums on your Immich server and
+  import their photos directly (no URL copy/paste needed); set
+  `IMMICH_BASE_URL` + `IMMICH_API_KEY` to enable.
 - **1.1.0** — Albums: create/upload/URL-import photo collections; "Pull from
   album" picker on new entries; `GARDEN_PUBLIC_URL`; version shown in UI + API.
 - **1.0.0** — Initial release: posts, fertilization + observation logs,

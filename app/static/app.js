@@ -421,6 +421,48 @@
     });
   }
 
+  async function initImmich() {
+    const section = $('#immich-section');
+    if (!section) return;
+    try {
+      const st = await api.get('/api/immich/status');
+      if (!st.configured) return;
+    } catch {
+      return;
+    }
+    section.classList.remove('hidden');
+    try {
+      const albums = await api.get('/api/immich/albums');
+      const sel = $('#immich-album-select');
+      sel.innerHTML = '<option value="">Choose an Immich album…</option>' +
+        albums.map((a) => `<option value="${esc(a.id)}">${esc(a.albumName)} (${a.assetCount})</option>`).join('');
+    } catch (e) {
+      toast(`Could not load Immich albums: ${e.message}`, 'err');
+    }
+  }
+
+  function wireImmichImport() {
+    const btn = $('#immich-import');
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      const id = $('#immich-album-select').value;
+      if (!id) { toast('Pick an Immich album first', 'info'); return; }
+      btn.disabled = true;
+      try {
+        const res = await api.post(`/api/immich/albums/${id}/import`, {});
+        await loadAlbums();
+        const sel = $('#post-album-select');
+        sel.value = String(res.album.id);
+        toast(`Imported ${res.created} photo${res.created === 1 ? '' : 's'} from Immich${res.failed ? ` (${res.failed} failed)` : ''}`, res.failed ? 'info' : 'ok');
+        $('#post-album-load').click();
+      } catch (e) {
+        toast(`Immich import failed: ${e.message}`, 'err');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
   // ─────────────────────────── wiring ───────────────────────────
   function wirePostForm() {
     const form = $('#post-form');
@@ -650,9 +692,10 @@
     wireDelegatedEvents();
     wireAlbumPicker();
     wireUrlImport();
+    wireImmichImport();
     activateTab(localStorage.getItem('verdant.tab') || 'blog');
 
-    Promise.all([loadPosts(), loadFerts(), loadObs(), renderStats(), loadAlbums()]);
+    Promise.all([loadPosts(), loadFerts(), loadObs(), renderStats(), loadAlbums(), initImmich()]);
 
     const v = document.documentElement.dataset.version;
     const ve = $('#app-version');
