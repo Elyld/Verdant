@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.database import UPLOAD_DIR, init_db
-from app.routers import albums, fertilizations, observations, posts, stats
+from app.routers import albums, fertilizations, immich, observations, posts, stats
 from app.version import __version__
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -42,6 +42,7 @@ app.include_router(fertilizations.router)
 app.include_router(observations.router)
 app.include_router(stats.router)
 app.include_router(albums.router)
+app.include_router(immich.router)
 
 
 @app.get("/api/health", tags=["meta"])
