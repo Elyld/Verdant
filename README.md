@@ -165,3 +165,30 @@ Changelog:
 
 
   **THIS IS 100% VIBE CODED** This is just my own personal project, I have no coding knowledge.
+
+## Troubleshooting
+
+### Immich integration issues
+
+**Album list returns 502 Bad Gateway**
+- The `GET /api/immich/albums` endpoint may fail with 502 if your Immich API key lacks sufficient permissions.
+- Ensure your Immich API key includes at minimum: `album.read`, `asset.read`, and `metadata.read` (from Account Settings → API Keys).
+- The `GET /api/immich/status` endpoint (`/api/immich/status`) must return `200 OK` for the Immich section to appear in the UI.
+
+**Immich section doesn't appear in UI**
+- Verify `IMMICH_BASE_URL` and `IMMICH_API_KEY` are set in `docker-compose.yml` environment section.
+- Use `host.docker.internal:8789` (not a bare IP like `192.168.0.57`) as the `IMMICH_BASE_URL` value when running inside a Docker bridge network. This routes from the Verdant container back to your host.
+- Restart the container after changing env vars: `docker-compose down && docker-compose up -d`.
+
+**Port mapping issues**
+- Ensure `ports: - 3119:8000` (or your chosen external port) in `docker-compose.yml` matches your dockge/ Docker setup.
+- `GARDEN_PUBLIC_URL` should match your external access URL, e.g. `http://192.168.0.114:3119` or `http://localhost:3119`.
+
+### General
+
+**Changes not taking effect**
+- After editing `docker-compose.yml`, always run `docker-compose down && docker-compose up -d` to pick up changes.
+- Browser cache may persist old UI state; use Ctrl+F5 (hard refresh) if the Immich section seems stuck.
+
+**API commands not working from host**
+- The Verdant container runs on an internal Docker network (`172.21.0.0/16`). Direct `curl http://localhost:8000/...` from your host won't work — use `curl http://127.0.0.1:3119/...` or access via `http://<host-ip>:3119` in a browser.
