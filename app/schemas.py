@@ -112,6 +112,16 @@ class Stats(BaseModel):
     last_watered: Optional[Date] = None
 
 
+class CalendarEntry(BaseModel):
+    id: int
+    date: Date
+    plant_name: str
+    health_scale: int
+    watering_status: bool
+    pest_sightings: str
+    notes: str
+
+
 # --------------------------------- Albums --------------------------------- #
 class AlbumImageRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
