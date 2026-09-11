@@ -52,6 +52,10 @@
                   class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">
             Garden Logs
           </button>
+          <button type="button" role="tab" data-tab="calendar"
+                  class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">
+            Calendar
+          </button>
         </nav>
       </div>
     </div>
@@ -155,7 +159,7 @@
     <!-- ══════════════════════════ LOGS TAB ══════════════════════════ -->
     <section id="panel-logs" data-panel="logs" class="hidden space-y-10">
 
-      <!-- Fertilization -->
+      <!-- Calendar -->\n      <div class=\"grid gap-2 lg:grid-cols-[minmax(0,4rem)_minmax(0,1fr)]\" id=\"calendar-grid\">\n        <!-- populated by app.js -->\n      </div>\n\n      <!-- Fertilization -->\n
       <div class="grid gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
         <form id="fert-form" class="card space-y-4 lg:self-start">
           <header class="border-b border-beige-300/70 pb-3">

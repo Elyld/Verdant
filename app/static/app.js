@@ -344,9 +344,105 @@
       panel.classList.toggle('hidden', panel.dataset.panel !== name);
     });
     localStorage.setItem('verdant.tab', name);
+
+    // Render calendar if switching to calendar tab
+    if (name === 'calendar') {
+      renderCalendar();
+    }
   }
 
-  // ─────────────────────────── uploads ───────────────────────────
+  // ─────────────────────────── calendar ───────────────────────────
+  function renderCalendar() {
+    const grid = $('#calendar-grid');
+    if (!state.observations || state.observations.length === 0) {
+      grid.innerHTML = `<div class="p-4 text-center text-navy-500">No observations yet</div>`;
+      return;
+    }
+
+    // Group observations by month-year
+    const months = new Map();
+    state.observations.forEach(obs => {
+      const date = new Date(obs.date);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      if (!months.has(key)) {
+        months.set(key, []);
+      }
+      months.get(key).push(obs);
+    });
+
+    // Show current month + previous 2 months
+    const today = new Date();
+    const monthsToShow = [];
+    for (let i = 2; i >= 0; i--) {
+      const d = new Date(today);
+      d.setMonth(today.getMonth() - i);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      monthsToShow.push(key);
+    }
+
+    let html = '';
+    for (const key of monthsToShow) {
+      const obs = months.get(key) || [];
+      const year = key.split('-')[0];
+      const month = parseInt(key.split('-')[1], 10);
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const monthName = monthNames[month - 1];
+
+      // Create a grid of days (1-31, pad empty as needed)
+      const firstDay = new Date(year, month - 1, 1).getDay();
+      const daysInMonth = new Date(year, month, 0).getDate();
+
+      // Header row
+      html += `<div class="text-center text-sage-600 text-sm mb-1">${monthName} ${year}</div>`;
+
+      // Day numbers row
+      html += `<div class="grid grid-cols-7 gap-1">`;
+      // Sun Mon Tue Wed Thu Fri Sat
+      for (let d = 0; d < 7; d++) {
+        html += `<span class="text-xxs font-medium text-sage-500">${d}</span>`;
+      }
+      html += `</div>`;
+
+      // Day cells
+      const cells = [];
+      // Empty leading cells
+      for (let d = 0; d < firstDay; d++) {
+        cells.push(`<div class="bg-beige-50 rounded px-1 py-0.5 text-center text-xxs text-sage-400"></div>`);
+      }
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dayObs = obs.filter(o => {
+          const oDate = new Date(o.date);
+          return oDate.getDate() === d;
+        });
+        const count = dayObs.length;
+        const hasHealth = dayObs.some(o => o.health_scale);
+        const avgHealth = dayObs.length > 0
+          ? Math.round(dayObs.reduce((sum, o) => sum + o.health_scale, 0) / count)
+          : null;
+        const healthClass = avgHealth !== null
+          ? `bg-sage-${Math.max(20, 80 - avgHealth * 14)}`
+          : 'bg-beige-100';
+
+        cells.push(`
+          <div class="bg-${healthClass.replace('bg-', '')} rounded px-1 py-0.5 text-center text-xxs hover:opacity-75 cursor-pointer"
+               title="Click for details"
+               onclick="window.location='/observations?plant=' + encodeURIComponent('') + '&date=' + ${d}">
+            <div class="text-[10px] font-bold">${d}</div>
+            ${count > 0 ? `<div class="text-[0.6em] ${avgHealth !== null ? 'font-medium' : ''}">${count}</div>` : ''}
+          </div>`
+      )
+      // Empty trailing cells
+      while (cells.length < 35) {
+        cells.push(`<div class="bg-beige-50 rounded px-1 py-0.5 text-center text-xxs text-sage-400"></div>`);
+      }
+
+      html += cells.join('');
+    }
+
+    grid.innerHTML = html;
+  }
+
+  // ─────────────────────────── logs tables ───────────────────────────
   async function uploadImages(endpoint, files) {
     if (!files || !files.length) return null;
     const form = new FormData();
