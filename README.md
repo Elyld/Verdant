@@ -1,4 +1,4 @@
-# 🌿 Verdant — Gardening Blog & Observation Log (v1.3.0)
+# 🌿 Verdant — Gardening Blog & Observation Log (v1.3.3)
 
 Self-hosted garden journal: markdown blog posts with photo galleries, fertilization
 records, and plant observation logs. FastAPI + SQLite + a single-page Tailwind
