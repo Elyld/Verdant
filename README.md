@@ -1,4 +1,4 @@
-# 🌿 Verdant — Gardening Blog & Observation Log (v1.2.0)
+# 🌿 Verdant — Gardening Blog & Observation Log (v1.3.0)
 
 Self-hosted garden journal: markdown blog posts with photo galleries, fertilization
 records, and plant observation logs. FastAPI + SQLite + a single-page Tailwind
@@ -155,13 +155,10 @@ validation bounds, and the stats aggregate.
 
 
 Changelog:
-- **1.2.0** — Immich integration: browse albums on your Immich server and
-  import their photos directly (no URL copy/paste needed); set
-  `IMMICH_BASE_URL` + `IMMICH_API_KEY` to enable.
-- **1.1.0** — Albums: create/upload/URL-import photo collections; "Pull from
-  album" picker on new entries; `GARDEN_PUBLIC_URL`; version shown in UI + API.
-- **1.0.0** — Initial release: posts, fertilization + observation logs,
-  multi-image uploads, stats, Docker.
+- **1.3.0** — Security hardening: IMMICH_BASE_URL and IMMICH_API_KEY moved to external env vars (not in docker-compose.yml); bump to v1.3.0
+- **1.2.0** — Immich integration: browse albums on your Immich server and import their photos directly (no URL copy/paste needed); set `IMMICH_BASE_URL` + `IMMICH_API_KEY` to enable.
+- **1.1.0** — Albums: create/upload/URL-import photo collections; "Pull from album" picker on new entries; `GARDEN_PUBLIC_URL`; version shown in UI + API.
+- **1.0.0** — Initial release: posts, fertilization + observation logs, multi-image uploads, Docker.
 
 
   **THIS IS 100% VIBE CODED** This is just my own personal project, I have no coding knowledge.
