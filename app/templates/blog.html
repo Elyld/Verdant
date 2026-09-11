@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full" data-version="{{ __version__ }}">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Verdant · Garden Journal</title>
+<meta name="description" content="Self-hosted gardening blog and observation log." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%B1%3C/text%3E%3C/svg%3E" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          sage: { 50: '#f2f6f1', 100: '#e2ebdf', 200: '#c6d8c1', 300: '#a4c09d', 400: '#82a87b', 500: '#688d61', 600: '#51704c', 700: '#41593d', 800: '#334631', 900: '#233022' },
+          navy: { 50: '#eef2f7', 100: '#d6e0ec', 200: '#adc0d7', 300: '#7d97b9', 400: '#4f6d94', 500: '#2f4f75', 600: '#233d5c', 700: '#1b3049', 800: '#142337', 900: '#0d1725' },
+          beige: { 50: '#fdfbf6', 100: '#f8f2e6', 200: '#efe4cd', 300: '#e3d3b0', 400: '#d3bd8d', 500: '#c0a469', 600: '#a4884f', 700: '#816b3e', 800: '#5d4d2d', 900: '#3a301c' }
+        },
+        fontFamily: {
+          display: ['Georgia', 'Cambria', 'Times New Roman', 'serif'],
+          body: ['ui-sans-serif', 'system-ui', 'Segoe UI', 'Helvetica', 'Arial', 'sans-serif']
+        },
+        boxShadow: { botanical: '0 10px 30px -12px rgba(20,35,55,0.35)' }
+      }
+    }
+  };
+</script>
+<link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body class="h-full font-body bg-beige-100 text-navy-800 antialiased">
+<div class="leaf-bg min-h-full">
+
+  <!-- Header -->
+  <header class="bg-navy-800 text-beige-100 shadow-botanical">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div class="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
+        <div class="flex items-center gap-3">
+          <span class="grid h-11 w-11 place-items-center rounded-xl bg-sage-400/20 text-2xl ring-1 ring-sage-300/40">🌿</span>
+          <div>
+            <h1 class="font-display text-2xl font-semibold tracking-tight text-beige-50">Verdant</h1>
+            <p class="text-xs uppercase tracking-[0.18em] text-sage-200">Garden Journal &amp; Observation Log</p>
+          </div>
+        </div>
+        <nav class="flex rounded-xl bg-navy-900/60 p-1 ring-1 ring-navy-600/60" role="tablist" aria-label="Sections">
+          <a href="/" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">Blog &amp; Stories</a>
+          <a href="/observations" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">Garden Logs</a>
+          <a href="/calendar" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">Calendar</a>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main content -->
+  <main class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <!-- Blog tab content -->
+    <section id="panel-blog" class="grid gap-8 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
+      <!-- Post creator -->
+      <div class="lg:sticky lg:top-6 lg:self-start">
+        <form id="post-form" class="card space-y-4">
+          <header class="border-b border-beige-300/70 pb-3">
+            <h2 class="font-display text-xl font-semibold text-navy-800">New Entry</h2>
+            <p class="text-sm text-navy-500">Markdown supported. Attach as many photos as you like.</p>
+          </header>
+          <div>
+            <label class="lbl" for="post-title">Title</label>
+            <input id="post-title" name="title" required maxlength="200" class="inp" placeholder="First tomatoes of the season" />
+          </div>
+          <div>
+            <label class="lbl" for="post-content">Story <span class="text-navy-400">(markdown)</span></label>
+            <textarea id="post-content" name="content" rows="8" class="inp font-mono text-[13px]" placeholder="## Week 12
+
+The **Brandywines** finally set fruit…"></textarea>
+          </div>
+          <div>
+            <label class="lbl" for="post-images">Photos</label>
+            <label for="post-images" class="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-sage-300 bg-sage-50/70 px-4 py-6 text-center transition hover:border-sage-500 hover:bg-sage-100">
+              <span class="text-2xl">📷</span>
+              <span class="text-sm font-semibold text-sage-700">Choose images</span>
+              <span class="text-xs text-navy-400">JPG · PNG · GIF · WEBP — max 8 MB each</span>
+            </label>
+            <input id="post-images" name="files" type="file" accept="image/*" multiple class="hidden" />
+            <ul id="post-images-preview" class="mt-3 grid grid-cols-3 gap-2"></ul>
+          </div>
+          <div class="mt-3 border-t border-beige-200 pt-3">
+            <span class="lbl">Import from URL</span>
+            <div class="flex flex-wrap gap-2">
+              <input id="post-import-url-input" class="inp w-full min-w-0 flex-1" placeholder="Paste image URL(s), one per line or comma-separated" />
+              <button type="button" id="post-import-urls" class="btn-ghost text-sm shrink-0">⬇ Import</button>
+            </div>
+            <p class="mt-1 text-xs text-navy-400">Downloads the image into a new album, then you can pull it into this entry.</p>
+          </div>
+          <div class="border-t border-beige-200 pt-4">
+            <span class="lbl">Pull from album</span>
+            <div class="flex flex-wrap items-center gap-2">
+              <select id="post-album-select" class="inp w-auto min-w-48">
+                <option value="">Choose an album…</option>
+              </select>
+              <button type="button" id="post-album-load" class="btn-ghost text-sm">Load photos</button>
+            </div>
+            <div id="post-album-grid" class="mt-3 hidden grid grid-cols-3 gap-2"></div>
+          </div>
+          <div id="immich-section" class="hidden border-t border-beige-200 pt-4">
+            <span class="lbl">Import from Immich</span>
+            <div class="flex flex-wrap items-center gap-2">
+              <select id="immich-album-select" class="inp w-auto min-w-48">
+                <option value="">Choose an Immich album…</option>
+              </select>
+              <button type="button" id="immich-import" class="btn-ghost text-sm">Import album</button>
+            </div>
+            <p class="mt-1 text-xs text-navy-400">Copies the album's photos in, then pick them above under "Pull from album".</p>
+          </div>
+          <div class="flex items-center gap-3 pt-1">
+            <button type="submit" class="btn-primary flex-1">Publish entry</button>
+            <button type="reset" class="btn-ghost">Clear</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Feed -->
+      <div class="space-y-5">
+        <div class="flex flex-wrap items-center gap-3">
+          <div class="relative flex-1 min-w-[12rem]">
+            <input id="post-search" type="search" class="inp pl-9" placeholder="Search entries…" />
+            <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-navy-400">⌕</span>
+          </div>
+          <span id="feed-count" class="text-sm text-navy-500"></span>
+        </div>
+        <div id="feed" class="space-y-6"></div>
+      </div>
+    </section>
+
+    <!-- Logs tab content -->
+    <section id="panel-logs" data-panel="logs" class="hidden space-y-10">
+
+      <!-- Fertilization -->
+      <div class="grid gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
+        <form id="fert-form" class="card space-y-4 lg:self-start">
+          <header class="border-b border-beige-300/70 pb-3">
+            <h2 class="font-display text-xl font-semibold text-navy-800">Log Fertilization</h2>
+            <p class="text-sm text-navy-500">What you fed, when, and how much.</p>
+          </header>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="col-span-2 sm:col-span-1">
+              <label class="lbl" for="fert-date">Date</label>
+              <input id="fert-date" name="date" type="date" required class="inp" />
+            </div>
+            <div class="col-span-2 sm:col-span-1">
+              <label class="lbl" for="fert-npk">N-P-K</label>
+              <input id="fert-npk" name="npk_ratio" class="inp" placeholder="10-10-10" maxlength="40" />
+            </div>
+          </div>
+          <div>
+            <label class="lbl" for="fert-name">Fertilizer</label>
+            <input id="fert-name" name="fertilizer_name" required maxlength="120" class="inp" placeholder="Fish emulsion" />
+          </div>
+          <div>
+            <label class="lbl" for="fert-amount">Amount used</label>
+            <input id="fert-amount" name="amount_used" class="inp" placeholder="2 tbsp / gal" maxlength="80" />
+          </div>
+          <div>
+            <label class="lbl" for="fert-notes">Notes</label>
+            <textarea id="fert-notes" name="notes" rows="3" class="inp" placeholder="Applied to raised bed 2 after rain."></textarea>
+          </div>
+          <button type="submit" class="btn-primary w-full">Add fertilization</button>
+        </form>
+
+        <div class="card overflow-hidden p-0">
+          <header class="flex items-center justify-between border-b border-beige-300/70 px-5 py-4">
+            <h3 class="font-display text-lg font-semibold text-navy-800">Fertilization History</h3>
+            <span id="fert-count" class="pill">0</span>
+          </header>
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-sm">
+              <thead class="bg-navy-800 text-beige-100">
+                <tr>
+                  <th class="th">Date</th><th class="th">Fertilizer</th><th class="th">N-P-K</th>
+                  <th class="th">Amount</th><th class="th">Notes</th><th class="th text-right">·</th>
+                </tr>
+              </thead>
+              <tbody id="fert-rows" class="divide-y divide-beige-200"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Observations -->
+      <div class="grid gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
+        <form id="obs-form" class="card space-y-4 lg:self-start">
+          <header class="border-b border-beige-300/70 pb-3">
+            <h2 class="font-display text-xl font-semibold text-navy-800">Log Observation</h2>
+            <p class="text-sm text-navy-500">Health, water, pests — with optional photos.</p>
+          </header>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="col-span-2 sm:col-span-1">
+              <label class="lbl" for="obs-date">Date</label>
+              <input id="obs-date" name="date" type="date" required class="inp" />
+            </div>
+            <div class="col-span-2 sm:col-span-1">
+              <label class="lbl" for="obs-water">Watered?</label>
+              <select id="obs-water" name="watering_status" class="inp">
+                <option value="true">Watered</option>
+                <option value="false" selected>Not watered</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label class="lbl" for="obs-plant">Plant</label>
+            <input id="obs-plant" name="plant_name" required maxlength="120" class="inp" placeholder="Brandywine tomato" />
+          </div>
+          <div>
+            <label class="lbl" for="obs-health">Health <span id="obs-health-out" class="pill ml-1">5</span> / 10</label>
+            <input id="obs-health" name="health_scale" type="range" min="1" max="10" value="5" class="range-sage w-full" />
+          </div>
+          <div>
+            <label class="lbl" for="obs-pests">Pest sightings</label>
+            <input id="obs-pests" name="pest_sightings" class="inp" placeholder="Aphids on new growth" />
+          </div>
+          <div>
+            <label class="lbl" for="obs-notes">Notes</label>
+            <textarea id="obs-notes" name="notes" rows="3" class="inp" placeholder="Leaf curl improving after shade cloth."></textarea>
+          </div>
+          <div>
+            <label class="lbl" for="obs-images">Photos</label>
+            <input id="obs-images" name="files" type="file" accept="image/*" multiple class="block w-full cursor-pointer rounded-lg border border-beige-300 bg-beige-50 text-sm text-navy-600 file:mr-3 file:cursor-pointer file:border-0 file:px-4 file:py-2 file:text-beige-50 hover:file:bg-sage-700" />
+          </div>
+          <button type="submit" class="btn-primary w-full">Add observation</button>
+        </form>
+
+        <div class="card overflow-hidden p-0">
+          <header class="flex flex-wrap items-center justify-between border-b border-beige-300/70 px-5 py-4">
+            <h3 class="font-display text-lg font-semibold text-navy-800">Observation History</h3>
+            <div class="flex items-center gap-3">
+              <input id="obs-filter" type="search" class="inp py-1.5 text-sm" placeholder="Filter by plant…" />
+              <span id="obs-count" class="pill">0</span>
+            </div>
+          </header>
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-sm">
+              <thead class="bg-sage-700 text-beige-50">
+                <tr>
+                  <th class="th">Date</th><th class="th">Plant</th><th class="th">Health</th>
+                  <th class="th">Water</th><th class="th">Pests</th><th class="th">Notes</th>
+                  <th class="th">Photos</th><th class="th text-right">·</th>
+                </tr>
+              </thead>
+              <tbody id="obs-rows" class="divide-y divide-beige-200"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-beige-300 bg-beige-50/70 py-6 text-center text-xs text-navy-400">
+    Verdant · self-hosted garden journal ·
+    <a class="underline decoration-sage-400 hover:text-navy-700" href="/docs">API docs</a>
+    <span id="app-version" class="pill" title="Verdant version"></span>
+  </footer>
+</div>
+
+<!-- Lightbox -->
+<div id="lightbox" class="fixed inset-0 z-50 hidden items-center justify-center bg-navy-900/90 p-4">
+  <img id="lightbox-img" alt="" class="max-h-full max-w-full rounded-xl shadow-botanical" />
+</div>
+
+<!-- Toasts -->
+<div id="toasts" class="pointer-events-none fixed bottom-4 right-4 z-50 flex w-80 flex-col gap-2"></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
