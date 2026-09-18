@@ -41,7 +41,7 @@
             <p class="text-xs uppercase tracking-[0.18em] text-sage-200">Garden Journal &amp; Observation Log</p>
           </div>
         </div>
-        <nav class="flex rounded-xl bg-navy-900/60 p-1 ring-1 ring-navy-600/60" role="tablist" aria-label="Sections">
+        <nav class="flex rounded-xl bg-navy-900/60 p-1 ring-1 ring-navy-600/60" aria-label="Primary navigation">
           <a href="/" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">Blog &amp; Stories</a>
           <a href="/observations" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">Garden Logs</a>
           <a href="/calendar" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">Calendar</a>
@@ -126,6 +126,7 @@ The **Brandywines** finally set fruit…"></textarea>
           <span id="feed-count" class="text-sm text-navy-500"></span>
         </div>
         <div id="feed" class="space-y-6"></div>
+        <button id="posts-load-more" type="button" class="btn-ghost hidden w-full">Load more entries</button>
       </div>
     </section>
 
@@ -265,7 +266,7 @@ The **Brandywines** finally set fruit…"></textarea>
 </div>
 
 <!-- Toasts -->
-<div id="toasts" class="pointer-events-none fixed bottom-4 right-4 z-50 flex w-80 flex-col gap-2"></div>
+<div id="toasts" role="status" aria-live="polite" class="pointer-events-none fixed bottom-4 right-4 z-50 flex w-80 flex-col gap-2"></div>
 
 <script src="/static/app.js"></script>
 </body>

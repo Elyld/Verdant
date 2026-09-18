@@ -1,10 +1,11 @@
 """Gardening Blog & Observation Log — FastAPI application entrypoint."""
 from __future__ import annotations
 
+from app.routers import locations, plants, fertilizers, seed_sources, harvests, watering_logs
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -47,7 +48,12 @@ app.include_router(observations.router)
 app.include_router(stats.router)
 app.include_router(albums.router)
 app.include_router(immich.router)
-
+app.include_router(locations.router)
+app.include_router(plants.router)
+app.include_router(fertilizers.router)
+app.include_router(seed_sources.router)
+app.include_router(harvests.router)
+app.include_router(watering_logs.router)
 
 @app.get("/api/health", tags=["meta"])
 def health() -> dict:
@@ -64,19 +70,20 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 # Per-route HTML pages — each renders its own standalone template.
 # No SPA JavaScript tab switching needed; plain links handle navigation.
 
+
 @app.get("/", include_in_schema=False)
-def blog_home() -> HTMLResponse:
+def blog_home(request: Request) -> HTMLResponse:
     """ Blog & stories homepage with post creation form. """
-    return templates.TemplateResponse("blog.html", {"request": {}, "__version__": __version__})
+    return templates.TemplateResponse(request, "blog.html", {"__version__": __version__})
 
 
 @app.get("/observations", include_in_schema=False)
-def observations_page() -> HTMLResponse:
+def observations_page(request: Request) -> HTMLResponse:
     """ Observation logging and history page. """
-    return templates.TemplateResponse("observations.html", {"request": {}, "__version__": __version__})
+    return templates.TemplateResponse(request, "observations.html", {"__version__": __version__})
 
 
 @app.get("/calendar", include_in_schema=False)
-def calendar_page() -> HTMLResponse:
+def calendar_page(request: Request) -> HTMLResponse:
     """ Calendar view page. """
-    return templates.TemplateResponse("calendar.html", {"request": {}, "__version__": __version__})
+    return templates.TemplateResponse(request, "calendar.html", {"__version__": __version__})

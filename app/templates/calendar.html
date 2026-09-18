@@ -41,7 +41,7 @@
             <p class="text-xs uppercase tracking-[0.18em] text-sage-200">Garden Journal &amp; Observation Log</p>
           </div>
         </div>
-        <nav class="flex rounded-xl bg-navy-900/60 p-1 ring-1 ring-navy-600/60" role="tablist" aria-label="Sections">
+        <nav class="flex rounded-xl bg-navy-900/60 p-1 ring-1 ring-navy-600/60" aria-label="Primary navigation">
           <a href="/" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">Blog &amp; Stories</a>
           <a href="/observations" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">Garden Logs</a>
           <a href="/calendar" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">Calendar</a>
@@ -52,13 +52,13 @@
 
   <!-- Main content -->
   <main class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-    <!-- Calendar tab content -->
-    <section id="panel-calendar" data-panel="calendar" class="hidden space-y-10">
-      <!-- Calendar -->
-      <div class="grid gap-2 lg:grid-cols-[minmax(0,4rem)_minmax(0,1fr)]" id="calendar-grid">
-        <!-- populated by app.js -->
-        <p class="text-sage-500 text-center">No observations yet — log some observations to populate the calendar.</p>
-      </div>
+    <section id="panel-calendar" class="space-y-6">
+      <header>
+        <h2 class="font-display text-2xl font-semibold text-navy-800">Garden Calendar</h2>
+        <p class="text-sm text-navy-500">Select a day to view its observations.</p>
+      </header>
+      <p id="calendar-empty" class="hidden card text-center text-navy-500">No observations yet — add one in Garden Logs to populate the calendar.</p>
+      <div id="calendar-grid" class="grid gap-6 xl:grid-cols-3"></div>
     </section>
   </main>
 
@@ -76,7 +76,7 @@
 </div>
 
 <!-- Toasts -->
-<div id="toasts" class="pointer-events-none fixed bottom-4 right-4 z-50 flex w-80 flex-col gap-2"></div>
+<div id="toasts" role="status" aria-live="polite" class="pointer-events-none fixed bottom-4 right-4 z-50 flex w-80 flex-col gap-2"></div>
 
 <script src="/static/app.js"></script>
 </body>

@@ -8,3 +8,4 @@ uploads/*
 !uploads/.gitkeep
 !data/.gitkeep
 .pytest_cache/
+.env

@@ -46,13 +46,18 @@ class Post(SQLModel, table=True):
 # --------------------------------------------------------------------------- #
 class FertilizationLog(SQLModel, table=True):
     __tablename__ = "fertilization_logs"
-
     id: Optional[int] = Field(default=None, primary_key=True)
     date: Date = Field(index=True)
-    fertilizer_name: str
-    npk_ratio: str = ""
-    amount_used: str = ""
-    notes: str = ""
+    fertilizer_name: str = Field(index=True)  # keep for backward compat
+    fertilizer_id: Optional[int] = Field(default=None, foreign_key="fertilizers.id", index=True)
+    npk_ratio: Optional[str] = None
+    amount_used: Optional[str] = None
+    plant_id: Optional[int] = Field(default=None, foreign_key="plants.id", index=True)
+    location_id: Optional[int] = Field(default=None, foreign_key="locations.id", index=True)
+    notes: Optional[str] = None
+    fertilizer: Optional[Fertilizer] = Relationship(back_populates="fertilization_logs")
+    plant: Optional[Plant] = Relationship(back_populates="fertilization_logs")
+
 
 
 # --------------------------------------------------------------------------- #
@@ -73,15 +78,15 @@ class ObservationImage(SQLModel, table=True):
 
 class ObservationLog(SQLModel, table=True):
     __tablename__ = "observation_logs"
-
     id: Optional[int] = Field(default=None, primary_key=True)
     date: Date = Field(index=True)
-    plant_name: str = Field(index=True)
+    plant_name: str = Field(index=True)  # keep for backward compat
+    plant_id: Optional[int] = Field(default=None, foreign_key="plants.id", index=True)
     health_scale: int = Field(default=5, ge=1, le=10)
-    watering_status: bool = False
-    pest_sightings: str = ""
-    notes: str = ""
-
+    watering_status: bool = Field(default=True)
+    pest_sightings: Optional[str] = None
+    notes: Optional[str] = None
+    plant: Optional[Plant] = Relationship(back_populates="observation_logs")
     images: List[ObservationImage] = Relationship(
         back_populates="observation",
         cascade_delete=True,
@@ -118,3 +123,73 @@ class AlbumImage(SQLModel, table=True):
     imported_at: datetime = Field(default_factory=utcnow)
 
     album: Optional["Album"] = Relationship(back_populates="images")
+
+class Location(SQLModel, table=True):
+    pot_size: Optional[str] = None
+    notes: Optional[str] = None
+    plants: List["Plant"] = Relationship(back_populates="location", cascade_delete=True)
+
+class Plant(SQLModel, table=True):
+    __tablename__ = "plants"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    plant_id: str = Field(unique=True, index=True)
+    variety_name: str = Field(index=True)
+    species_type: str
+    family_genus: Optional[str] = None
+    category: str = Field(default="Annual")
+    status: str = Field(default="Growing")
+    location_id: Optional[int] = Field(default=None, foreign_key="locations.id", index=True)
+    date_started_indoors: Optional[Date] = None
+    date_planted: Optional[Date] = None
+    days_to_maturity: Optional[int] = None
+    light: str = Field(default="Full Sun")
+    pot_size: Optional[str] = None
+    notes: Optional[str] = None
+    location: Optional[Location] = Relationship(back_populates="plants")
+    fertilization_logs: List["FertilizationLog"] = Relationship(back_populates="plant")
+    observation_logs: List["ObservationLog"] = Relationship(back_populates="plant")
+    harvests: List["Harvest"] = Relationship(back_populates="plant")
+
+class Fertilizer(SQLModel, table=True):
+    __tablename__ = "fertilizers"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    fertilizer_id: str = Field(unique=True, index=True)
+    name: str = Field(index=True)
+    npk_ratio: Optional[str] = None
+    best_for: Optional[str] = None
+    notes: Optional[str] = None
+    fertilization_logs: List["FertilizationLog"] = Relationship(back_populates="fertilizer")
+
+class SeedSource(SQLModel, table=True):
+    __tablename__ = "seed_sources"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    source_id: str = Field(unique=True, index=True)
+    source: str = Field(index=True)
+    variety: str
+    type: str = Field(default="Vendor Purchase")
+    acquired_date: Optional[Date] = None
+    linked_plant_id: Optional[int] = Field(default=None, foreign_key="plants.id", index=True)
+    notes: Optional[str] = None
+
+class Harvest(SQLModel, table=True):
+    __tablename__ = "harvests"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    harvest_id: str = Field(unique=True, index=True)
+    plant_id: int = Field(foreign_key="plants.id", index=True, ondelete="CASCADE")
+    date: Date = Field(index=True)
+    quantity: int
+    unit: str = Field(default="fruit")
+    weight: Optional[float] = None
+    notes: Optional[str] = None
+    plant: Optional[Plant] = Relationship(back_populates="harvests")
+
+class WateringLog(SQLModel, table=True):
+    __tablename__ = "watering_logs"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    watering_id: str = Field(unique=True, index=True)
+    location_id: int = Field(foreign_key="locations.id", index=True, ondelete="CASCADE")
+    date: Date = Field(index=True)
+    method: Optional[str] = None
+    amount: Optional[str] = None
+    notes: Optional[str] = None
+    location: Optional[Location] = Relationship()
