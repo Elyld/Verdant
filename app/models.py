@@ -47,7 +47,7 @@ class Post(SQLModel, table=True):
 class FertilizationLog(SQLModel, table=True):
     __tablename__ = "fertilization_logs"
     id: Optional[int] = Field(default=None, primary_key=True)
-    date: Date = Field(index=True)
+    date: str = Field(index=True, default="")
     fertilizer_name: str = Field(index=True)  # keep for backward compat
     fertilizer_id: Optional[int] = Field(default=None, foreign_key="fertilizers.id", index=True)
     npk_ratio: Optional[str] = None
@@ -55,8 +55,8 @@ class FertilizationLog(SQLModel, table=True):
     plant_id: Optional[int] = Field(default=None, foreign_key="plants.id", index=True)
     location_id: Optional[int] = Field(default=None, foreign_key="locations.id", index=True)
     notes: Optional[str] = None
-    fertilizer: Optional[Fertilizer] = Relationship(back_populates="fertilization_logs")
-    plant: Optional[Plant] = Relationship(back_populates="fertilization_logs")
+    fertilizer: Optional["Fertilizer"] = Relationship(back_populates="fertilization_logs")
+    plant: Optional["Plant"] = Relationship(back_populates="fertilization_logs")
 
 
 
@@ -79,14 +79,14 @@ class ObservationImage(SQLModel, table=True):
 class ObservationLog(SQLModel, table=True):
     __tablename__ = "observation_logs"
     id: Optional[int] = Field(default=None, primary_key=True)
-    date: Date = Field(index=True)
+    date: str = Field(index=True, default="")
     plant_name: str = Field(index=True)  # keep for backward compat
     plant_id: Optional[int] = Field(default=None, foreign_key="plants.id", index=True)
     health_scale: int = Field(default=5, ge=1, le=10)
     watering_status: bool = Field(default=True)
     pest_sightings: Optional[str] = None
     notes: Optional[str] = None
-    plant: Optional[Plant] = Relationship(back_populates="observation_logs")
+    plant: Optional["Plant"] = Relationship(back_populates="observation_logs")
     images: List[ObservationImage] = Relationship(
         back_populates="observation",
         cascade_delete=True,
@@ -125,6 +125,12 @@ class AlbumImage(SQLModel, table=True):
     album: Optional["Album"] = Relationship(back_populates="images")
 
 class Location(SQLModel, table=True):
+    __tablename__ = "locations"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    location_id: str = Field(unique=True, index=True)
+    name: str = Field(index=True)
+    type: str = Field(default="Container")
+    light: str = Field(default="Full Sun")
     pot_size: Optional[str] = None
     notes: Optional[str] = None
     plants: List["Plant"] = Relationship(back_populates="location", cascade_delete=True)
@@ -176,7 +182,7 @@ class Harvest(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     harvest_id: str = Field(unique=True, index=True)
     plant_id: int = Field(foreign_key="plants.id", index=True, ondelete="CASCADE")
-    date: Date = Field(index=True)
+    date: str = Field(index=True, default="")
     quantity: int
     unit: str = Field(default="fruit")
     weight: Optional[float] = None
@@ -188,7 +194,7 @@ class WateringLog(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     watering_id: str = Field(unique=True, index=True)
     location_id: int = Field(foreign_key="locations.id", index=True, ondelete="CASCADE")
-    date: Date = Field(index=True)
+    date: str = Field(index=True, default="")
     method: Optional[str] = None
     amount: Optional[str] = None
     notes: Optional[str] = None

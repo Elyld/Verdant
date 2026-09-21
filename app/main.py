@@ -1,7 +1,12 @@
 """Gardening Blog & Observation Log — FastAPI application entrypoint."""
 from __future__ import annotations
 
-from app.routers import locations, plants, fertilizers, seed_sources, harvests, watering_logs
+from app.routers.locations import router as locations_router
+from app.routers.plants import router as plants_router
+from app.routers.fertilizers import router as fertilizers_router
+from app.routers.seed_sources import router as seed_sources_router
+from app.routers.harvests import router as harvests_router
+from app.routers.watering_logs import router as watering_logs_router
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -48,12 +53,12 @@ app.include_router(observations.router)
 app.include_router(stats.router)
 app.include_router(albums.router)
 app.include_router(immich.router)
-app.include_router(locations.router)
-app.include_router(plants.router)
-app.include_router(fertilizers.router)
-app.include_router(seed_sources.router)
-app.include_router(harvests.router)
-app.include_router(watering_logs.router)
+app.include_router(locations_router)
+app.include_router(plants_router)
+app.include_router(fertilizers_router)
+app.include_router(seed_sources_router)
+app.include_router(harvests_router)
+app.include_router(watering_logs_router)
 
 @app.get("/api/health", tags=["meta"])
 def health() -> dict:
