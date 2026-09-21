@@ -4,6 +4,7 @@ __pycache__/
 data/*.db
 data/*.db-wal
 data/*.db-shm
+data/*.csv
 uploads/*
 !uploads/.gitkeep
 !data/.gitkeep
