@@ -85,10 +85,19 @@ def test_health(client):
     assert "version" in body
 
 
-def test_index_served(client):
-    res = client.get("/")
-    assert res.status_code == 200
-    assert "Verdant" in res.text
+def test_route_pages_expose_visible_primary_content(client):
+    routes = {
+        "/": ('id="panel-blog"', 'id="post-form"'),
+        "/observations": ('id="panel-logs"', 'id="obs-form"'),
+        "/calendar": ('id="panel-calendar"', 'id="calendar-grid"'),
+    }
+    for path, markers in routes.items():
+        res = client.get(path)
+        assert res.status_code == 200
+        assert "Verdant" in res.text
+        assert all(marker in res.text for marker in markers)
+        primary_tag = res.text.split(markers[0], 1)[1].split(">", 1)[0]
+        assert "hidden" not in primary_tag
 
 
 def test_post_crud_and_images(client):
@@ -211,6 +220,8 @@ def test_observation_crud_with_images_and_filter(client):
 
     assert any(o["id"] == obs["id"] for o in client.get("/api/observations?plant=brandywine").json())
     assert client.get("/api/observations?plant=nosuchplant").json() == []
+    assert any(o["id"] == obs["id"] for o in client.get("/api/observations?date_from=2026-05-03&date_to=2026-05-03").json())
+    assert client.get("/api/observations?date_from=2026-05-04").json() == []
 
     # health_scale bounds are enforced
     bad = client.post(

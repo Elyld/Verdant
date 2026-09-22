@@ -1,705 +1,348 @@
-/* Verdant — vanilla JS SPA for the Gardening Blog & Observation Log. */
+/* Verdant v2 — route-aware frontend for the garden journal. */
 (() => {
   'use strict';
 
-  // ─────────────────────────── helpers ───────────────────────────
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+  const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]
+  ));
+  const fmtDate = (iso) => iso
+    ? new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+    : '—';
+  const fmtDateTime = (iso) => iso
+    ? new Date(/[zZ]|[+-]\d\d:\d\d$/.test(iso) ? iso : `${iso}Z`).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+    : '—';
 
-  const esc = (s) =>
-    String(s ?? '').replace(/[&<>"']/g, (c) =>
-      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-
-  const fmtDate = (iso) => {
-    if (!iso) return '—';
-    const d = new Date(iso.length <= 10 ? `${iso}T00:00:00` : iso);
-    return Number.isNaN(d.getTime())
-      ? iso
-      : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  const api = {
+    async request(method, path, { json, form } = {}) {
+      const options = { method, headers: {} };
+      if (json !== undefined) {
+        options.headers['Content-Type'] = 'application/json';
+        options.body = JSON.stringify(json);
+      } else if (form) {
+        options.body = form;
+      }
+      const response = await fetch(path, options);
+      if (!response.ok) {
+        let detail = `${response.status} ${response.statusText}`;
+        try {
+          const body = await response.json();
+          detail = Array.isArray(body.detail)
+            ? body.detail.map((item) => item.msg || JSON.stringify(item)).join('; ')
+            : body.detail || detail;
+        } catch { /* non-JSON response */ }
+        throw new Error(detail);
+      }
+      return response.status === 204 ? null : response.json();
+    },
+    get(path) { return this.request('GET', path); },
+    post(path, json) { return this.request('POST', path, { json }); },
+    patch(path, json) { return this.request('PATCH', path, { json }); },
+    del(path) { return this.request('DELETE', path); },
+    upload(path, form) { return this.request('POST', path, { form }); },
   };
 
-  const fmtDateTime = (iso) => {
-    if (!iso) return '—';
-    const d = new Date(/[zZ]|[+-]\d\d:\d\d$/.test(iso) ? iso : `${iso}Z`);
-    return Number.isNaN(d.getTime())
-      ? iso
-      : d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-  };
-
-  const toast = (message, kind = 'info') => {
+  function toast(message, kind = 'info') {
+    const host = $('#toasts');
+    if (!host) return;
     const tones = {
       info: 'bg-navy-800 text-beige-50 ring-navy-600',
       ok: 'bg-sage-700 text-beige-50 ring-sage-500',
       err: 'bg-red-800 text-beige-50 ring-red-600',
     };
     const el = document.createElement('div');
-    el.className = `pointer-events-auto rounded-xl px-4 py-3 text-sm shadow-botanical ring-1 transition duration-300 ${tones[kind] || tones.info}`;
+    el.className = `pointer-events-auto rounded-xl px-4 py-3 text-sm shadow-botanical ring-1 ${tones[kind]}`;
     el.textContent = message;
-    $('#toasts').append(el);
-    setTimeout(() => {
-      el.style.opacity = '0';
-      el.style.transform = 'translateY(6px)';
-      setTimeout(() => el.remove(), 320);
-    }, 3600);
-  };
-
-  // ─────────────────────────── API client ───────────────────────────
-  const api = {
-    async request(method, path, { json, form } = {}) {
-      const opts = { method, headers: {} };
-      if (json !== undefined) {
-        opts.headers['Content-Type'] = 'application/json';
-        opts.body = JSON.stringify(json);
-      } else if (form) {
-        opts.body = form;
-      }
-      const res = await fetch(path, opts);
-      if (!res.ok) {
-        let detail = `${res.status} ${res.statusText}`;
-        try {
-          const body = await res.json();
-          if (body?.detail) {
-            detail = Array.isArray(body.detail)
-              ? body.detail.map((d) => d.msg || JSON.stringify(d)).join('; ')
-              : body.detail;
-          }
-        } catch { /* non-JSON error body */ }
-        throw new Error(detail);
-      }
-      return res.status === 204 ? null : res.json();
-    },
-    get: (p) => api.request('GET', p),
-    post: (p, json) => api.request('POST', p, { json }),
-    patch: (p, json) => api.request('PATCH', p, { json }),
-    del: (p) => api.request('DELETE', p),
-    upload: (p, form) => api.request('POST', p, { form }),
-  };
-
-  // ─────────────────────── tiny markdown renderer ───────────────────────
-  // Escapes first, then applies a safe subset: headings, lists, quotes,
-  // fenced/inline code, bold/italic, links, hr, paragraphs.
-  function markdown(src) {
-    const text = esc(src ?? '').replace(/\r\n/g, '\n');
-    const codeBlocks = [];
-    let out = text.replace(/```([\s\S]*?)```/g, (_, code) => {
-      codeBlocks.push(code.replace(/^\n/, ''));
-      return `\u0000CODE${codeBlocks.length - 1}\u0000`;
-    });
-
-    const inline = (s) =>
-      s
-        .replace(/`([^`]+)`/g, '<code>$1</code>')
-        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-        .replace(/(^|[\s(])\*([^*\n]+)\*/g, '$1<em>$2</em>')
-        .replace(/(^|[\s(])_([^_\n]+)_/g, '$1<em>$2</em>')
-        .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
-          '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
-
-    const lines = out.split('\n');
-    const html = [];
-    let list = null; // 'ul' | 'ol'
-    let para = [];
-
-    const flushPara = () => {
-      if (para.length) {
-        html.push(`<p>${inline(para.join(' '))}</p>`);
-        para = [];
-      }
-    };
-    const closeList = () => {
-      if (list) { html.push(`</${list}>`); list = null; }
-    };
-
-    for (const raw of lines) {
-      const line = raw.trimEnd();
-
-      if (!line.trim()) { flushPara(); closeList(); continue; }
-
-      let m;
-      if ((m = line.match(/^(#{1,3})\s+(.*)$/))) {
-        flushPara(); closeList();
-        html.push(`<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`);
-      } else if (/^(---|\*\*\*|___)$/.test(line.trim())) {
-        flushPara(); closeList();
-        html.push('<hr />');
-      } else if ((m = line.match(/^\s*[-*+]\s+(.*)$/))) {
-        flushPara();
-        if (list !== 'ul') { closeList(); html.push('<ul>'); list = 'ul'; }
-        html.push(`<li>${inline(m[1])}</li>`);
-      } else if ((m = line.match(/^\s*\d+[.)]\s+(.*)$/))) {
-        flushPara();
-        if (list !== 'ol') { closeList(); html.push('<ol>'); list = 'ol'; }
-        html.push(`<li>${inline(m[1])}</li>`);
-      } else if ((m = line.match(/^&gt;\s?(.*)$/))) {
-        flushPara(); closeList();
-        html.push(`<blockquote>${inline(m[1])}</blockquote>`);
-      } else if (/^\u0000CODE\d+\u0000$/.test(line.trim())) {
-        flushPara(); closeList();
-        html.push(line.trim());
-      } else {
-        para.push(line.trim());
-      }
-    }
-    flushPara(); closeList();
-
-    return html
-      .join('\n')
-      .replace(/\u0000CODE(\d+)\u0000/g, (_, i) => `<pre><code>${codeBlocks[Number(i)]}</code></pre>`);
+    host.append(el);
+    setTimeout(() => el.remove(), 3800);
   }
 
-  // ─────────────────────────── state ───────────────────────────
-  const state = { posts: [], ferts: [], obs: [], search: '', plantFilter: '', albums: [] };
-
-  // ─────────────────────────── stats ───────────────────────────
-  const STAT_CARDS = [
-    { key: 'posts', label: 'Entries', icon: '📖' },
-    { key: 'observations', label: 'Observations', icon: '🔍' },
-    { key: 'fertilizations', label: 'Feedings', icon: '🧪' },
-    { key: 'images', label: 'Photos', icon: '🖼️' },
-    { key: 'avg_health', label: 'Avg health', icon: '💚', suffix: ' / 10' },
-  ];
-
-  async function renderStats() {
-    let s;
-    try {
-      s = await api.get('/api/stats');
-    } catch {
-      return;
-    }
-    $('#stats').innerHTML = STAT_CARDS.map(({ key, label, icon, suffix }) => {
-      const raw = s[key];
-      const value = raw === null || raw === undefined ? '—' : `${raw}${suffix || ''}`;
-      return `
-        <div class="rounded-xl border border-beige-300 bg-beige-50 px-4 py-3 shadow-sm">
-          <dt class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-navy-500">
-            <span aria-hidden="true">${icon}</span>${esc(label)}
-          </dt>
-          <dd class="mt-1 font-display text-2xl font-semibold text-sage-700">${esc(value)}</dd>
-        </div>`;
-    }).join('');
+  function markdown(source) {
+    let output = esc(source || '');
+    output = output
+      .replace(/^### (.*)$/gm, '<h3>$1</h3>')
+      .replace(/^## (.*)$/gm, '<h2>$1</h2>')
+      .replace(/^# (.*)$/gm, '<h1>$1</h1>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    return output.split(/\n{2,}/).map((block) => /^<h[1-3]>/.test(block) ? block : `<p>${block.replace(/\n/g, '<br>')}</p>`).join('');
   }
 
-  // ─────────────────────────── blog feed ───────────────────────────
-  function postCard(post) {
-    const images = post.images || [];
-    const gallery = images.length
-      ? `<div class="grid gap-2 ${images.length === 1 ? 'grid-cols-1' : 'grid-cols-2 sm:grid-cols-3'}">
-           ${images.map((img) => `
-             <button type="button" class="group relative overflow-hidden rounded-lg ring-1 ring-beige-300"
-                     data-lightbox="${esc(img.file_path)}">
-               <img src="${esc(img.file_path)}" alt="Photo from ${esc(post.title)}" loading="lazy"
-                    class="h-40 w-full object-cover transition duration-300 group-hover:scale-105" />
-             </button>`).join('')}
-         </div>`
-      : '';
-
-    return `
-      <article class="card space-y-4" data-post="${post.id}">
-        <header class="flex flex-wrap items-start justify-between gap-3 border-b border-beige-200 pb-3">
-          <div>
-            <h3 class="font-display text-xl font-semibold text-navy-800">${esc(post.title)}</h3>
-            <p class="mt-1 text-xs text-navy-400">
-              ${fmtDateTime(post.created_at)}
-              ${post.updated_at && post.updated_at !== post.created_at ? ` · edited ${fmtDateTime(post.updated_at)}` : ''}
-              ${images.length ? ` · <span class="pill">${images.length} photo${images.length === 1 ? '' : 's'}</span>` : ''}
-            </p>
-          </div>
-          <div class="flex gap-2">
-            <label class="btn-ghost cursor-pointer text-sm" title="Add photos">
-              ＋📷<input type="file" accept="image/*" multiple class="hidden" data-add-images="${post.id}" />
-            </label>
-            <button type="button" class="btn-ghost text-sm" data-delete-post="${post.id}" title="Delete entry">🗑</button>
-          </div>
-        </header>
-        ${post.content?.trim() ? `<div class="md">${markdown(post.content)}</div>` : ''}
-        ${gallery}
-      </article>`;
+  function setVersion() {
+    const version = document.documentElement.dataset.version;
+    const target = $('#app-version');
+    if (version && target) target.textContent = `v${version}`;
   }
 
-  function renderFeed() {
-    const feed = $('#feed');
-    const items = state.posts;
-    $('#feed-count').textContent = items.length
-      ? `${items.length} entr${items.length === 1 ? 'y' : 'ies'}`
-      : '';
-
-    if (!items.length) {
-      feed.innerHTML = `
-        <div class="card border-dashed text-center text-navy-500">
-          <p class="text-4xl">🌱</p>
-          <p class="mt-2 font-display text-lg text-navy-700">No entries yet</p>
-          <p class="text-sm">${state.search ? 'No entries match your search.' : 'Write your first garden story on the left.'}</p>
-        </div>`;
-      return;
-    }
-    feed.innerHTML = items.map(postCard).join('');
-  }
-
-  async function loadPosts() {
-    const qs = state.search ? `?q=${encodeURIComponent(state.search)}` : '';
-    try {
-      state.posts = await api.get(`/api/posts${qs}`);
-      renderFeed();
-    } catch (e) {
-      toast(`Could not load entries: ${e.message}`, 'err');
-    }
-  }
-
-  // ─────────────────────────── logs tables ───────────────────────────
-  function renderFerts() {
-    $('#fert-count').textContent = state.ferts.length;
-    const body = $('#fert-rows');
-    if (!state.ferts.length) {
-      body.innerHTML = `<tr><td class="td py-8 text-center text-navy-400" colspan="6">No fertilization entries yet.</td></tr>`;
-      return;
-    }
-    body.innerHTML = state.ferts.map((f, i) => `
-      <tr class="${i % 2 ? 'bg-beige-50/60' : 'bg-white'} hover:bg-sage-50">
-        <td class="td whitespace-nowrap font-semibold text-navy-700">${fmtDate(f.date)}</td>
-        <td class="td">${esc(f.fertilizer_name)}</td>
-        <td class="td whitespace-nowrap">${f.npk_ratio ? `<span class="pill">${esc(f.npk_ratio)}</span>` : '—'}</td>
-        <td class="td whitespace-nowrap">${esc(f.amount_used) || '—'}</td>
-        <td class="td max-w-xs text-navy-600">${esc(f.notes) || '—'}</td>
-        <td class="td text-right">
-          <button type="button" class="text-navy-400 hover:text-red-700" data-delete-fert="${f.id}" title="Delete">🗑</button>
-        </td>
-      </tr>`).join('');
-  }
-
-  function healthBar(score) {
-    const pct = (score / 10) * 100;
-    const color = score >= 8 ? 'bg-sage-600' : score >= 5 ? 'bg-beige-500' : 'bg-red-600';
-    return `
-      <div class="flex items-center gap-2">
-        <div class="h-2 w-16 overflow-hidden rounded-full bg-beige-200">
-          <div class="h-full ${color}" style="width:${pct}%"></div>
-        </div>
-        <span class="text-xs font-bold text-navy-600">${score}</span>
-      </div>`;
-  }
-
-  function renderObs() {
-    $('#obs-count').textContent = state.obs.length;
-    const body = $('#obs-rows');
-    if (!state.obs.length) {
-      body.innerHTML = `<tr><td class="td py-8 text-center text-navy-400" colspan="8">No observations yet.</td></tr>`;
-      return;
-    }
-    body.innerHTML = state.obs.map((o, i) => {
-      const imgs = (o.images || []).map((img) => `
-        <button type="button" data-lightbox="${esc(img.file_path)}" class="inline-block">
-          <img src="${esc(img.file_path)}" alt="${esc(o.plant_name)}" loading="lazy"
-               class="h-10 w-10 rounded object-cover ring-1 ring-beige-300 hover:ring-sage-500" />
-        </button>`).join(' ');
-      return `
-        <tr class="${i % 2 ? 'bg-beige-50/60' : 'bg-white'} hover:bg-sage-50">
-          <td class="td whitespace-nowrap font-semibold text-navy-700">${fmtDate(o.date)}</td>
-          <td class="td font-medium">${esc(o.plant_name)}</td>
-          <td class="td">${healthBar(o.health_scale)}</td>
-          <td class="td whitespace-nowrap">${o.watering_status
-            ? '<span class="pill">💧 Watered</span>'
-            : '<span class="text-navy-400">—</span>'}</td>
-          <td class="td max-w-[10rem]">${o.pest_sightings
-            ? `<span class="text-red-800">🐛 ${esc(o.pest_sightings)}</span>`
-            : '<span class="text-navy-400">None</span>'}</td>
-          <td class="td max-w-xs text-navy-600">${esc(o.notes) || '—'}</td>
-          <td class="td">
-            <div class="flex flex-wrap gap-1">${imgs || '<span class="text-navy-400">—</span>'}</div>
-            <label class="mt-1 inline-block cursor-pointer text-xs text-sage-700 underline">
-              add<input type="file" accept="image/*" multiple class="hidden" data-add-obs-images="${o.id}" />
-            </label>
-          </td>
-          <td class="td text-right">
-            <button type="button" class="text-navy-400 hover:text-red-700" data-delete-obs="${o.id}" title="Delete">🗑</button>
-          </td>
-        </tr>`;
-    }).join('');
-  }
-
-  async function loadFerts() {
-    try {
-      state.ferts = await api.get('/api/fertilizations');
-      renderFerts();
-    } catch (e) {
-      toast(`Could not load fertilizations: ${e.message}`, 'err');
-    }
-  }
-
-  async function loadObs() {
-    const qs = state.plantFilter ? `?plant=${encodeURIComponent(state.plantFilter)}` : '';
-    try {
-      state.obs = await api.get(`/api/observations${qs}`);
-      renderObs();
-    } catch (e) {
-      toast(`Could not load observations: ${e.message}`, 'err');
-    }
-  }
-
-  // ─────────────────────────── tabs ───────────────────────────
-  function activateTab(name) {
-    $$('.tab-btn').forEach((btn) => {
-      btn.setAttribute('aria-selected', String(btn.dataset.tab === name));
-    });
-    $$('[data-panel]').forEach((panel) => {
-      panel.classList.toggle('hidden', panel.dataset.panel !== name);
-    });
-    localStorage.setItem('verdant.tab', name);
-  }
-
-  // ─────────────────────────── uploads ───────────────────────────
-  async function uploadImages(endpoint, files) {
-    if (!files || !files.length) return null;
-    const form = new FormData();
-    Array.from(files).forEach((f) => form.append('files', f, f.name));
-    return api.upload(endpoint, form);
-  }
-
-  // ─────────────────────────── albums & URL import ───────────────────────────
-  async function loadAlbums() {
-    try {
-      state.albums = await api.get('/api/albums');
-      renderAlbumSelects();
-    } catch { /* albums are optional until used */ }
-  }
-
-  function renderAlbumSelects() {
-    const sel = $('#post-album-select');
-    if (!sel) return;
-    const current = sel.value;
-    sel.innerHTML = '<option value="">Choose an album…</option>' +
-      state.albums.map((a) => `<option value="${a.id}">${esc(a.name)} (${a.images.length})</option>`).join('');
-    if (current && state.albums.some((a) => a.id === Number(current))) sel.value = current;
-  }
-
-  function wireAlbumPicker() {
-    const loadBtn = $('#post-album-load');
-    const grid = $('#post-album-grid');
-    if (!loadBtn || !grid) return;
-    loadBtn.addEventListener('click', async () => {
-      const id = $('#post-album-select').value;
-      if (!id) { toast('Pick an album first', 'info'); return; }
-      loadBtn.disabled = true;
-      try {
-        const album = await api.get(`/api/albums/${id}`);
-        grid.classList.remove('hidden');
-        grid.innerHTML = (album.images || []).length
-          ? album.images.map((img) => `
-            <label class="relative cursor-pointer overflow-hidden rounded-lg ring-1 ring-beige-300 has-[:checked]:ring-sage-600 has-[:checked]:ring-2">
-              <input type="checkbox" class="absolute z-10 m-1 accent-sage-600" data-album-image="${img.id}" value="${esc(img.title)}" />
-              <img src="${esc(img.file_path)}" alt="${esc(img.title || 'album photo')}" loading="lazy" class="h-20 w-full object-cover" />
-            </label>`).join('')
-          : '<p class="col-span-3 text-sm text-navy-400">This album is empty — import from URL below.</p>';
-      } catch (e) {
-        toast(`Could not load album: ${e.message}`, 'err');
-      } finally {
-        loadBtn.disabled = false;
-      }
+  function setActiveNavigation() {
+    const path = window.location.pathname;
+    $$('nav a').forEach((link) => {
+      const active = link.getAttribute('href') === path;
+      if (active) link.setAttribute('aria-current', 'page');
+      link.classList.toggle('bg-sage-600', active);
+      link.classList.toggle('text-white', active);
     });
   }
 
-  function wireUrlImport() {
-    const btn = $('#post-import-urls');
-    if (!btn) return;
-    btn.addEventListener('click', async () => {
-      const raw = $('#post-import-url-input').value.trim();
-      const urls = raw.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
-      if (!urls.length) { toast('Paste at least one image URL', 'info'); return; }
-      btn.disabled = true;
-      try {
-        const res = await api.post('/api/import/urls', { urls });
-        const albumId = res.album.id;
-        await loadAlbums();
-        const sel = $('#post-album-select');
-        sel.value = String(albumId);
-        toast(`Imported ${res.created} photo${res.created === 1 ? '' : 's'} into "${res.album.name}"${res.failed ? ` (${res.failed} failed)` : ''}`, res.failed ? 'info' : 'ok');
-        $('#post-album-load').click();
-      } catch (e) {
-        toast(`Import failed: ${e.message}`, 'err');
-      } finally {
-        btn.disabled = false;
-      }
-    });
-  }
-
-  async function initImmich() {
-    const section = $('#immich-section');
-    if (!section) return;
-    try {
-      const st = await api.get('/api/immich/status');
-      if (!st.configured) return;
-    } catch {
-      return;
-    }
-    section.classList.remove('hidden');
-    try {
-      const albums = await api.get('/api/immich/albums');
-      const sel = $('#immich-album-select');
-      sel.innerHTML = '<option value="">Choose an Immich album…</option>' +
-        albums.map((a) => `<option value="${esc(a.id)}">${esc(a.albumName)} (${a.assetCount})</option>`).join('');
-    } catch (e) {
-      toast(`Could not load Immich albums: ${e.message}`, 'err');
-    }
-  }
-
-  function wireImmichImport() {
-    const btn = $('#immich-import');
-    if (!btn) return;
-    btn.addEventListener('click', async () => {
-      const id = $('#immich-album-select').value;
-      if (!id) { toast('Pick an Immich album first', 'info'); return; }
-      btn.disabled = true;
-      try {
-        const res = await api.post(`/api/immich/albums/${id}/import`, {});
-        await loadAlbums();
-        const sel = $('#post-album-select');
-        sel.value = String(res.album.id);
-        toast(`Imported ${res.created} photo${res.created === 1 ? '' : 's'} from Immich${res.failed ? ` (${res.failed} failed)` : ''}`, res.failed ? 'info' : 'ok');
-        $('#post-album-load').click();
-      } catch (e) {
-        toast(`Immich import failed: ${e.message}`, 'err');
-      } finally {
-        btn.disabled = false;
-      }
-    });
-  }
-
-  // ─────────────────────────── wiring ───────────────────────────
-  function wirePostForm() {
-    const form = $('#post-form');
-    const picker = $('#post-images');
-    const preview = $('#post-images-preview');
-
-    const renderPreview = () => {
-      preview.innerHTML = Array.from(picker.files || []).map((f) => `
-        <li class="overflow-hidden rounded-lg ring-1 ring-beige-300">
-          <img src="${URL.createObjectURL(f)}" alt="${esc(f.name)}" class="h-20 w-full object-cover" />
-        </li>`).join('');
-    };
-    picker.addEventListener('change', renderPreview);
-    form.addEventListener('reset', () => setTimeout(() => {
-      preview.innerHTML = '';
-      const grid = $('#post-album-grid');
-      if (grid) { grid.innerHTML = ''; grid.classList.add('hidden'); }
-    }, 0));
-
-    form.addEventListener('submit', async (ev) => {
-      ev.preventDefault();
-      const btn = $('button[type="submit"]', form);
-      btn.disabled = true;
-      try {
-        const post = await api.post('/api/posts', {
-          title: $('#post-title').value.trim(),
-          content: $('#post-content').value,
-        });
-        const files = picker.files;
-        if (files?.length) {
-          try {
-            await uploadImages(`/api/posts/${post.id}/images`, files);
-          } catch (e) {
-            toast(`Entry saved, but photos failed: ${e.message}`, 'err');
-          }
-        }
-
-        // copy any checked album photos into the new post
-        const albumGrid = $('#post-album-grid');
-        const checked = albumGrid ? $$('[data-album-image]:checked', albumGrid) : [];
-        if (checked.length) {
-          const albumId = $('#post-album-select').value;
-          const image_ids = checked.map((el) => Number(el.dataset.albumImage));
-          try {
-            await api.post(`/api/posts/${post.id}/from-album`, { album_id: Number(albumId), image_ids });
-          } catch (e) {
-            toast(`Entry saved, but album photos failed: ${e.message}`, 'err');
-          }
-        }
-
-        form.reset();
-        preview.innerHTML = '';
-        toast('Entry published 🌿', 'ok');
-        await Promise.all([loadPosts(), renderStats()]);
-      } catch (e) {
-        toast(`Could not publish: ${e.message}`, 'err');
-      } finally {
-        btn.disabled = false;
-      }
-    });
-  }
-
-  function wireFertForm() {
-    const form = $('#fert-form');
-    form.addEventListener('submit', async (ev) => {
-      ev.preventDefault();
-      const btn = $('button[type="submit"]', form);
-      btn.disabled = true;
-      try {
-        await api.post('/api/fertilizations', {
-          date: $('#fert-date').value,
-          fertilizer_name: $('#fert-name').value.trim(),
-          npk_ratio: $('#fert-npk').value.trim(),
-          amount_used: $('#fert-amount').value.trim(),
-          notes: $('#fert-notes').value,
-        });
-        form.reset();
-        $('#fert-date').value = new Date().toISOString().slice(0, 10);
-        toast('Fertilization logged 🧪', 'ok');
-        await Promise.all([loadFerts(), renderStats()]);
-      } catch (e) {
-        toast(`Could not save: ${e.message}`, 'err');
-      } finally {
-        btn.disabled = false;
-      }
-    });
-  }
-
-  function wireObsForm() {
-    const form = $('#obs-form');
-    const range = $('#obs-health');
-    range.addEventListener('input', () => { $('#obs-health-out').textContent = range.value; });
-
-    form.addEventListener('submit', async (ev) => {
-      ev.preventDefault();
-      const btn = $('button[type="submit"]', form);
-      btn.disabled = true;
-      try {
-        const obs = await api.post('/api/observations', {
-          date: $('#obs-date').value,
-          plant_name: $('#obs-plant').value.trim(),
-          health_scale: Number(range.value),
-          watering_status: $('#obs-water').value === 'true',
-          pest_sightings: $('#obs-pests').value.trim(),
-          notes: $('#obs-notes').value,
-        });
-        const files = $('#obs-images').files;
-        if (files?.length) {
-          try {
-            await uploadImages(`/api/observations/${obs.id}/images`, files);
-          } catch (e) {
-            toast(`Observation saved, but photos failed: ${e.message}`, 'err');
-          }
-        }
-        form.reset();
-        $('#obs-date').value = new Date().toISOString().slice(0, 10);
-        $('#obs-health-out').textContent = $('#obs-health').value;
-        toast('Observation logged 🔍', 'ok');
-        await Promise.all([loadObs(), renderStats()]);
-      } catch (e) {
-        toast(`Could not save: ${e.message}`, 'err');
-      } finally {
-        btn.disabled = false;
-      }
-    });
-  }
-
-  function wireDelegatedEvents() {
-    document.addEventListener('click', async (ev) => {
-      const lightbox = ev.target.closest('[data-lightbox]');
-      if (lightbox) {
-        $('#lightbox-img').src = lightbox.dataset.lightbox;
+  function wireLightboxAndDeletes(reloaders) {
+    document.addEventListener('click', async (event) => {
+      const lightboxTarget = event.target.closest('[data-lightbox]');
+      if (lightboxTarget && $('#lightbox')) {
+        $('#lightbox-img').src = lightboxTarget.dataset.lightbox;
         $('#lightbox').classList.replace('hidden', 'flex');
         return;
       }
-
-      const delPost = ev.target.closest('[data-delete-post]');
-      if (delPost && confirm('Delete this entry and its photos?')) {
-        try {
-          await api.del(`/api/posts/${delPost.dataset.deletePost}`);
-          toast('Entry deleted', 'ok');
-          await Promise.all([loadPosts(), renderStats()]);
-        } catch (e) { toast(e.message, 'err'); }
-        return;
-      }
-
-      const delFert = ev.target.closest('[data-delete-fert]');
-      if (delFert && confirm('Delete this fertilization entry?')) {
-        try {
-          await api.del(`/api/fertilizations/${delFert.dataset.deleteFert}`);
-          toast('Entry deleted', 'ok');
-          await Promise.all([loadFerts(), renderStats()]);
-        } catch (e) { toast(e.message, 'err'); }
-        return;
-      }
-
-      const delObs = ev.target.closest('[data-delete-obs]');
-      if (delObs && confirm('Delete this observation and its photos?')) {
-        try {
-          await api.del(`/api/observations/${delObs.dataset.deleteObs}`);
-          toast('Observation deleted', 'ok');
-          await Promise.all([loadObs(), renderStats()]);
-        } catch (e) { toast(e.message, 'err'); }
+      const actions = [
+        ['[data-delete-post]', 'deletePost', '/api/posts/', 'Delete this entry and its photos?', reloaders.posts],
+        ['[data-delete-fert]', 'deleteFert', '/api/fertilizations/', 'Delete this fertilization entry?', reloaders.ferts],
+        ['[data-delete-obs]', 'deleteObs', '/api/observations/', 'Delete this observation and its photos?', reloaders.obs],
+      ];
+      for (const [selector, key, endpoint, question, reload] of actions) {
+        const button = event.target.closest(selector);
+        if (button && window.confirm(question)) {
+          try {
+            await api.del(`${endpoint}${button.dataset[key]}`);
+            toast('Entry deleted', 'ok');
+            await reload?.();
+          } catch (error) { toast(error.message, 'err'); }
+          return;
+        }
       }
     });
-
-    // Add-photos-to-existing-record pickers (rendered dynamically).
-    document.addEventListener('change', async (ev) => {
-      const postPicker = ev.target.closest('[data-add-images]');
-      if (postPicker) {
-        try {
-          await uploadImages(`/api/posts/${postPicker.dataset.addImages}/images`, postPicker.files);
-          toast('Photos added 📷', 'ok');
-          await Promise.all([loadPosts(), renderStats()]);
-        } catch (e) { toast(e.message, 'err'); }
-        return;
-      }
-      const obsPicker = ev.target.closest('[data-add-obs-images]');
-      if (obsPicker) {
-        try {
-          await uploadImages(`/api/observations/${obsPicker.dataset.addObsImages}/images`, obsPicker.files);
-          toast('Photos added 📷', 'ok');
-          await Promise.all([loadObs(), renderStats()]);
-        } catch (e) { toast(e.message, 'err'); }
-      }
-    });
-
-    $('#lightbox').addEventListener('click', () => {
-      $('#lightbox').classList.replace('flex', 'hidden');
-      $('#lightbox-img').src = '';
-    });
-    document.addEventListener('keydown', (ev) => {
-      if (ev.key === 'Escape') {
-        $('#lightbox').classList.replace('flex', 'hidden');
-      }
+    const lightbox = $('#lightbox');
+    if (lightbox) lightbox.addEventListener('click', () => lightbox.classList.replace('flex', 'hidden'));
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && lightbox) lightbox.classList.replace('flex', 'hidden');
     });
   }
 
-  function debounce(fn, ms = 280) {
-    let t;
-    return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+  async function uploadFiles(path, files) {
+    if (!files?.length) return;
+    const form = new FormData();
+    Array.from(files).forEach((file) => form.append('files', file, file.name));
+    await api.upload(path, form);
   }
 
-  function wireFilters() {
-    $('#post-search').addEventListener('input', debounce((ev) => {
-      state.search = ev.target.value.trim();
-      loadPosts();
-    }));
-    $('#obs-filter').addEventListener('input', debounce((ev) => {
-      state.plantFilter = ev.target.value.trim();
-      loadObs();
-    }));
-    $$('.tab-btn').forEach((btn) =>
-      btn.addEventListener('click', () => activateTab(btn.dataset.tab)));
+  function wireDraft(form, key, fields) {
+    const draft = JSON.parse(localStorage.getItem(key) || '{}');
+    fields.forEach((selector) => {
+      const input = $(selector);
+      if (!input) return;
+      if (draft[selector] !== undefined && input.type !== 'file') input.value = draft[selector];
+      input.addEventListener('input', () => {
+        const next = JSON.parse(localStorage.getItem(key) || '{}');
+        next[selector] = input.value;
+        localStorage.setItem(key, JSON.stringify(next));
+      });
+    });
+    form.addEventListener('reset', () => localStorage.removeItem(key));
   }
 
-  // ─────────────────────────── boot ───────────────────────────
-  function boot() {
+  async function renderStats() {
+    const host = $('#stats');
+    if (!host) return;
+    try {
+      const stats = await api.get('/api/stats');
+      const cards = [
+        ['posts', 'Entries', '📖'], ['observations', 'Observations', '🔍'],
+        ['fertilizations', 'Feedings', '🧪'], ['images', 'Photos', '🖼️'],
+        ['avg_health', 'Avg health', '💚'],
+      ];
+      host.innerHTML = cards.map(([key, label, icon]) => `<div class="rounded-xl border border-beige-300 bg-beige-50 px-4 py-3"><dt class="text-xs font-bold uppercase text-navy-500">${icon} ${label}</dt><dd class="mt-1 font-display text-2xl text-sage-700">${esc(stats[key] ?? '—')}</dd></div>`).join('');
+    } catch { /* stats are supplementary */ }
+  }
+
+  function postCard(post) {
+    const images = post.images || [];
+    return `<article class="card space-y-4" data-post="${post.id}">
+      <header class="flex justify-between gap-3 border-b border-beige-200 pb-3">
+        <div><h3 class="font-display text-xl font-semibold">${esc(post.title)}</h3><p class="text-xs text-navy-400">${fmtDateTime(post.created_at)}</p></div>
+        <div class="flex gap-2"><button type="button" class="btn-ghost text-sm" data-edit-post="${post.id}">Edit</button><button type="button" class="btn-ghost text-sm" data-delete-post="${post.id}" aria-label="Delete entry">🗑</button></div>
+      </header>
+      ${post.content?.trim() ? `<div class="md">${markdown(post.content)}</div>` : ''}
+      ${images.length ? `<div class="grid grid-cols-2 gap-2 sm:grid-cols-3">${images.map((image) => `<button type="button" data-lightbox="${esc(image.file_path)}"><img src="${esc(image.file_path)}" alt="Photo from ${esc(post.title)}" class="h-40 w-full rounded-lg object-cover"></button>`).join('')}</div>` : ''}
+    </article>`;
+  }
+
+  function initBlog() {
+    const form = $('#post-form');
+    if (!form) return {};
+    let posts = [];
+    let editingId = null;
+    let offset = 0;
+    const pageSize = 20;
+    const feed = $('#feed');
+    const loadMore = $('#posts-load-more');
+
+    async function loadPosts(reset = true) {
+      if (reset) offset = 0;
+      const query = $('#post-search')?.value.trim() || '';
+      const batch = await api.get(`/api/posts?limit=${pageSize}&offset=${offset}${query ? `&q=${encodeURIComponent(query)}` : ''}`);
+      posts = reset ? batch : posts.concat(batch);
+      feed.innerHTML = posts.length ? posts.map(postCard).join('') : '<div class="card text-center text-navy-500">No entries yet. Write your first garden story.</div>';
+      $('#feed-count').textContent = `${posts.length} ${posts.length === 1 ? 'entry' : 'entries'}`;
+      if (loadMore) loadMore.classList.toggle('hidden', batch.length < pageSize);
+    }
+
+    wireDraft(form, 'verdant.draft.blog', ['#post-title', '#post-content']);
+    $('#post-images')?.addEventListener('change', (event) => {
+      $('#post-images-preview').innerHTML = Array.from(event.target.files || []).map((file) => `<li class="text-xs text-navy-500">${esc(file.name)}</li>`).join('');
+    });
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const button = $('button[type="submit"]', form);
+      button.disabled = true;
+      try {
+        const payload = { title: $('#post-title').value.trim(), content: $('#post-content').value };
+        const post = editingId
+          ? await api.patch(`/api/posts/${editingId}`, payload)
+          : await api.post('/api/posts', payload);
+        if (!editingId) await uploadFiles(`/api/posts/${post.id}/images`, $('#post-images').files);
+        editingId = null;
+        form.reset();
+        localStorage.removeItem('verdant.draft.blog');
+        button.textContent = 'Publish entry';
+        toast('Entry saved 🌿', 'ok');
+        await Promise.all([loadPosts(), renderStats()]);
+      } catch (error) { toast(`Could not save: ${error.message}`, 'err'); }
+      finally { button.disabled = false; }
+    });
+    document.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-edit-post]');
+      if (!button) return;
+      const post = posts.find((item) => item.id === Number(button.dataset.editPost));
+      if (!post) return;
+      editingId = post.id;
+      $('#post-title').value = post.title;
+      $('#post-content').value = post.content || '';
+      $('button[type="submit"]', form).textContent = 'Save changes';
+      form.scrollIntoView({ behavior: 'smooth' });
+    });
+    let searchTimer;
+    $('#post-search')?.addEventListener('input', () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => loadPosts(), 250);
+    });
+    loadMore?.addEventListener('click', async () => { offset += pageSize; await loadPosts(false); });
+    loadPosts().catch((error) => toast(`Could not load entries: ${error.message}`, 'err'));
+    renderStats();
+    return { posts: loadPosts };
+  }
+
+  function healthBar(score) {
+    const color = score >= 8 ? 'bg-sage-600' : score >= 5 ? 'bg-beige-500' : 'bg-red-600';
+    return `<div class="flex items-center gap-2"><div class="h-2 w-16 rounded bg-beige-200"><div class="h-full ${color}" style="width:${score * 10}%"></div></div><b>${score}</b></div>`;
+  }
+
+  function initLogs() {
+    const fertForm = $('#fert-form');
+    const obsForm = $('#obs-form');
+    if (!fertForm || !obsForm) return {};
     const today = new Date().toISOString().slice(0, 10);
-    $('#fert-date').value = today;
-    $('#obs-date').value = today;
+    $('#fert-date').value ||= today;
+    $('#obs-date').value ||= new URLSearchParams(location.search).get('date') || today;
+    let ferts = [];
+    let observations = [];
+    let editingFert = null;
+    let editingObs = null;
 
-    wirePostForm();
-    wireFertForm();
-    wireObsForm();
-    wireFilters();
-    wireDelegatedEvents();
-    wireAlbumPicker();
-    wireUrlImport();
-    wireImmichImport();
-    activateTab(localStorage.getItem('verdant.tab') || 'blog');
+    async function loadFerts() {
+      ferts = await api.get('/api/fertilizations?limit=500');
+      $('#fert-count').textContent = ferts.length;
+      $('#fert-rows').innerHTML = ferts.length ? ferts.map((item) => `<tr><td class="td">${fmtDate(item.date)}</td><td class="td">${esc(item.fertilizer_name)}</td><td class="td">${esc(item.npk_ratio) || '—'}</td><td class="td">${esc(item.amount_used) || '—'}</td><td class="td">${esc(item.notes) || '—'}</td><td class="td text-right"><button class="text-sage-700" data-edit-fert="${item.id}">Edit</button> <button data-delete-fert="${item.id}" aria-label="Delete fertilization">🗑</button></td></tr>`).join('') : '<tr><td class="td text-center" colspan="6">No fertilization entries yet.</td></tr>';
+    }
+    async function loadObs() {
+      const plant = $('#obs-filter').value.trim();
+      const date = new URLSearchParams(location.search).get('date');
+      observations = await api.get(`/api/observations?limit=500${plant ? `&plant=${encodeURIComponent(plant)}` : ''}${date ? `&date_from=${date}&date_to=${date}` : ''}`);
+      $('#obs-count').textContent = observations.length;
+      $('#obs-rows').innerHTML = observations.length ? observations.map((item) => `<tr><td class="td">${fmtDate(item.date)}</td><td class="td">${esc(item.plant_name)}</td><td class="td">${healthBar(item.health_scale)}</td><td class="td">${item.watering_status ? '💧 Watered' : '—'}</td><td class="td">${esc(item.pest_sightings) || 'None'}</td><td class="td">${esc(item.notes) || '—'}</td><td class="td">${(item.images || []).map((image) => `<button data-lightbox="${esc(image.file_path)}"><img src="${esc(image.file_path)}" class="h-10 w-10 rounded object-cover" alt="${esc(item.plant_name)}"></button>`).join('') || '—'}</td><td class="td text-right"><button class="text-sage-700" data-edit-obs="${item.id}">Edit</button> <button data-delete-obs="${item.id}" aria-label="Delete observation">🗑</button></td></tr>`).join('') : '<tr><td class="td text-center" colspan="8">No observations yet.</td></tr>';
+    }
 
-    Promise.all([loadPosts(), loadFerts(), loadObs(), renderStats(), loadAlbums(), initImmich()]);
+    wireDraft(fertForm, 'verdant.draft.fert', ['#fert-date', '#fert-name', '#fert-npk', '#fert-amount', '#fert-notes']);
+    wireDraft(obsForm, 'verdant.draft.obs', ['#obs-date', '#obs-plant', '#obs-health', '#obs-water', '#obs-pests', '#obs-notes']);
+    $('#obs-health').addEventListener('input', () => { $('#obs-health-out').textContent = $('#obs-health').value; });
 
-    const v = document.documentElement.dataset.version;
-    const ve = $('#app-version');
-    if (v && ve) ve.textContent = `v${v}`;
+    fertForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      try {
+        const payload = { date: $('#fert-date').value, fertilizer_name: $('#fert-name').value.trim(), npk_ratio: $('#fert-npk').value.trim(), amount_used: $('#fert-amount').value.trim(), notes: $('#fert-notes').value };
+        editingFert ? await api.patch(`/api/fertilizations/${editingFert}`, payload) : await api.post('/api/fertilizations', payload);
+        editingFert = null; fertForm.reset(); localStorage.removeItem('verdant.draft.fert'); $('#fert-date').value = today;
+        $('button[type="submit"]', fertForm).textContent = 'Add fertilization';
+        toast('Fertilization saved 🧪', 'ok'); await Promise.all([loadFerts(), renderStats()]);
+      } catch (error) { toast(`Could not save: ${error.message}`, 'err'); }
+    });
+    obsForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      try {
+        const payload = { date: $('#obs-date').value, plant_name: $('#obs-plant').value.trim(), health_scale: Number($('#obs-health').value), watering_status: $('#obs-water').value === 'true', pest_sightings: $('#obs-pests').value.trim(), notes: $('#obs-notes').value };
+        const observation = editingObs ? await api.patch(`/api/observations/${editingObs}`, payload) : await api.post('/api/observations', payload);
+        if (!editingObs) await uploadFiles(`/api/observations/${observation.id}/images`, $('#obs-images').files);
+        editingObs = null; obsForm.reset(); localStorage.removeItem('verdant.draft.obs'); $('#obs-date').value = today; $('#obs-health-out').textContent = '5';
+        $('button[type="submit"]', obsForm).textContent = 'Add observation';
+        toast('Observation saved 🔍', 'ok'); await Promise.all([loadObs(), renderStats()]);
+      } catch (error) { toast(`Could not save: ${error.message}`, 'err'); }
+    });
+    document.addEventListener('click', (event) => {
+      const fertButton = event.target.closest('[data-edit-fert]');
+      const obsButton = event.target.closest('[data-edit-obs]');
+      if (fertButton) {
+        const item = ferts.find((entry) => entry.id === Number(fertButton.dataset.editFert));
+        editingFert = item.id; $('#fert-date').value = item.date; $('#fert-name').value = item.fertilizer_name; $('#fert-npk').value = item.npk_ratio; $('#fert-amount').value = item.amount_used; $('#fert-notes').value = item.notes;
+        $('button[type="submit"]', fertForm).textContent = 'Save changes'; fertForm.scrollIntoView({ behavior: 'smooth' });
+      }
+      if (obsButton) {
+        const item = observations.find((entry) => entry.id === Number(obsButton.dataset.editObs));
+        editingObs = item.id; $('#obs-date').value = item.date; $('#obs-plant').value = item.plant_name; $('#obs-health').value = item.health_scale; $('#obs-health-out').textContent = item.health_scale; $('#obs-water').value = String(item.watering_status); $('#obs-pests').value = item.pest_sightings; $('#obs-notes').value = item.notes;
+        $('button[type="submit"]', obsForm).textContent = 'Save changes'; obsForm.scrollIntoView({ behavior: 'smooth' });
+      }
+    });
+    let filterTimer;
+    $('#obs-filter').addEventListener('input', () => { clearTimeout(filterTimer); filterTimer = setTimeout(() => loadObs(), 250); });
+    Promise.all([loadFerts(), loadObs(), renderStats()]).catch((error) => toast(`Could not load garden logs: ${error.message}`, 'err'));
+    return { ferts: loadFerts, obs: loadObs };
+  }
+
+  function initCalendar() {
+    const grid = $('#calendar-grid');
+    if (!grid) return;
+    const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    api.get('/api/stats/calendar').then((observations) => {
+      const byDate = new Map();
+      observations.forEach((item) => {
+        const key = item.date.slice(0, 10);
+        if (!byDate.has(key)) byDate.set(key, []);
+        byDate.get(key).push(item);
+      });
+      const today = new Date();
+      const months = [];
+      for (let delta = -2; delta <= 0; delta += 1) months.push(new Date(today.getFullYear(), today.getMonth() + delta, 1));
+      grid.innerHTML = months.map((monthDate) => {
+        const year = monthDate.getFullYear();
+        const month = monthDate.getMonth();
+        const cells = Array(monthDate.getDay()).fill('<div class="calendar-day calendar-empty"></div>');
+        const days = new Date(year, month + 1, 0).getDate();
+        for (let day = 1; day <= days; day += 1) {
+          const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          const entries = byDate.get(iso) || [];
+          const average = entries.length ? Math.round(entries.reduce((sum, item) => sum + item.health_scale, 0) / entries.length) : null;
+          cells.push(`<a href="/observations?date=${iso}" class="calendar-day ${entries.length ? 'calendar-active' : ''}" title="${entries.length} observation${entries.length === 1 ? '' : 's'}${average ? `, average health ${average}` : ''}"><b>${day}</b>${entries.length ? `<span>${entries.length} log${entries.length === 1 ? '' : 's'}</span>` : ''}</a>`);
+        }
+        return `<section class="card"><h2 class="mb-4 font-display text-xl font-semibold">${monthDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</h2><div class="calendar-weekdays">${weekdays.map((day) => `<span>${day}</span>`).join('')}</div><div class="calendar-month">${cells.join('')}</div></section>`;
+      }).join('');
+      if (!observations.length) $('#calendar-empty')?.classList.remove('hidden');
+    }).catch((error) => { grid.innerHTML = `<div class="card text-red-700">Could not load calendar: ${esc(error.message)}</div>`; });
+  }
+
+  function boot() {
+    setVersion();
+    setActiveNavigation();
+    const reloaders = { ...initBlog(), ...initLogs() };
+    initCalendar();
+    wireLightboxAndDeletes(reloaders);
   }
 
   document.addEventListener('DOMContentLoaded', boot);

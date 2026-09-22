@@ -53,6 +53,9 @@ class FertilizationUpdate(BaseModel):
     npk_ratio: Optional[str] = Field(default=None, max_length=40)
     amount_used: Optional[str] = Field(default=None, max_length=80)
     notes: Optional[str] = None
+    fertilizer_id: Optional[int] = None
+    plant_id: Optional[int] = None
+    location_id: Optional[int] = None
 
 
 class FertilizationRead(BaseModel):
@@ -64,6 +67,9 @@ class FertilizationRead(BaseModel):
     npk_ratio: str
     amount_used: str
     notes: str
+    fertilizer_id: Optional[int] = None
+    plant_id: Optional[int] = None
+    location_id: Optional[int] = None
 
 
 # ----------------------------- Observation logs ---------------------------- #
@@ -83,6 +89,7 @@ class ObservationUpdate(BaseModel):
     watering_status: Optional[bool] = None
     pest_sightings: Optional[str] = None
     notes: Optional[str] = None
+    plant_id: Optional[int] = None
 
 
 class ObservationRead(BaseModel):
@@ -96,6 +103,7 @@ class ObservationRead(BaseModel):
     pest_sightings: Optional[str] = ""
     notes: str
     images: List[ImageRead] = []
+    plant_id: Optional[int] = None
 
 
 # --------------------------------- Misc ------------------------------------ #
@@ -110,6 +118,16 @@ class Stats(BaseModel):
     images: int
     avg_health: Optional[float] = None
     last_watered: Optional[Date] = None
+
+
+class CalendarEntry(BaseModel):
+    id: int
+    date: Date
+    plant_name: str
+    health_scale: int
+    watering_status: bool
+    pest_sightings: str
+    notes: str
 
 
 # --------------------------------- Albums --------------------------------- #

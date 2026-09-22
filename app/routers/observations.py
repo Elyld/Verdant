@@ -1,6 +1,7 @@
 """Observation log CRUD + image uploads."""
 from __future__ import annotations
 
+from datetime import date as Date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
@@ -30,12 +31,18 @@ def _get_or_404(session: Session, obs_id: int) -> ObservationLog:
 def list_observations(
     session: Session = Depends(get_session),
     plant: Optional[str] = Query(default=None, description="Filter by plant name"),
+    date_from: Optional[Date] = Query(default=None, description="Earliest observation date"),
+    date_to: Optional[Date] = Query(default=None, description="Latest observation date"),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> List[ObservationLog]:
     stmt = select(ObservationLog)
     if plant:
         stmt = stmt.where(func.lower(ObservationLog.plant_name).like(f"%{plant.lower()}%"))
+    if date_from:
+        stmt = stmt.where(ObservationLog.date >= date_from)
+    if date_to:
+        stmt = stmt.where(ObservationLog.date <= date_to)
     stmt = (
         stmt.order_by(ObservationLog.date.desc(), ObservationLog.id.desc())
         .offset(offset)
