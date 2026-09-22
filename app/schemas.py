@@ -93,7 +93,7 @@ class ObservationRead(BaseModel):
     plant_name: str
     health_scale: int
     watering_status: bool
-    pest_sightings: str
+    pest_sightings: Optional[str] = ""
     notes: str
     images: List[ImageRead] = []
 
