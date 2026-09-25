@@ -151,6 +151,12 @@ def plants_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "plants.html", {"__version__": __version__})
 
 
+@app.get("/seeds", include_in_schema=False)
+def seeds_page(request: Request) -> HTMLResponse:
+    """Seed sources: vendors, saved seeds, and trades."""
+    return templates.TemplateResponse(request, "seed_sources.html", {"__version__": __version__})
+
+
 @app.get("/review", include_in_schema=False)
 def review_page(request: Request) -> HTMLResponse:
     """Season in review: a year of garden stats."""
