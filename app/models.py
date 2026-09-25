@@ -178,7 +178,7 @@ class SeedSource(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     source_id: str = Field(unique=True, index=True)
     source: str = Field(index=True)
-    variety: str
+    variety: str = Field(default="")  # optional: sometimes only the vendor is known
     type: str = Field(default="Vendor Purchase")
     acquired_date: Optional[Date] = None
     linked_plant_id: Optional[int] = Field(default=None, foreign_key="plants.id", index=True)
