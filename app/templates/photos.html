@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Verdant · Calendar View</title>
+<title>Verdant · Photos</title>
 <meta name="description" content="Self-hosted gardening blog and observation log." />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%B1%3C/text%3E%3C/svg%3E" />
 <script src="https://cdn.tailwindcss.com"></script>
@@ -53,13 +53,50 @@
 
   <!-- Main content -->
   <main class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-    <section id="panel-calendar" class="space-y-6">
+    <section id="panel-photos" class="space-y-6">
       <header>
-        <h2 class="font-display text-2xl font-semibold text-navy-800">Garden Calendar</h2>
-        <p class="text-sm text-navy-500">Select a day to view its observations.</p>
+        <h2 class="font-display text-2xl font-semibold text-navy-800">Photos</h2>
+        <p class="text-sm text-navy-500">Pick an album and enjoy the slideshow.</p>
       </header>
-      <p id="calendar-empty" class="hidden card text-center text-navy-500">No observations yet — add one in Garden Logs to populate the calendar.</p>
-      <div id="calendar-grid" class="grid gap-6 xl:grid-cols-3"></div>
+
+      <div class="card flex flex-wrap items-end gap-3">
+        <div>
+          <label class="lbl" for="photo-album-select">Album</label>
+          <select id="photo-album-select" class="inp w-auto min-w-48">
+            <option value="">Choose an album…</option>
+          </select>
+        </div>
+        <button type="button" id="photo-refresh" class="btn-ghost text-sm">Refresh albums</button>
+      </div>
+
+      <div id="immich-section" class="hidden card">
+        <span class="lbl">Import from Immich</span>
+        <div class="flex flex-wrap items-center gap-2">
+          <select id="immich-album-select" class="inp w-auto min-w-48">
+            <option value="">Choose an Immich album…</option>
+          </select>
+          <button type="button" id="immich-import" class="btn-ghost text-sm">Import album</button>
+        </div>
+        <p class="mt-1 text-xs text-navy-400">Copies the album's photos into Verdant so the slideshow works even when your Immich server is offline.</p>
+      </div>
+
+      <div id="slideshow" class="card hidden">
+        <div id="slide-stage" class="slide-stage">
+          <img id="slide-img" alt="" />
+          <button type="button" id="slide-prev" class="slide-nav left-2" aria-label="Previous photo">&#8249;</button>
+          <button type="button" id="slide-next" class="slide-nav right-2" aria-label="Next photo">&#8250;</button>
+        </div>
+        <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
+          <p id="slide-caption" class="text-sm font-medium text-navy-700"></p>
+          <p id="slide-counter" class="text-xs text-navy-400"></p>
+          <div class="flex gap-2">
+            <button type="button" id="slide-play" class="btn-ghost text-sm">&#10074;&#10074; Pause</button>
+            <button type="button" id="slide-fullscreen" class="btn-ghost text-sm">&#9974; Fullscreen</button>
+          </div>
+        </div>
+      </div>
+
+      <p id="photos-empty" class="card text-center text-navy-500">Choose an album above to start the slideshow.</p>
     </section>
   </main>
 
@@ -69,14 +106,6 @@
     <a class="underline decoration-sage-400 hover:text-navy-700" href="/docs">API docs</a>
     <span id="app-version" class="pill" title="Verdant version"></span>
   </footer>
-</div>
-
-<!-- Day popup -->
-<div id="day-modal" class="hidden" aria-hidden="true"></div>
-
-<!-- Lightbox -->
-<div id="lightbox" class="fixed inset-0 z-50 hidden items-center justify-center bg-navy-900/90 p-4">
-  <img id="lightbox-img" alt="" class="max-h-full max-w-full rounded-xl shadow-botanical" />
 </div>
 
 <!-- Toasts -->
