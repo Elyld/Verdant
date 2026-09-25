@@ -126,8 +126,8 @@ class CalendarEntry(BaseModel):
     plant_name: str
     health_scale: int
     watering_status: bool
-    pest_sightings: str
-    notes: str
+    pest_sightings: Optional[str] = None
+    notes: Optional[str] = None
 
 
 # --------------------------------- Albums --------------------------------- #
