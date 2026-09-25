@@ -28,11 +28,19 @@ def list_seed_sources(
     return query.all()
 
 
+def _coerce_dates(src: SeedSource) -> SeedSource:
+    """SQLModel table models skip validation, so coerce ISO date strings by hand."""
+    if isinstance(src.acquired_date, str):
+        src.acquired_date = date.fromisoformat(src.acquired_date)
+    return src
+
+
 @router.post("/", response_model=SeedSource, status_code=201)
 def create_seed_source(
     src: SeedSource,
     session: Session = Depends(get_session)
 ) -> SeedSource:
+    _coerce_dates(src)
     existing = session.query(SeedSource).filter(
         SeedSource.source_id == src.source_id
     ).first()
@@ -62,6 +70,7 @@ def update_seed_source(
     for key, value in payload.items():
         if hasattr(src, key) and key != "id":
             setattr(src, key, value)
+    _coerce_dates(src)
     session.add(src)
     session.commit()
     session.refresh(src)
