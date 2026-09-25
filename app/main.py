@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.database import UPLOAD_DIR, init_db
-from app.routers import albums, fertilizations, immich, observations, posts, stats
+from app.routers import albums, backup, fertilizations, immich, observations, posts, stats
 from app.version import __version__
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -59,6 +59,7 @@ app.include_router(fertilizers_router)
 app.include_router(seed_sources_router)
 app.include_router(harvests_router)
 app.include_router(watering_logs_router)
+app.include_router(backup.router)
 
 @app.get("/api/health", tags=["meta"])
 def health() -> dict:
@@ -110,3 +111,9 @@ def plants_page(request: Request) -> HTMLResponse:
 def review_page(request: Request) -> HTMLResponse:
     """Season in review: a year of garden stats."""
     return templates.TemplateResponse(request, "review.html", {"__version__": __version__})
+
+
+@app.get("/backup", include_in_schema=False)
+def backup_page(request: Request) -> HTMLResponse:
+    """Download or restore a full backup (database + uploaded photos)."""
+    return templates.TemplateResponse(request, "backup.html", {"__version__": __version__})

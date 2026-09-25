@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Verdant · Season Review</title>
+<title>Verdant · Backup &amp; Restore</title>
 <meta name="description" content="Self-hosted gardening blog and observation log." />
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%B1%3C/text%3E%3C/svg%3E" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%B1%3C/text%3E%F0%9F%8C%B1%3C/svg%3E" />
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
   tailwind.config = {
@@ -54,57 +54,49 @@
   </header>
 
   <!-- Main content -->
-  <main class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+  <main class="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
     <section class="space-y-6">
-      <header class="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 class="font-display text-2xl font-semibold text-navy-800">Season in review</h2>
-          <p class="text-sm text-navy-500">Your year in the garden, by the numbers.</p>
-        </div>
-        <div class="flex items-center gap-2">
-          <button type="button" id="review-prev" class="btn-ghost text-sm" aria-label="Previous year">←</button>
-          <span id="review-year" class="font-display text-xl font-semibold text-navy-800"></span>
-          <button type="button" id="review-next" class="btn-ghost text-sm" aria-label="Next year">→</button>
-        </div>
+      <header>
+        <h2 class="font-display text-2xl font-semibold text-navy-800">Backup &amp; restore</h2>
+        <p class="text-sm text-navy-500">Your whole garden in one file — every entry, plant, harvest, and photo.</p>
       </header>
 
-      <dl id="review-stats" class="grid grid-cols-2 gap-3 sm:grid-cols-4"></dl>
-
-      <div class="grid gap-6 lg:grid-cols-2">
-        <div class="card">
-          <h3 class="mb-1 font-display text-lg font-semibold">Observations by month</h3>
-          <p class="mb-4 text-xs text-navy-400">How often you checked in.</p>
-          <div id="review-activity" class="flex h-40 items-end gap-1.5"></div>
-          <div class="mt-2 flex gap-1.5 text-[10px] text-navy-400" id="review-months"></div>
-        </div>
-        <div class="card">
-          <h3 class="mb-1 font-display text-lg font-semibold">Average health by month</h3>
-          <p class="mb-4 text-xs text-navy-400">Mean health score of your observations.</p>
-          <div id="review-health" class="flex h-40 items-end gap-1.5"></div>
-          <div class="mt-2 flex gap-1.5 text-[10px] text-navy-400" id="review-months-2"></div>
-        </div>
+      <div class="card">
+        <h3 class="font-display text-lg font-semibold">Download a backup</h3>
+        <p class="mt-1 text-sm text-navy-500">Saves a <span class="font-mono text-xs">verdant-backup-….zip</span> with the full database plus all uploaded photos. Keep it somewhere safe; it's all you need to rebuild.</p>
+        <a href="/api/backup/export" class="btn-primary mt-4 inline-block text-sm" download>⬇ Download backup</a>
       </div>
 
-      <div class="grid gap-6 lg:grid-cols-2">
-        <div class="card">
-          <h3 class="mb-3 font-display text-lg font-semibold">Most watched plants</h3>
-          <ol id="review-top" class="space-y-2"></ol>
-        </div>
-        <div class="card">
-          <h3 class="mb-3 font-display text-lg font-semibold">Highlights</h3>
-          <ul id="review-highlights" class="space-y-2 text-sm text-navy-600"></ul>
-        </div>
+      <div class="card border-l-4 border-red-300">
+        <h3 class="font-display text-lg font-semibold">Restore from a backup</h3>
+        <p class="mt-1 text-sm text-navy-500">Replaces <b>everything</b> currently in Verdant with the contents of the backup file. There's no undo — download a fresh backup first if you're unsure.</p>
+        <form id="restore-form" class="mt-4 space-y-4" autocomplete="off">
+          <div>
+            <label class="lbl" for="restore-file">Backup file (.zip)</label>
+            <input id="restore-file" type="file" accept=".zip,application/zip" required class="inp" />
+          </div>
+          <label class="flex items-start gap-2 text-sm text-navy-600">
+            <input id="restore-confirm" type="checkbox" required class="mt-1" />
+            <span>I understand this wipes all current data and replaces it with the backup.</span>
+          </label>
+          <div>
+            <button type="submit" class="btn-primary text-sm" id="restore-submit">Restore backup</button>
+          </div>
+        </form>
+        <div id="restore-result" class="mt-3 hidden text-sm"></div>
       </div>
     </section>
   </main>
 
-  <footer class="mx-auto max-w-7xl px-4 pb-10 sm:px-6 lg:px-8">
-    <p class="text-center text-xs text-navy-400">Verdant <span id="app-version"></span> · grown locally 🌿 · <a class="underline decoration-sage-400 hover:text-navy-700" href="/backup">💾 Backup</a></p>
+  <footer class="border-t border-beige-300 bg-beige-50/70 py-6 text-center text-xs text-navy-400">
+    Verdant · self-hosted garden journal ·
+    <a class="underline decoration-sage-400 hover:text-navy-700" href="/docs">API docs</a> ·
+    <a class="underline decoration-sage-400 hover:text-navy-700" href="/backup">💾 Backup</a>
+    <span id="app-version" class="pill" title="Verdant version"></span>
   </footer>
 </div>
 
 <div id="toasts" class="pointer-events-none fixed bottom-4 right-4 z-50 flex w-72 flex-col gap-2"></div>
-
 <script src="/static/app.js"></script>
 </body>
 </html>
