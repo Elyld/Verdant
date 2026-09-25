@@ -331,3 +331,25 @@ def test_health_reports_version(client):
     body = client.get("/api/health").json()
     assert body["status"] == "ok"
     assert "version" in body
+
+
+def test_day_modal_regression():
+    """Node regression test for the calendar heatmap + day-observation popup.
+
+    Skipped when node isn't available (e.g. minimal containers); the JS file
+    itself lives at tests/test_day_modal.js and can be run directly.
+    """
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node not available")
+    here = os.path.dirname(os.path.abspath(__file__))
+    result = subprocess.run(
+        [node, os.path.join(here, "test_day_modal.js")],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert result.returncode == 0, f"day-modal JS test failed:\n{result.stdout}\n{result.stderr}"
