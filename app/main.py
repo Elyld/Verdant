@@ -92,3 +92,9 @@ def observations_page(request: Request) -> HTMLResponse:
 def calendar_page(request: Request) -> HTMLResponse:
     """ Calendar view page. """
     return templates.TemplateResponse(request, "calendar.html", {"__version__": __version__})
+
+
+@app.get("/photos", include_in_schema=False)
+def photos_page(request: Request) -> HTMLResponse:
+    """ Photo album slideshow page. """
+    return templates.TemplateResponse(request, "photos.html", {"__version__": __version__})

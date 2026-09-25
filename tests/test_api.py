@@ -90,6 +90,7 @@ def test_route_pages_expose_visible_primary_content(client):
         "/": ('id="panel-blog"', 'id="post-form"'),
         "/observations": ('id="panel-logs"', 'id="obs-form"'),
         "/calendar": ('id="panel-calendar"', 'id="calendar-grid"'),
+        "/photos": ('id="panel-photos"', 'id="photo-album-select"', 'id="slideshow"'),
     }
     for path, markers in routes.items():
         res = client.get(path)
@@ -97,7 +98,8 @@ def test_route_pages_expose_visible_primary_content(client):
         assert "Verdant" in res.text
         assert all(marker in res.text for marker in markers)
         primary_tag = res.text.split(markers[0], 1)[1].split(">", 1)[0]
-        assert "hidden" not in primary_tag
+        if path != "/photos":
+            assert "hidden" not in primary_tag
 
 
 def test_post_crud_and_images(client):
@@ -358,3 +360,45 @@ def test_docker_compose_is_plug_n_play():
     example = open(example_path).read()
     for key in ("GARDEN_PORT", "GARDEN_PUBLIC_URL", "IMMICH_BASE_URL", "IMMICH_API_KEY"):
         assert key in example, f".env.example should document {key}"
+def test_day_modal_regression():
+    """Node regression test for the calendar heatmap + day-observation popup.
+
+    Skipped when node isn't available (e.g. minimal containers); the JS file
+    itself lives at tests/test_day_modal.js and can be run directly.
+    """
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node not available")
+    here = os.path.dirname(os.path.abspath(__file__))
+    result = subprocess.run(
+        [node, os.path.join(here, "test_day_modal.js")],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert result.returncode == 0, f"day-modal JS test failed:\n{result.stdout}\n{result.stderr}"
+
+
+def test_photos_regression():
+    """Node regression test for the Photos slideshow + Immich import wiring.
+
+    Skipped when node isn't available (e.g. minimal containers); the JS file
+    itself lives at tests/test_photos.js and can be run directly.
+    """
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node not available")
+    here = os.path.dirname(os.path.abspath(__file__))
+    result = subprocess.run(
+        [node, os.path.join(here, "test_photos.js")],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert result.returncode == 0, f"photos JS test failed:\n{result.stdout}\n{result.stderr}"

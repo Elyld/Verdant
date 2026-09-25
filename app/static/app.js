@@ -314,6 +314,55 @@
     return 4;
   }
 
+  function dayModalHtml(iso, entries) {
+    const list = entries.slice().sort((a, b) => b.health_scale - a.health_scale);
+    const pretty = new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    const cards = list.map((item) => `
+      <article class="rounded-xl border border-beige-200 bg-white p-4">
+        <div class="flex items-center justify-between gap-2">
+          <h4 class="font-semibold text-navy-800">${esc(item.plant_name)}</h4>
+          <span class="pill">${esc(String(item.health_scale))}/10 health</span>
+        </div>
+        ${item.pest_sightings ? `<p class="mt-2 text-sm">&#x1F41B; <span class="font-semibold">Pests:</span> ${esc(item.pest_sightings)}</p>` : ''}
+        ${item.notes ? `<p class="mt-1 text-sm text-navy-600">${esc(item.notes)}</p>` : ''}
+      </article>`).join('');
+    return `
+      <div class="modal-backdrop" data-close></div>
+      <div class="modal-card card" role="dialog" aria-modal="true" aria-label="Observations on ${esc(iso)}">
+        <div class="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h3 class="font-display text-xl font-semibold">${esc(pretty)}</h3>
+            <p class="text-sm text-navy-500">${list.length} observation${list.length === 1 ? '' : 's'}</p>
+          </div>
+          <button type="button" class="btn-ghost" data-close aria-label="Close">&times;</button>
+        </div>
+        <div class="grid gap-3 sm:grid-cols-2">${cards}</div>
+        <div class="mt-4 text-right">
+          <a class="btn-primary text-sm" href="/observations?date=${esc(iso)}">View in Garden Logs &rarr;</a>
+        </div>
+      </div>`;
+  }
+
+  function openDayModal(iso, entries) {
+    const modal = $('#day-modal');
+    if (!modal) return;
+    modal.innerHTML = dayModalHtml(iso, entries);
+    modal.classList.remove('hidden');
+    modal.classList.add('modal-open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeDayModal() {
+    const modal = $('#day-modal');
+    if (!modal || modal.classList.contains('hidden')) return;
+    modal.classList.add('hidden');
+    modal.classList.remove('modal-open');
+    modal.setAttribute('aria-hidden', 'true');
+    modal.innerHTML = '';
+    document.body.style.overflow = '';
+  }
+
   function initCalendar() {
     const grid = $('#calendar-grid');
     if (!grid) return;
@@ -343,12 +392,161 @@
           const tip = entries.length
             ? `${entries.length} observation${entries.length === 1 ? '' : 's'} on ${iso}${average ? `, average health ${average}/10` : ''} — view in Garden Logs`
             : `No observations on ${iso}`;
-          cells.push(`<a href="/observations?date=${iso}" class="calendar-day heat-${level}" title="${esc(tip)}"><span>${day}</span></a>`);
+          cells.push(`<a href="/observations?date=${iso}" data-date="${iso}" class="calendar-day heat-${level}" title="${esc(tip)}"><span>${day}</span></a>`);
         }
         return `<section class="card"><h2 class="mb-4 font-display text-xl font-semibold">${monthDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</h2><div class="calendar-weekdays">${weekdays.map((day) => `<span>${day}</span>`).join('')}</div><div class="calendar-month">${cells.join('')}</div>${legend}</section>`;
       }).join('');
+      grid.addEventListener('click', (ev) => {
+        const link = ev.target.closest('a[data-date]');
+        if (!link) return;
+        ev.preventDefault();
+        const iso = link.getAttribute('data-date');
+        openDayModal(iso, byDate.get(iso) || []);
+      });
+      const modal = $('#day-modal');
+      modal?.addEventListener('click', (ev) => {
+        if (ev.target.closest('[data-close]')) closeDayModal();
+      });
+      document.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Escape') closeDayModal();
+      });
       if (!observations.length) $('#calendar-empty')?.classList.remove('hidden');
     }).catch((error) => { grid.innerHTML = `<div class="card text-red-700">Could not load calendar: ${esc(error.message)}</div>`; });
+  }
+
+  function initImmich() {
+    const sections = $$('#immich-section');
+    if (!sections.length) return;
+    api.get('/api/immich/status')
+      .then((status) => {
+        if (!status.configured) return null;
+        sections.forEach((section) => section.classList.remove('hidden'));
+        return api.get('/api/immich/albums');
+      })
+      .then((albums) => {
+        if (!albums) return;
+        $$('#immich-album-select').forEach((sel) => {
+          sel.innerHTML = '<option value="">Choose an Immich album…</option>'
+            + albums.map((a) => `<option value="${esc(a.id)}">${esc(a.albumName)} (${a.assetCount})</option>`).join('');
+        });
+      })
+      .catch(() => { /* Immich unreachable: leave the section hidden */ });
+    $$('#immich-import').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const section = btn.closest('#immich-section');
+        const sel = (section && section.querySelector('#immich-album-select')) || $('#immich-album-select');
+        const albumId = sel && sel.value;
+        if (!albumId) { toast('Choose an Immich album first.', 'err'); return; }
+        btn.disabled = true;
+        const label = btn.textContent;
+        btn.textContent = 'Importing…';
+        try {
+          const result = await api.post(`/api/immich/albums/${encodeURIComponent(albumId)}/import`);
+          toast(`Imported ${result.created} photo${result.created === 1 ? '' : 's'} into \u201C${result.album.name}\u201D.`);
+          document.dispatchEvent(new CustomEvent('verdant:albums-changed', { detail: { selectId: result.album.id } }));
+        } catch (error) {
+          toast(`Import failed: ${error.message}`, 'err');
+        } finally {
+          btn.disabled = false;
+          btn.textContent = label;
+        }
+      });
+    });
+  }
+
+  function initPhotos() {
+    const picker = $('#photo-album-select');
+    if (!picker) return;
+    const viewer = $('#slideshow');
+    const empty = $('#photos-empty');
+    const stage = $('#slide-stage');
+    const img = $('#slide-img');
+    const caption = $('#slide-caption');
+    const counter = $('#slide-counter');
+    const playBtn = $('#slide-play');
+    let slides = [];
+    let index = 0;
+    let timer = null;
+
+    async function loadAlbums(selectId) {
+      const albums = await api.get('/api/albums');
+      picker.innerHTML = '<option value="">Choose an album…</option>'
+        + albums.map((a) => `<option value="${a.id}">${esc(a.name)} (${(a.images || []).length})</option>`).join('');
+      if (selectId) picker.value = String(selectId);
+    }
+
+    function render() {
+      if (!slides.length) {
+        viewer.classList.add('hidden');
+        empty.classList.remove('hidden');
+        empty.textContent = picker.value ? 'This album has no photos yet.' : 'Choose an album above to start the slideshow.';
+        return;
+      }
+      empty.classList.add('hidden');
+      viewer.classList.remove('hidden');
+      const slide = slides[index];
+      img.src = slide.file_path;
+      img.alt = slide.title || slide.original_name || 'Garden photo';
+      caption.textContent = slide.title || slide.original_name || '';
+      counter.textContent = `${index + 1} / ${slides.length}`;
+      [1, slides.length - 1].forEach((offset) => {
+        const preload = new Image();
+        preload.src = slides[(index + offset) % slides.length].file_path;
+      });
+    }
+
+    function go(delta) {
+      if (!slides.length) return;
+      index = (index + delta + slides.length) % slides.length;
+      render();
+    }
+
+    function play() {
+      stop();
+      timer = setInterval(() => go(1), 5000);
+      playBtn.innerHTML = '&#10074;&#10074; Pause';
+    }
+
+    function stop() {
+      if (timer) clearInterval(timer);
+      timer = null;
+      playBtn.innerHTML = '&#9654; Play';
+    }
+
+    async function openAlbum(id) {
+      stop();
+      if (!id) { slides = []; index = 0; render(); return; }
+      try {
+        const album = await api.get(`/api/albums/${id}`);
+        slides = album.images || [];
+        index = 0;
+        render();
+        if (slides.length) play();
+      } catch (error) {
+        toast(`Could not load album: ${error.message}`, 'err');
+      }
+    }
+
+    picker.addEventListener('change', () => openAlbum(picker.value));
+    $('#photo-refresh').addEventListener('click', () => loadAlbums().catch((error) => toast(`Could not load albums: ${error.message}`, 'err')));
+    $('#slide-prev').addEventListener('click', () => go(-1));
+    $('#slide-next').addEventListener('click', () => go(1));
+    playBtn.addEventListener('click', () => { if (timer) stop(); else if (slides.length) play(); });
+    $('#slide-fullscreen').addEventListener('click', () => {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else if (stage.requestFullscreen) stage.requestFullscreen();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (!slides.length || viewer.classList.contains('hidden')) return;
+      if (event.key === 'ArrowLeft') go(-1);
+      else if (event.key === 'ArrowRight') go(1);
+    });
+    document.addEventListener('verdant:albums-changed', (event) => {
+      loadAlbums(event.detail && event.detail.selectId)
+        .then(() => openAlbum(picker.value))
+        .catch((error) => toast(`Could not load albums: ${error.message}`, 'err'));
+    });
+    loadAlbums().catch((error) => toast(`Could not load albums: ${error.message}`, 'err'));
   }
 
   function boot() {
@@ -356,6 +554,8 @@
     setActiveNavigation();
     const reloaders = { ...initBlog(), ...initLogs() };
     initCalendar();
+    initImmich();
+    initPhotos();
     wireLightboxAndDeletes(reloaders);
   }
 
