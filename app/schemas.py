@@ -5,7 +5,12 @@ from datetime import date as Date
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+def _none_to_str(value):
+    """Coerce NULLs from old databases to "" so reads never 500."""
+    return "" if value is None else value
 
 
 class ImageRead(BaseModel):
@@ -73,6 +78,8 @@ class FertilizationRead(BaseModel):
     plant_id: Optional[int] = None
     location_id: Optional[int] = None
 
+    _null_str = field_validator("npk_ratio", "amount_used", "notes", mode="before")(_none_to_str)
+
 
 # ----------------------------- Observation logs ---------------------------- #
 class ObservationCreate(BaseModel):
@@ -109,6 +116,8 @@ class ObservationRead(BaseModel):
     plant_id: Optional[int] = None
     temp_c: Optional[float] = None
     weather_summary: Optional[str] = None
+
+    _null_str = field_validator("notes", mode="before")(_none_to_str)
 
 
 # --------------------------------- Plants ---------------------------------- #
@@ -241,6 +250,20 @@ class AlbumRead(BaseModel):
 class AlbumCreateResult(BaseModel):
     album: AlbumRead
     created: int
+    failed: int
+    errors: List[str] = []
+
+
+class ImmichBatchImportResult(BaseModel):
+    """One batch of an Immich album import. The client repeats the request
+    with increasing offset until done is true."""
+
+    album_id: int
+    album_name: str
+    total: int  # photo assets in the Immich album
+    imported: int  # photos in the local album so far
+    done: bool
+    created: int  # photos added by this batch
     failed: int
     errors: List[str] = []
 
