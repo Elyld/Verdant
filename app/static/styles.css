@@ -136,3 +136,45 @@
 }
 .md a { color: #2f4f75; text-decoration: underline; text-decoration-color: #a4c09d; }
 .md hr { border: 0; border-top: 1px solid #efe4cd; margin: 1rem 0; }
+
+/* Calendar heatmap — GitHub-style intensity per day. */
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.calendar-weekdays span {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7d97b9;
+  text-align: center;
+}
+.calendar-month {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.calendar-day {
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.45rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+}
+.calendar-empty { background: transparent; }
+a.calendar-day { cursor: pointer; }
+a.calendar-day:hover { outline: 2px solid #51704c; outline-offset: 1px; }
+/* Intensity ramp: 0 = no observations, 4 = busiest days (sage scale). */
+.heat-0 { background-color: #ecefe9; color: #9aa8b8; }
+.heat-1 { background-color: #c6d8c1; color: #334631; }
+.heat-2 { background-color: #82a87b; color: #233022; }
+.heat-3 { background-color: #51704c; color: #f2f6f1; }
+.heat-4 { background-color: #2c4429; color: #f2f6f1; }
+.heat-swatch { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }

@@ -306,6 +306,14 @@
     return { ferts: loadFerts, obs: loadObs };
   }
 
+  function heatLevel(count) {
+    if (count <= 0) return 0;
+    if (count === 1) return 1;
+    if (count <= 3) return 2;
+    if (count <= 6) return 3;
+    return 4;
+  }
+
   function initCalendar() {
     const grid = $('#calendar-grid');
     if (!grid) return;
@@ -313,13 +321,15 @@
     api.get('/api/stats/calendar').then((observations) => {
       const byDate = new Map();
       observations.forEach((item) => {
-        const key = item.date.slice(0, 10);
+        const key = String(item.date).slice(0, 10);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return;
         if (!byDate.has(key)) byDate.set(key, []);
         byDate.get(key).push(item);
       });
       const today = new Date();
       const months = [];
       for (let delta = -2; delta <= 0; delta += 1) months.push(new Date(today.getFullYear(), today.getMonth() + delta, 1));
+      const legend = `<div class="flex items-center justify-end gap-1.5 pt-2 text-xs text-navy-500"><span>Less</span>${[0, 1, 2, 3, 4].map((level) => `<span class="heat-swatch heat-${level}" aria-hidden="true"></span>`).join('')}<span>More</span></div>`;
       grid.innerHTML = months.map((monthDate) => {
         const year = monthDate.getFullYear();
         const month = monthDate.getMonth();
@@ -328,10 +338,14 @@
         for (let day = 1; day <= days; day += 1) {
           const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           const entries = byDate.get(iso) || [];
+          const level = heatLevel(entries.length);
           const average = entries.length ? Math.round(entries.reduce((sum, item) => sum + item.health_scale, 0) / entries.length) : null;
-          cells.push(`<a href="/observations?date=${iso}" class="calendar-day ${entries.length ? 'calendar-active' : ''}" title="${entries.length} observation${entries.length === 1 ? '' : 's'}${average ? `, average health ${average}` : ''}"><b>${day}</b>${entries.length ? `<span>${entries.length} log${entries.length === 1 ? '' : 's'}</span>` : ''}</a>`);
+          const tip = entries.length
+            ? `${entries.length} observation${entries.length === 1 ? '' : 's'} on ${iso}${average ? `, average health ${average}/10` : ''} — view in Garden Logs`
+            : `No observations on ${iso}`;
+          cells.push(`<a href="/observations?date=${iso}" class="calendar-day heat-${level}" title="${esc(tip)}"><span>${day}</span></a>`);
         }
-        return `<section class="card"><h2 class="mb-4 font-display text-xl font-semibold">${monthDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</h2><div class="calendar-weekdays">${weekdays.map((day) => `<span>${day}</span>`).join('')}</div><div class="calendar-month">${cells.join('')}</div></section>`;
+        return `<section class="card"><h2 class="mb-4 font-display text-xl font-semibold">${monthDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</h2><div class="calendar-weekdays">${weekdays.map((day) => `<span>${day}</span>`).join('')}</div><div class="calendar-month">${cells.join('')}</div>${legend}</section>`;
       }).join('');
       if (!observations.length) $('#calendar-empty')?.classList.remove('hidden');
     }).catch((error) => { grid.innerHTML = `<div class="card text-red-700">Could not load calendar: ${esc(error.message)}</div>`; });

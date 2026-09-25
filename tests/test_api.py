@@ -249,6 +249,28 @@ def test_stats(client):
     assert stats["last_watered"] == "2026-06-01"
 
 
+def test_calendar_skips_bad_dates_and_null_fields(client):
+    # Legacy/imported rows may carry empty or malformed dates and NULL text
+    # fields; the calendar endpoint must skip the bad dates, not 500.
+    from sqlmodel import Session
+
+    from app.database import engine
+    from app.models import ObservationLog
+
+    with Session(engine) as session:
+        session.add(ObservationLog(date="2026-07-04", plant_name="Mint", health_scale=9))
+        session.add(ObservationLog(date="", plant_name="Mint", health_scale=5))
+        session.add(ObservationLog(date="not-a-date", plant_name="Mint", health_scale=5))
+        session.commit()
+
+    res = client.get("/api/stats/calendar")
+    assert res.status_code == 200, res.text
+    dates = [entry["date"] for entry in res.json()]
+    assert "2026-07-04" in dates
+    assert "" not in dates
+    assert "not-a-date" not in dates
+
+
 def test_404s(client):
     assert client.get("/api/posts/999999").status_code == 404
     assert client.get("/api/observations/999999").status_code == 404
