@@ -96,6 +96,16 @@
 
 .range-sage { accent-color: #688d61; }
 
+/* Modal pattern (backdrop + card), shared by popups. */
+.modal-backdrop { position: absolute; inset: 0; background: rgba(13, 23, 37, 0.72); }
+.modal-card { position: relative; width: 100%; max-width: 44rem; max-height: 85vh; overflow-y: auto; animation: modal-in 160ms ease-out; }
+.modal-card.modal-wide { max-width: 56rem; }
+@keyframes modal-in { from { transform: translateY(8px) scale(0.98); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* Plant detail modal. */
+#plant-modal { position: fixed; inset: 0; z-index: 50; padding: 1rem; }
+#plant-modal.modal-open { display: flex; align-items: center; justify-content: center; }
+
 /* Minimal markdown typography for rendered post bodies */
 .md { color: #1b3049; line-height: 1.65; }
 .md h1, .md h2, .md h3 {

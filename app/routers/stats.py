@@ -9,7 +9,7 @@ from sqlmodel import Session, func, select
 
 from app.database import get_session
 from app.models import FertilizationLog, ObservationImage, ObservationLog, Post, PostImage
-from app.schemas import CalendarEntry, Stats
+from app.schemas import CalendarEntry, ReviewRead, Stats, TopPlant
 
 router = APIRouter(prefix="/api/stats", tags=["stats"])
 
@@ -60,6 +60,7 @@ def get_calendar(
                 notes=obs.notes,
             )
         )
+
     return entries
 
 
@@ -71,3 +72,85 @@ def _coerce_date(value) -> Optional[date_cls]:
         return date_cls.fromisoformat(str(value)[:10])
     except ValueError:
         return None
+
+
+@router.get("/review", response_model=ReviewRead, tags=["stats"])
+def season_review(
+    year: int = Query(default=None, description="Season year (defaults to current year)"),
+    session: Session = Depends(get_session),
+) -> ReviewRead:
+    """Year-in-review aggregates: monthly activity, health trends, harvests."""
+    from datetime import date as Date
+
+    from app.models import Harvest, ObservationImage, WateringLog
+
+    if year is None:
+        year = Date.today().year
+    prefix = f"{year}-"
+
+    observations = list(
+        session.exec(
+            select(ObservationLog).where(ObservationLog.date.like(f"{prefix}%"))
+        ).all()
+    )
+    by_month = [0] * 12
+    health_sum = [0.0] * 12
+    health_n = [0] * 12
+    per_plant: dict[str, int] = {}
+    per_day: dict[str, int] = {}
+    pests = 0
+    for obs in observations:
+        try:
+            month = int(str(obs.date)[5:7])
+        except (ValueError, IndexError):
+            continue
+        if 1 <= month <= 12:
+            by_month[month - 1] += 1
+            health_sum[month - 1] += obs.health_scale
+            health_n[month - 1] += 1
+        per_plant[obs.plant_name] = per_plant.get(obs.plant_name, 0) + 1
+        day = str(obs.date)[:10]
+        per_day[day] = per_day.get(day, 0) + 1
+        if (obs.pest_sightings or "").strip():
+            pests += 1
+
+    avg_health = [
+        round(health_sum[i] / health_n[i], 1) if health_n[i] else None for i in range(12)
+    ]
+    top_plants = sorted(per_plant.items(), key=lambda kv: kv[1], reverse=True)[:5]
+    busiest = max(per_day.items(), key=lambda kv: kv[1]) if per_day else (None, 0)
+
+    harvests = list(
+        session.exec(select(Harvest).where(Harvest.date.like(f"{prefix}%"))).all()
+    )
+    total_weight = sum(h.weight for h in harvests if h.weight) or None
+
+    photos = session.exec(
+        select(func.count())
+        .select_from(ObservationImage)
+        .where(ObservationImage.observation_id.in_(
+            select(ObservationLog.id).where(ObservationLog.date.like(f"{prefix}%"))
+        ))
+    ).one() if observations else 0
+    waterings = session.exec(
+        select(func.count()).select_from(WateringLog).where(WateringLog.date.like(f"{prefix}%"))
+    ).one()
+    feedings = session.exec(
+        select(func.count()).select_from(FertilizationLog).where(FertilizationLog.date.like(f"{prefix}%"))
+    ).one()
+
+    return ReviewRead(
+        year=year,
+        observations=len(observations),
+        observations_by_month=by_month,
+        avg_health_by_month=avg_health,
+        harvest_count=len(harvests),
+        harvest_weight=round(total_weight, 1) if total_weight else None,
+        photos=int(photos),
+        pests_noted=pests,
+        waterings=int(waterings),
+        feedings=int(feedings),
+        top_plants=[TopPlant(plant_name=name, observations=count) for name, count in top_plants],
+        busiest_day=Date.fromisoformat(busiest[0]) if busiest[0] else None,
+        busiest_day_count=busiest[1],
+    )

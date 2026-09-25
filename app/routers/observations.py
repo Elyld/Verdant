@@ -16,6 +16,7 @@ from app.schemas import (
     UploadResult,
 )
 from app.storage import delete_stored, save_uploads
+from app.weather import fetch_current_weather
 
 router = APIRouter(prefix="/api/observations", tags=["observations"])
 
@@ -57,6 +58,11 @@ def create_observation(
 ) -> ObservationLog:
     obs = ObservationLog(**payload.model_dump())
     obs.plant_name = obs.plant_name.strip()
+    # Stamp the current weather (Open-Meteo). Never fails the request.
+    weather = fetch_current_weather()
+    if weather:
+        obs.temp_c = weather["temp_c"]
+        obs.weather_summary = weather["summary"]
     session.add(obs)
     session.commit()
     session.refresh(obs)

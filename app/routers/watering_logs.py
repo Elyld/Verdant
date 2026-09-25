@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_session
-from app.models import WateringLog, Location
+from app.models import WateringLog, Location, Plant
+from app.schemas import WateringCreate
 
 router = APIRouter(prefix="/api/watering-logs", tags=["watering-logs"])
 
@@ -35,23 +36,32 @@ def list_watering_logs(
 
 @router.post("/", response_model=WateringLog, status_code=201)
 def create_watering_log(
-    location_id: int,
-    date: str,
-    method: Optional[str] = None,
-    amount: Optional[str] = None,
-    notes: Optional[str] = None,
-    session: Session = Depends(get_session)
+    payload: WateringCreate,
+    session: Session = Depends(get_session),
 ) -> WateringLog:
-    # Validate location exists
-    session.get(Location, location_id)  # will raise if not found
-    
+    location_id = payload.location_id
+    if payload.plant_id:
+        plant = session.get(Plant, payload.plant_id)
+        if not plant:
+            raise HTTPException(status_code=404, detail=f"Plant {payload.plant_id} not found")
+        if location_id is None:
+            location_id = plant.location_id
+    elif location_id is not None:
+        if not session.get(Location, location_id):
+            raise HTTPException(status_code=404, detail=f"Location {location_id} not found")
+    if location_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Watering needs a location: pass location_id or use a plant that has one.",
+        )
+
     log = WateringLog(
-        watering_id=f"WATER-{hash(f'{location_id}-{date}') % 1000:03d}",
         location_id=location_id,
-        date=date,
-        method=method,
-        amount=amount,
-        notes=notes
+        plant_id=payload.plant_id,
+        date=payload.date.isoformat(),
+        method=payload.method or None,
+        amount=payload.amount or None,
+        notes=payload.notes or None,
     )
     session.add(log)
     session.commit()

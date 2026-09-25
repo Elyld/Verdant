@@ -3,6 +3,7 @@
 from datetime import date as Date
 from datetime import datetime, timezone
 from typing import List, Optional
+from uuid import uuid4
 
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -86,6 +87,9 @@ class ObservationLog(SQLModel, table=True):
     watering_status: bool = Field(default=True)
     pest_sightings: Optional[str] = None
     notes: Optional[str] = None
+    # Weather snapshot captured automatically at log time (Open-Meteo, optional).
+    temp_c: Optional[float] = None
+    weather_summary: Optional[str] = None
     plant: Optional["Plant"] = Relationship(back_populates="observation_logs")
     images: List[ObservationImage] = Relationship(
         back_populates="observation",
@@ -127,7 +131,7 @@ class AlbumImage(SQLModel, table=True):
 class Location(SQLModel, table=True):
     __tablename__ = "locations"
     id: Optional[int] = Field(default=None, primary_key=True)
-    location_id: str = Field(unique=True, index=True)
+    location_id: str = Field(default_factory=lambda: f"LOC-{uuid4().hex[:8].upper()}", unique=True, index=True)
     name: str = Field(index=True)
     type: str = Field(default="Container")
     light: str = Field(default="Full Sun")
@@ -138,7 +142,7 @@ class Location(SQLModel, table=True):
 class Plant(SQLModel, table=True):
     __tablename__ = "plants"
     id: Optional[int] = Field(default=None, primary_key=True)
-    plant_id: str = Field(unique=True, index=True)
+    plant_id: str = Field(default_factory=lambda: f"PLANT-{uuid4().hex[:8].upper()}", unique=True, index=True)
     variety_name: str = Field(index=True)
     species_type: str
     family_genus: Optional[str] = None
@@ -151,6 +155,9 @@ class Plant(SQLModel, table=True):
     light: str = Field(default="Full Sun")
     pot_size: Optional[str] = None
     notes: Optional[str] = None
+    # Care cadence (days) — drives watering/feeding reminders. Null = no reminder.
+    water_every_days: Optional[int] = Field(default=None, ge=1, le=365)
+    feed_every_days: Optional[int] = Field(default=None, ge=1, le=365)
     location: Optional[Location] = Relationship(back_populates="plants")
     fertilization_logs: List["FertilizationLog"] = Relationship(back_populates="plant")
     observation_logs: List["ObservationLog"] = Relationship(back_populates="plant")
@@ -180,7 +187,7 @@ class SeedSource(SQLModel, table=True):
 class Harvest(SQLModel, table=True):
     __tablename__ = "harvests"
     id: Optional[int] = Field(default=None, primary_key=True)
-    harvest_id: str = Field(unique=True, index=True)
+    harvest_id: str = Field(default_factory=lambda: f"HARV-{uuid4().hex[:8].upper()}", unique=True, index=True)
     plant_id: int = Field(foreign_key="plants.id", index=True, ondelete="CASCADE")
     date: str = Field(index=True, default="")
     quantity: int
@@ -192,8 +199,9 @@ class Harvest(SQLModel, table=True):
 class WateringLog(SQLModel, table=True):
     __tablename__ = "watering_logs"
     id: Optional[int] = Field(default=None, primary_key=True)
-    watering_id: str = Field(unique=True, index=True)
-    location_id: int = Field(foreign_key="locations.id", index=True, ondelete="CASCADE")
+    watering_id: str = Field(default_factory=lambda: f"WATER-{uuid4().hex[:8].upper()}", unique=True, index=True)
+    location_id: Optional[int] = Field(default=None, foreign_key="locations.id", index=True, ondelete="CASCADE")
+    plant_id: Optional[int] = Field(default=None, foreign_key="plants.id", index=True)
     date: str = Field(index=True, default="")
     method: Optional[str] = None
     amount: Optional[str] = None

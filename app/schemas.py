@@ -45,6 +45,8 @@ class FertilizationCreate(BaseModel):
     npk_ratio: str = Field(default="", max_length=40)
     amount_used: str = Field(default="", max_length=80)
     notes: str = ""
+    plant_id: Optional[int] = None
+    location_id: Optional[int] = None
 
 
 class FertilizationUpdate(BaseModel):
@@ -76,6 +78,7 @@ class FertilizationRead(BaseModel):
 class ObservationCreate(BaseModel):
     date: Date
     plant_name: str = Field(min_length=1, max_length=120)
+    plant_id: Optional[int] = None
     health_scale: int = Field(default=5, ge=1, le=10)
     watering_status: bool = False
     pest_sightings: str = ""
@@ -104,6 +107,83 @@ class ObservationRead(BaseModel):
     notes: str
     images: List[ImageRead] = []
     plant_id: Optional[int] = None
+    temp_c: Optional[float] = None
+    weather_summary: Optional[str] = None
+
+
+# --------------------------------- Plants ---------------------------------- #
+class ReminderRead(BaseModel):
+    plant_id: int
+    plant_name: str
+    kind: str  # "water" | "feed"
+    last_date: Optional[Date] = None
+    due_date: Optional[Date] = None
+    days_until_due: Optional[int] = None  # negative = overdue
+    status: str  # "overdue" | "due" | "soon" | "ok" | "unset"
+
+
+class TimelineEvent(BaseModel):
+    kind: str  # "observation" | "fertilization" | "harvest" | "watering"
+    date: Date
+    id: int
+    title: str
+    detail: str = ""
+    health_scale: Optional[int] = None
+    images: List[ImageRead] = []
+
+
+class TimelapsePhoto(BaseModel):
+    file_path: str
+    date: Date
+    caption: str = ""
+
+
+class PlantTimelineRead(BaseModel):
+    plant_id: int
+    plant_name: str
+    events: List[TimelineEvent] = []
+    photos: List[TimelapsePhoto] = []  # chronological, for the timelapse player
+
+
+# --------------------------------- Harvests -------------------------------- #
+class HarvestCreate(BaseModel):
+    plant_id: int
+    date: Date
+    quantity: int = Field(ge=1)
+    unit: str = Field(default="fruit", max_length=40)
+    weight: Optional[float] = Field(default=None, ge=0)
+    notes: str = ""
+
+
+class WateringCreate(BaseModel):
+    location_id: Optional[int] = None
+    plant_id: Optional[int] = None
+    date: Date
+    method: str = ""
+    amount: str = ""
+    notes: str = ""
+
+
+# ------------------------------ Season review ------------------------------ #
+class TopPlant(BaseModel):
+    plant_name: str
+    observations: int
+
+
+class ReviewRead(BaseModel):
+    year: int
+    observations: int
+    observations_by_month: List[int]
+    avg_health_by_month: List[Optional[float]]
+    harvest_count: int
+    harvest_weight: Optional[float] = None
+    photos: int
+    pests_noted: int
+    waterings: int
+    feedings: int
+    top_plants: List[TopPlant] = []
+    busiest_day: Optional[Date] = None
+    busiest_day_count: int = 0
 
 
 # --------------------------------- Misc ------------------------------------ #
