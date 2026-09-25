@@ -35,32 +35,47 @@ def init_db() -> None:
             conn.exec_driver_sql("PRAGMA foreign_keys=ON")
 
 
-# Columns added after the initial release. create_all() won't add them to
-# existing databases, so we ALTER TABLE them in when missing (SQLite only).
-_COLUMN_MIGRATIONS: list[tuple[str, str, str]] = [
-    ("plants", "water_every_days", "INTEGER"),
-    ("plants", "feed_every_days", "INTEGER"),
-    ("observation_logs", "temp_c", "FLOAT"),
-    ("observation_logs", "weather_summary", "TEXT"),
-    ("watering_logs", "plant_id", "INTEGER"),
-]
+# init_db() also brings old databases up to date: create_all() creates missing
+# tables but never adds columns to tables that already exist, so upgrading
+# from an older release would 500 on the new fields. Instead of a
+# hand-maintained list (which inevitably misses some), we sync automatically:
+# for every mapped table, ADD COLUMN for each model column absent on disk.
+# All Verdant columns are nullable, so ADD COLUMN is always safe (SQLite).
 
 
-def _apply_column_migrations() -> None:
-    if not DATABASE_URL.startswith("sqlite"):
+def _apply_column_migrations(target_engine=None) -> None:
+    """Add any model columns missing from existing tables (SQLite only).
+
+    ``target_engine`` defaults to the app engine; tests pass their own engine
+    pointed at a scratch database shaped like an old release.
+    """
+    target_engine = target_engine or engine
+    url = str(target_engine.url)
+    if not url.startswith("sqlite"):
         return
-    with engine.connect() as conn:
-        for table, column, coltype in _COLUMN_MIGRATIONS:
+    with target_engine.connect() as conn:
+        present = {
+            row[0]
+            for row in conn.exec_driver_sql(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+        for table in SQLModel.metadata.sorted_tables:
+            if table.name not in present:
+                continue  # create_all() already made it with the full schema
             existing = {
                 row[1]
                 for row in conn.exec_driver_sql(
-                    f"PRAGMA table_info({table})"
+                    f'PRAGMA table_info("{table.name}")'
                 ).fetchall()
             }
-            if column not in existing:
-                conn.exec_driver_sql(
-                    f"ALTER TABLE {table} ADD COLUMN {column} {coltype}"
-                )
+            for column in table.columns:
+                if column.name not in existing:
+                    coltype = column.type.compile(dialect=target_engine.dialect)
+                    conn.exec_driver_sql(
+                        f'ALTER TABLE "{table.name}" '
+                        f'ADD COLUMN "{column.name}" {coltype}'
+                    )
 
 
 def get_session() -> Iterator[Session]:

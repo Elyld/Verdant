@@ -5,7 +5,12 @@ from datetime import date as Date
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+def _none_to_str(value):
+    """Coerce NULLs from old databases to "" so reads never 500."""
+    return "" if value is None else value
 
 
 class ImageRead(BaseModel):
@@ -73,6 +78,8 @@ class FertilizationRead(BaseModel):
     plant_id: Optional[int] = None
     location_id: Optional[int] = None
 
+    _null_str = field_validator("npk_ratio", "amount_used", "notes", mode="before")(_none_to_str)
+
 
 # ----------------------------- Observation logs ---------------------------- #
 class ObservationCreate(BaseModel):
@@ -109,6 +116,8 @@ class ObservationRead(BaseModel):
     plant_id: Optional[int] = None
     temp_c: Optional[float] = None
     weather_summary: Optional[str] = None
+
+    _null_str = field_validator("notes", mode="before")(_none_to_str)
 
 
 # --------------------------------- Plants ---------------------------------- #

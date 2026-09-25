@@ -64,7 +64,7 @@ def import_immich_album(
 ) -> AlbumCreateResult:
     """Copy every photo asset from an Immich album into a new local Album."""
     remote = immich.get_album(immich_album_id)
-    assets = remote.get("assets", []) or []
+    assets = immich.list_album_assets(immich_album_id)
     if not assets:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="That Immich album has no assets.")
     if len(assets) > MAX_ASSETS:

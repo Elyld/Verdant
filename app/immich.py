@@ -68,6 +68,39 @@ def get_album(album_id: str) -> dict:
         return resp.json()
 
 
+def list_album_assets(album_id: str) -> List[dict]:
+    """Fetch every asset in an album via the metadata search endpoint.
+
+    Immich v3 removed the embedded ``assets`` array from
+    ``GET /api/albums/{id}`` (it now only returns ``assetCount``), so album
+    contents must come from ``POST /api/search/metadata`` filtered by
+    ``albumIds``. That endpoint exists on older servers too, so this works
+    across versions. Results are paginated; follow ``nextPage`` until done.
+    """
+    assets: List[dict] = []
+    page: object = 1
+    with _client() as c:
+        while True:
+            try:
+                resp = c.post(
+                    "/api/search/metadata",
+                    json={"albumIds": [album_id], "page": page, "size": 1000},
+                )
+            except httpx.HTTPError as exc:
+                raise HTTPException(
+                    status.HTTP_502_BAD_GATEWAY,
+                    detail=f"Could not reach Immich: {exc}",
+                ) from exc
+            _raise_for(resp)
+            block = (resp.json() or {}).get("assets") or {}
+            assets.extend(block.get("items") or [])
+            nxt = block.get("nextPage")
+            if not nxt:
+                break
+            page = nxt
+    return assets
+
+
 def download_asset(asset_id: str, thumbnail: bool = False) -> bytes:
     """Fetch original (or thumbnail) bytes for one asset."""
     path = f"/api/assets/{asset_id}/thumbnail" if thumbnail else f"/api/assets/{asset_id}/original"
