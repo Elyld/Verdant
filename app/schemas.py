@@ -235,6 +235,10 @@ class AlbumImageRead(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
 
+    _null_str = field_validator(
+        "source_url", "camera_make", "camera_model", mode="before"
+    )(_none_to_str)
+
 
 class AlbumImageRef(BaseModel):
     """Reference to an already-imported album image (for copying into posts)."""
@@ -251,6 +255,8 @@ class AlbumRead(BaseModel):
     created_at: datetime
     source_url: str = ""
     images: List[AlbumImageRead] = []
+
+    _null_str = field_validator("source_url", mode="before")(_none_to_str)
 
 
 class AlbumMetadataSyncResult(BaseModel):

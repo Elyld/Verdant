@@ -10,6 +10,7 @@ import json
 import os
 import sqlite3
 import tempfile
+from datetime import datetime
 from types import SimpleNamespace
 
 import httpx
@@ -21,11 +22,17 @@ os.environ.setdefault("GARDEN_UPLOAD_DIR", os.path.join(TMP, "uploads"))
 os.environ.setdefault("IMMICH_BASE_URL", "http://immich.test")
 os.environ.setdefault("IMMICH_API_KEY", "fake-key")
 
-from sqlmodel import create_engine  # noqa: E402
+from sqlmodel import Session, SQLModel, create_engine  # noqa: E402
 
 from app import immich  # noqa: E402
 from app.database import _apply_column_migrations  # noqa: E402
-from app.schemas import FertilizationRead, ObservationRead  # noqa: E402
+from app.routers.import_csv import _Ctx, _build_fertilization  # noqa: E402
+from app.schemas import (  # noqa: E402
+    AlbumImageRead,
+    AlbumRead,
+    FertilizationRead,
+    ObservationRead,
+)
 import app.models  # noqa: E402,F401
 
 
@@ -94,6 +101,64 @@ def test_null_string_fields_serialize_cleanly():
         )
     )
     assert obs.notes == ""
+
+
+def test_album_null_exif_and_source_url_serialize_cleanly():
+    """PR #12 added nullable EXIF/source_url columns; rows created before it
+    (or never synced) hold NULLs. /api/albums must not 500 on them."""
+    img = AlbumImageRead.model_validate(
+        SimpleNamespace(
+            id=1, file_path="/uploads/albums/1/a.jpg", title="A",
+            original_name="a.jpg", source_url=None,
+            imported_at=datetime(2026, 9, 25, 12, 0, 0),
+            taken_at=None, camera_make=None, camera_model=None,
+            latitude=None, longitude=None,
+        )
+    )
+    assert (img.source_url, img.camera_make, img.camera_model) == ("", "", "")
+    album = AlbumRead.model_validate(
+        SimpleNamespace(
+            id=1, name="Old", created_at=datetime(2026, 9, 25, 12, 0, 0),
+            source_url=None, images=[img],
+        )
+    )
+    assert album.source_url == ""
+
+
+def test_fertilization_import_empty_amount_on_legacy_db(tmp_path):
+    """Databases created by the initial release still carry NOT NULL on
+    fertilization_logs.amount_used. Importing a row with no amount must not
+    500 (reported 2026-09-25)."""
+    db = str(tmp_path / "garden.db")
+    engine = create_engine(f"sqlite:///{db}")
+    SQLModel.metadata.create_all(engine)
+    with engine.connect() as conn:
+        # Recreate the table the way the initial release built it: amount_used NOT NULL.
+        conn.exec_driver_sql("DROP TABLE fertilization_logs")
+        conn.exec_driver_sql(
+            "CREATE TABLE fertilization_logs (id INTEGER PRIMARY KEY, date TEXT,"
+            " fertilizer_name TEXT NOT NULL, fertilizer_id INTEGER,"
+            " npk_ratio TEXT NOT NULL, amount_used TEXT NOT NULL,"
+            " plant_id INTEGER, location_id INTEGER, notes TEXT NOT NULL)"
+        )
+        conn.commit()
+    with Session(engine) as session:
+        ctx = _Ctx(session)
+        row = {
+            "Log ID": "FE-LEG-001", "Link to Plant": "", "Fertilizer": "",
+            "Date": "08/09/2026", "Amount / Concentration": "",
+            "Application": "Liquid", "Notes": "",
+        }
+        res = _build_fertilization(row, ctx)
+        assert res["status"] == "new", res
+        session.add(res["make"]())
+        session.commit()  # IntegrityError before the fix
+    con = sqlite3.connect(db)
+    try:
+        val = con.execute("SELECT amount_used FROM fertilization_logs").fetchone()[0]
+    finally:
+        con.close()
+    assert val == ""
 
 
 def _v3_transport():

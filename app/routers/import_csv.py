@@ -296,7 +296,9 @@ def _build_fertilization(row: Dict[str, str], ctx: _Ctx) -> Dict[str, Any]:
     when = _parse_date(row.get("Date", ""))
     if when is None:
         return {"status": "error", "label": f"{code or '?'}: bad or missing date", "key": code}
-    amount = row.get("Amount / Concentration", "") or None
+    # Coerce to "" (not None): databases created by early releases still carry
+    # NOT NULL constraints on fertilization_logs string columns.
+    amount = row.get("Amount / Concentration", "") or ""
     plant_id = plants[0].id if len(plants) == 1 else None
     notes_parts = []
     if len(plants) > 1:
@@ -307,7 +309,7 @@ def _build_fertilization(row: Dict[str, str], ctx: _Ctx) -> Dict[str, Any]:
     base_notes = row.get("Notes", "")
     if base_notes:
         notes_parts.append(base_notes)
-    notes = "\n".join(notes_parts) or None
+    notes = "\n".join(notes_parts) or ""
     # Idempotency: no public log ID on this table, match on the natural key.
     stmt = select(FertilizationLog).where(
         FertilizationLog.fertilizer_id == (fertilizer.id if fertilizer else None),
@@ -322,7 +324,7 @@ def _build_fertilization(row: Dict[str, str], ctx: _Ctx) -> Dict[str, Any]:
             date=when.isoformat(),
             fertilizer_name=fertilizer.name if fertilizer else fert_code,
             fertilizer_id=fertilizer.id if fertilizer else None,
-            npk_ratio=fertilizer.npk_ratio if fertilizer else None,
+            npk_ratio=(fertilizer.npk_ratio if fertilizer else "") or "",
             amount_used=amount,
             plant_id=plant_id,
             notes=notes,
