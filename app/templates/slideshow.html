@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full" data-version="{{ __version__ }}">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Verdant · Slideshow</title>
+<meta name="description" content="Full-screen garden photo slideshow." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%B1%3C/text%3E%3C/svg%3E" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          sage: { 50: '#f2f6f1', 100: '#e2ebdf', 200: '#c6d8c1', 300: '#a4c09d', 400: '#82a87b', 500: '#688d61', 600: '#51704c', 700: '#41593d', 800: '#334631', 900: '#233022' },
+          navy: { 50: '#eef2f7', 100: '#d6e0ec', 200: '#adc0d7', 300: '#7d97b9', 400: '#4f6d94', 500: '#2f4f75', 600: '#233d5c', 700: '#1b3049', 800: '#142337', 900: '#0d1725' },
+          beige: { 50: '#fdfbf6', 100: '#f8f2e6', 200: '#efe4cd', 300: '#e3d3b0', 400: '#d3bd8d', 500: '#c0a469', 600: '#a4884f', 700: '#816b3e', 800: '#5d4d2d', 900: '#3a301c' }
+        },
+        fontFamily: {
+          display: ['Georgia', 'Cambria', 'Times New Roman', 'serif'],
+          body: ['ui-sans-serif', 'system-ui', 'Segoe UI', 'Helvetica', 'Arial', 'sans-serif']
+        },
+        boxShadow: { botanical: '0 10px 30px -12px rgba(20,35,55,0.35)' }
+      }
+    }
+  };
+</script>
+<link rel="stylesheet" href="/static/styles.css" />
+<style>
+  #slide-stage img { max-height: calc(100vh - 10rem); }
+</style>
+</head>
+<body class="h-full bg-navy-900 font-body text-beige-100 antialiased">
+<div class="flex h-full flex-col">
+
+  <!-- Top bar -->
+  <header class="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-6">
+    <a href="/photos" class="btn-ghost text-sm">← Photos</a>
+    <h1 class="font-display text-xl font-semibold">Slideshow</h1>
+    <div class="ml-auto flex flex-wrap items-center gap-2">
+      <select id="fs-album" class="inp w-auto bg-navy-800 text-sm text-beige-100" aria-label="Album">
+        <option value="">Choose an album…</option>
+      </select>
+      <select id="fs-interval" class="inp w-auto bg-navy-800 text-sm text-beige-100" aria-label="Slide interval">
+        <option value="3000">3s</option>
+        <option value="5000" selected>5s</option>
+        <option value="10000">10s</option>
+        <option value="30000">30s</option>
+      </select>
+      <button type="button" id="fs-play" class="btn-ghost text-sm">⏸ Pause</button>
+      <button type="button" id="fs-full" class="btn-ghost text-sm">⛶ Fullscreen</button>
+    </div>
+  </header>
+
+  <!-- Stage -->
+  <main id="slide-stage" class="relative flex flex-1 items-center justify-center overflow-hidden px-2 pb-2">
+    <p id="fs-empty" class="text-navy-300">Pick an album above to begin.</p>
+    <figure id="fs-figure" class="hidden max-h-full text-center">
+      <img id="fs-img" class="mx-auto max-w-full rounded-lg object-contain shadow-botanical" alt="Garden photo" />
+      <figcaption class="mt-3 space-y-1">
+        <p id="fs-title" class="font-display text-lg text-beige-100"></p>
+        <p id="fs-exif" class="text-xs text-navy-300"></p>
+        <p id="fs-counter" class="text-xs text-navy-400"></p>
+      </figcaption>
+    </figure>
+    <button type="button" id="fs-prev" aria-label="Previous photo" class="absolute left-3 top-1/2 hidden -translate-y-1/2 rounded-full bg-navy-800/70 px-4 py-3 text-xl text-beige-100 ring-1 ring-navy-600 hover:bg-navy-700 sm:block">‹</button>
+    <button type="button" id="fs-next" aria-label="Next photo" class="absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-full bg-navy-800/70 px-4 py-3 text-xl text-beige-100 ring-1 ring-navy-600 hover:bg-navy-700 sm:block">›</button>
+  </main>
+</div>
+
+<!-- Toasts -->
+<div id="toasts" role="status" aria-live="polite" class="pointer-events-none fixed bottom-4 right-4 z-50 flex w-80 flex-col gap-2"></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

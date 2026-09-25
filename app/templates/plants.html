@@ -50,6 +50,9 @@
           <a href="/seeds" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">Seeds</a>
           <a href="/review" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">Review</a>
           <a href="/import" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">Import</a>
+          <a href="/quick" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">Quick Log</a>
+          <a href="/costs" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">Costs</a>
+          <a href="/pests" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">Pests</a>
         </nav>
       </div>
     </div>
@@ -70,6 +73,13 @@
       <div id="reminders" class="hidden space-y-3">
         <h3 class="font-display text-lg font-semibold text-navy-800">Needs attention</h3>
         <div id="reminder-list" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"></div>
+      </div>
+
+      <!-- Seed-starting calendar -->
+      <div id="sow-panel" class="card hidden">
+        <h3 class="font-display text-lg font-semibold text-navy-800">🌱 Seed-starting calendar</h3>
+        <p class="mb-3 text-sm text-navy-500">Suggested indoor-start dates from your last frost date. Set <code class="pill">LAST_FROST_DATE</code> in the server environment to tune it.</p>
+        <ul id="sow-list" class="space-y-2"></ul>
       </div>
 
       <!-- Add / edit plant form -->

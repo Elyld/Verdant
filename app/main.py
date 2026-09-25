@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.database import UPLOAD_DIR, init_db
-from app.routers import albums, backup, digest, fertilizations, immich, import_csv, observations, posts, stats
+from app.routers import albums, backup, digest, expenses, fertilizations, immich, import_csv, observations, pests, posts, stats
 from app.version import __version__
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -105,6 +105,8 @@ app.include_router(watering_logs_router)
 app.include_router(backup.router)
 app.include_router(digest.router)
 app.include_router(import_csv.router)
+app.include_router(expenses.router)
+app.include_router(pests.router)
 
 @app.get("/api/health", tags=["meta"])
 def health() -> dict:
@@ -174,3 +176,27 @@ def backup_page(request: Request) -> HTMLResponse:
 def import_page(request: Request) -> HTMLResponse:
     """Import garden data from CSV files exported by other trackers."""
     return templates.TemplateResponse(request, "import.html", {"__version__": __version__})
+
+
+@app.get("/slideshow", include_in_schema=False)
+def slideshow_page(request: Request) -> HTMLResponse:
+    """Full-screen photo slideshow (?album=<id> to start with an album)."""
+    return templates.TemplateResponse(request, "slideshow.html", {"__version__": __version__})
+
+
+@app.get("/quick", include_in_schema=False)
+def quick_page(request: Request) -> HTMLResponse:
+    """One-tap garden logging for the phone."""
+    return templates.TemplateResponse(request, "quick.html", {"__version__": __version__})
+
+
+@app.get("/costs", include_in_schema=False)
+def costs_page(request: Request) -> HTMLResponse:
+    """Track what the garden costs."""
+    return templates.TemplateResponse(request, "costs.html", {"__version__": __version__})
+
+
+@app.get("/pests", include_in_schema=False)
+def pests_page(request: Request) -> HTMLResponse:
+    """Pest sightings and treatments."""
+    return templates.TemplateResponse(request, "pests.html", {"__version__": __version__})

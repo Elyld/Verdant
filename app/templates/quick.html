@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Verdant · Import CSV</title>
-<meta name="description" content="Self-hosted gardening blog and observation log." />
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%B1%3C/text%3E%F0%9F%8C%B1%3C/svg%3E" />
+<title>Verdant · Quick Log</title>
+<meta name="description" content="One-tap garden logging for the phone." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%B1%3C/text%3E%3C/svg%3E" />
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
   tailwind.config = {
@@ -59,55 +59,28 @@
   </header>
 
   <!-- Main content -->
-  <main class="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
-    <section id="panel-import" class="space-y-6">
-      <header>
-        <h2 class="font-display text-2xl font-semibold text-navy-800">Import your data</h2>
-        <p class="text-sm text-navy-500">Bring garden records over from another tracker. Pick what the file holds, upload it, check the preview, then import. Importing twice is safe — rows already here are skipped.</p>
+  <main class="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
+    <section id="panel-quick" class="space-y-6">
+      <header class="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h2 class="font-display text-2xl font-semibold text-navy-800">Quick Log</h2>
+          <p class="text-sm text-navy-500">Big buttons, no typing. Made for dirty hands.</p>
+        </div>
+        <p id="quick-today" class="pill"></p>
       </header>
 
-      <div class="card">
-        <h3 class="font-display text-lg font-semibold">1 · Choose file</h3>
-        <p class="mt-1 text-sm text-navy-500">Import in this order so everything links up: <b>Locations → Plants → Fertilizers → Seed sources → Watering → Fertilization → Harvests</b>.</p>
-        <div class="mt-4 grid gap-4 sm:grid-cols-2">
-          <div>
-            <label class="lbl" for="import-entity">This file holds</label>
-            <select id="import-entity" class="inp">
-              <option value="locations">Locations</option>
-              <option value="plants">Plants</option>
-              <option value="fertilizers">Fertilizers</option>
-              <option value="seed_sources">Seed sources</option>
-              <option value="watering">Watering logs</option>
-              <option value="fertilization">Fertilization logs</option>
-              <option value="harvests">Harvest logs</option>
-            </select>
-          </div>
-          <div>
-            <label class="lbl" for="import-file">CSV file</label>
-            <input id="import-file" type="file" accept=".csv,text/csv" class="inp" />
-          </div>
-        </div>
-        <div class="mt-4">
-          <button type="button" id="import-preview-btn" class="btn-primary text-sm">👁 Preview</button>
-        </div>
-      </div>
+      <div id="quick-groups" class="space-y-6"></div>
 
-      <div id="import-preview" class="card hidden">
-        <h3 class="font-display text-lg font-semibold">2 · Preview</h3>
-        <div id="import-preview-body" class="mt-3 space-y-4 text-sm"></div>
-        <div id="import-assign" class="mt-4 hidden space-y-2"></div>
-        <div class="mt-4">
-          <button type="button" id="import-run-btn" class="btn-primary text-sm">⬇ Import</button>
-        </div>
-      </div>
-
-      <div id="import-result" class="card hidden">
-        <h3 class="font-display text-lg font-semibold">Result</h3>
-        <div id="import-result-body" class="mt-2 text-sm"></div>
-      </div>
+      <section class="card">
+        <h3 class="font-display text-lg font-semibold text-navy-800">Logged today</h3>
+        <ul id="quick-today-log" class="mt-2 space-y-1 text-sm text-navy-600">
+          <li class="text-navy-400">Nothing yet — go touch grass.</li>
+        </ul>
+      </section>
     </section>
   </main>
 
+  <!-- Footer -->
   <footer class="border-t border-beige-300 bg-beige-50/70 py-6 text-center text-xs text-navy-400">
     Verdant · self-hosted garden journal ·
     <a class="underline decoration-sage-400 hover:text-navy-700" href="/docs">API docs</a> ·
@@ -116,7 +89,9 @@
   </footer>
 </div>
 
-<div id="toasts" class="pointer-events-none fixed bottom-4 right-4 z-50 flex w-72 flex-col gap-2"></div>
+<!-- Toasts -->
+<div id="toasts" role="status" aria-live="polite" class="pointer-events-none fixed bottom-4 right-4 z-50 flex w-80 flex-col gap-2"></div>
+
 <script src="/static/app.js"></script>
 </body>
 </html>

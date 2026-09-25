@@ -26,6 +26,8 @@ from sqlmodel import Session
 
 from app.database import get_session
 from app.routers.plants import ReminderRead, plant_reminders
+from app.routers.stats import seed_calendar_rows
+from app.schemas import SowRow
 
 log = logging.getLogger("verdant.digest")
 
@@ -64,7 +66,11 @@ def _line(r: ReminderRead) -> str:
     return f"{icon} **{r.plant_name}** — {action} · {when}{last}"
 
 
-def build_digest_message(reminders: List[ReminderRead], today: Optional[date] = None) -> str:
+def build_digest_message(
+    reminders: List[ReminderRead],
+    today: Optional[date] = None,
+    sow_rows: Optional[List[SowRow]] = None,
+) -> str:
     """Compose the Discord message from reminder data. Always returns text;
     when nothing needs attention it's a short all-clear."""
     today = today or date.today()
@@ -78,7 +84,15 @@ def build_digest_message(reminders: List[ReminderRead], today: Optional[date] = 
         (r for r in reminders if r.status == "soon"),
         key=lambda r: (r.days_until_due or 0),
     )
-    if not overdue and not due and not soon:
+    sow_due = sorted(
+        (
+            r
+            for r in (sow_rows or [])
+            if r.started_indoors is None and 0 <= r.days_until <= 7
+        ),
+        key=lambda r: r.days_until,
+    )
+    if not overdue and not due and not soon and not sow_due:
         return f"{header}\n✅ All clear — nothing needs water or food today. Go enjoy the garden."
     parts = [header]
     if overdue:
@@ -90,6 +104,13 @@ def build_digest_message(reminders: List[ReminderRead], today: Optional[date] = 
     if soon:
         parts.append("\n🟢 **Coming up**")
         parts.extend(_line(r) for r in soon)
+    if sow_due:
+        parts.append("\n🌱 **Start indoors this week**")
+        parts.extend(
+            f"• {r.variety_name} — start by {r.suggested_start.strftime('%a %b %d')}"
+            + (" (today!)" if r.days_until == 0 else f" (in {r.days_until}d)")
+            for r in sow_due
+        )
     return "\n".join(parts)
 
 
@@ -105,7 +126,8 @@ def send_discord_message(webhook_url: str, content: str, timeout: float = 15.0) 
 def run_digest(session: Session, webhook_url: str) -> str:
     """Build the digest from live reminder data and send it. Returns the message."""
     reminders = plant_reminders(session)
-    message = build_digest_message(reminders)
+    sow_rows = seed_calendar_rows(session)
+    message = build_digest_message(reminders, sow_rows=sow_rows)
     send_discord_message(webhook_url, message)
     log.info("Digest sent (%d chars).", len(message))
     return message
@@ -114,7 +136,7 @@ def run_digest(session: Session, webhook_url: str) -> str:
 @router.get("/preview")
 def preview_digest(session: Session = Depends(get_session)):
     """Show the message text that would be sent right now (does not send)."""
-    return {"message": build_digest_message(plant_reminders(session))}
+    return {"message": build_digest_message(plant_reminders(session), sow_rows=seed_calendar_rows(session))}
 
 
 @router.post("/send")
