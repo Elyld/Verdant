@@ -214,3 +214,33 @@ class WateringLog(SQLModel, table=True):
     amount: Optional[str] = None
     notes: Optional[str] = None
     location: Optional[Location] = Relationship()
+
+# --------------------------------------------------------------------------- #
+# Costs
+# --------------------------------------------------------------------------- #
+class Expense(SQLModel, table=True):
+    __tablename__ = "expenses"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    date: str = Field(index=True, default="")  # ISO YYYY-MM-DD
+    category: str = Field(default="Supplies", index=True)  # Seeds, Soil, Fertilizer, Tools, Plants, Other
+    description: str = Field(default="")
+    amount: float = Field(default=0.0)  # dollars
+    notes: Optional[str] = None
+
+
+# --------------------------------------------------------------------------- #
+# Pests
+# --------------------------------------------------------------------------- #
+class PestLog(SQLModel, table=True):
+    __tablename__ = "pest_logs"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    date: str = Field(index=True, default="")  # ISO YYYY-MM-DD
+    pest_name: str = Field(default="", index=True)
+    plant_id: Optional[int] = Field(default=None, foreign_key="plants.id", index=True)
+    treatment: Optional[str] = None
+    notes: Optional[str] = None
+    resolved: bool = Field(default=False)
+
+    plant: Optional[Plant] = Relationship()

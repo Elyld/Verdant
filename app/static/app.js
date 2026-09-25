@@ -570,6 +570,8 @@
 
     async function openAlbum(id) {
       stop();
+      const dedicated = $('#slide-dedicated');
+      if (dedicated) dedicated.href = id ? `/slideshow?album=${id}` : '/slideshow';
       if (!id) { slides = []; index = 0; render(); return; }
       try {
         const album = await api.get(`/api/albums/${id}`);
@@ -1036,8 +1038,38 @@
     loadLocationOptions()
       .then(() => loadReminders())
       .then(() => loadPlants())
+      .then(() => loadSowCalendar())
       .catch((error) => toast(`Could not load plants: ${error.message}`, 'err'));
     return { plants: loadPlants };
+  }
+
+  /* ------------------------ Seed-starting calendar ------------------------ */
+
+  function initSowCalendar() {
+    const panel = $('#sow-panel');
+    if (!panel) return;
+    loadSowCalendar();
+  }
+
+  async function loadSowCalendar() {
+    const panel = $('#sow-panel');
+    if (!panel) return;
+    try {
+      const rows = await api.get('/api/stats/seed-calendar');
+      if (!Array.isArray(rows) || !rows.length) { panel.classList.add('hidden'); return; }
+      panel.classList.remove('hidden');
+      $('#sow-list').innerHTML = rows.map((r) => {
+        const when = r.days_until < 0
+          ? `<span class="pill">${Math.abs(r.days_until)}d ago</span>`
+          : r.days_until === 0
+            ? '<span class="pill bg-sage-200 text-sage-800">today!</span>'
+            : `<span class="pill">in ${r.days_until}d</span>`;
+        const done = r.started_indoors ? `<span class="text-xs text-sage-600">✓ started ${fmtDate(r.started_indoors)}</span>` : '';
+        return `<li class="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <span class="text-navy-800"><b>${esc(r.variety_name)}</b> <span class="text-navy-400">· start indoors by ${fmtDate(r.suggested_start)}</span> ${done}</span>
+          ${when}</li>`;
+      }).join('');
+    } catch (error) { /* non-fatal; panel stays hidden */ }
   }
 
   /* ------------------------------ Review ------------------------------ */
@@ -1112,6 +1144,15 @@
       if (data.waterings || data.feedings) highlights.push(`💧 <b>${data.waterings}</b> watering${data.waterings === 1 ? '' : 's'} · 🧪 <b>${data.feedings}</b> feeding${data.feedings === 1 ? '' : 's'} logged.`);
       if (!highlights.length) highlights.push('Log some observations to start your story.');
       $('#review-highlights').innerHTML = highlights.map((h) => `<li>${h}</li>`).join('');
+
+      const medals = ['🥇', '🥈', '🥉'];
+      const yields = await api.get(`/api/stats/yield?year=${year}`).catch(() => []);
+      $('#review-yield-empty').classList.toggle('hidden', yields.length > 0);
+      $('#review-yield').innerHTML = yields.slice(0, 10).map((y, i) => `
+        <li class="flex items-center justify-between gap-2 text-sm">
+          <span class="text-navy-800">${medals[i] || `<b class="text-navy-400">${i + 1}.</b>`} ${esc(y.variety_name)}</span>
+          <span class="pill">${y.total_quantity} ${esc(y.unit)} · ${y.harvest_count} picks</span>
+        </li>`).join('');
     }
 
     $('#review-prev').addEventListener('click', () => { year -= 1; load().catch((e) => toast(e.message, 'err')); });
@@ -1424,6 +1465,416 @@
     return {};
   }
 
+  /* ------------------------------ Slideshow ------------------------------ */
+
+  function initSlideshow() {
+    const select = $('#fs-album');
+    if (!select) return;
+    const empty = $('#fs-empty');
+    const figure = $('#fs-figure');
+    const img = $('#fs-img');
+    const title = $('#fs-title');
+    const exif = $('#fs-exif');
+    const counter = $('#fs-counter');
+    const playBtn = $('#fs-play');
+    const intervalSel = $('#fs-interval');
+    let slides = [];
+    let index = 0;
+    let timer = null;
+
+    function exifLine(slide) {
+      const bits = [];
+      if (slide.taken_at) bits.push(fmtDateTime(slide.taken_at));
+      const cam = [slide.camera_make, slide.camera_model].filter(Boolean).join(' ').trim();
+      if (cam) bits.push(cam);
+      return bits.join(' · ');
+    }
+
+    function render() {
+      if (!slides.length) {
+        figure.classList.add('hidden');
+        empty.classList.remove('hidden');
+        empty.textContent = select.value ? 'This album has no photos yet.' : 'Pick an album above to begin.';
+        return;
+      }
+      empty.classList.add('hidden');
+      figure.classList.remove('hidden');
+      const slide = slides[index];
+      img.src = slide.file_path;
+      img.alt = slide.title || slide.original_name || 'Garden photo';
+      title.textContent = slide.title || slide.original_name || '';
+      exif.textContent = exifLine(slide);
+      counter.textContent = `${index + 1} / ${slides.length}`;
+      [1, slides.length - 1].forEach((offset) => {
+        const preload = new Image();
+        preload.src = slides[(index + offset) % slides.length].file_path;
+      });
+    }
+
+    function go(delta) {
+      if (!slides.length) return;
+      index = (index + delta + slides.length) % slides.length;
+      render();
+    }
+
+    function play() {
+      stop();
+      timer = setInterval(() => go(1), Number(intervalSel.value) || 5000);
+      playBtn.textContent = '⏸ Pause';
+    }
+
+    function stop() {
+      if (timer) clearInterval(timer);
+      timer = null;
+      playBtn.textContent = '▶ Play';
+    }
+
+    async function openAlbum(id) {
+      stop();
+      if (!id) { slides = []; index = 0; render(); return; }
+      try {
+        const album = await api.get(`/api/albums/${id}`);
+        slides = album.images || [];
+        index = 0;
+        render();
+        if (slides.length) play();
+      } catch (error) {
+        toast(`Could not load album: ${error.message}`, 'err');
+      }
+    }
+
+    async function loadAlbums() {
+      const albums = await api.get('/api/albums');
+      select.innerHTML = '<option value="">Choose an album…</option>'
+        + albums.map((a) => `<option value="${a.id}">${esc(a.name)} (${(a.images || []).length})</option>`).join('');
+      const params = new URLSearchParams(location.search);
+      const preselect = params.get('album');
+      if (preselect) { select.value = preselect; openAlbum(preselect); }
+    }
+
+    select.addEventListener('change', () => openAlbum(select.value));
+    intervalSel.addEventListener('change', () => { if (timer && slides.length) play(); });
+    $('#fs-prev').addEventListener('click', () => go(-1));
+    $('#fs-next').addEventListener('click', () => go(1));
+    playBtn.addEventListener('click', () => { if (timer) stop(); else if (slides.length) play(); });
+    $('#fs-full').addEventListener('click', () => {
+      const stage = $('#slide-stage');
+      if (document.fullscreenElement) document.exitFullscreen();
+      else if (stage.requestFullscreen) stage.requestFullscreen();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (!slides.length) return;
+      if (event.key === 'ArrowLeft') go(-1);
+      else if (event.key === 'ArrowRight') go(1);
+      else if (event.key === ' ') { event.preventDefault(); if (timer) stop(); else play(); }
+    });
+    loadAlbums().catch((error) => toast(`Could not load albums: ${error.message}`, 'err'));
+  }
+
+  /* ------------------------------ Quick log ------------------------------ */
+
+  function initQuick() {
+    const host = $('#quick-groups');
+    if (!host) return;
+    const today = new Date().toISOString().slice(0, 10);
+    $('#quick-today').textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+
+    function flash(btn, label) {
+      const original = btn.innerHTML;
+      btn.innerHTML = '✓';
+      btn.disabled = true;
+      setTimeout(() => { btn.innerHTML = original; btn.disabled = false; }, 900);
+      refreshToday();
+    }
+
+    async function waterPlant(plant, btn) {
+      try {
+        await api.post('/api/watering-logs/', { plant_id: plant.id, location_id: plant.location_id || null, date: today });
+        toast('Watered 💧', 'ok');
+        flash(btn);
+      } catch (error) { toast(`Could not log watering: ${error.message}`, 'err'); }
+    }
+
+    async function waterLocation(plants, btn) {
+      try {
+        await Promise.all(plants.map((p) => api.post('/api/watering-logs/', { plant_id: p.id, location_id: p.location_id || null, date: today })));
+        toast(`Watered ${plants.length} plants 💧`, 'ok');
+        flash(btn);
+      } catch (error) { toast(`Could not log watering: ${error.message}`, 'err'); }
+    }
+
+    async function logHarvest(plantId, qty, btn) {
+      try {
+        await api.post('/api/harvests/', { plant_id: plantId, date: today, quantity: qty });
+        toast(`Harvested ${qty} 🧺`, 'ok');
+        flash(btn);
+      } catch (error) { toast(`Could not log harvest: ${error.message}`, 'err'); }
+    }
+
+    async function logNote(plant, text, btn) {
+      try {
+        await api.post('/api/observations', { plant_id: plant.id, plant_name: plant.variety_name, date: today, notes: text, health_scale: 7 });
+        toast('Note logged 📝', 'ok');
+        flash(btn);
+      } catch (error) { toast(`Could not log note: ${error.message}`, 'err'); }
+    }
+
+    function plantCard(plant) {
+      const card = document.createElement('div');
+      card.className = 'card space-y-3';
+      card.innerHTML = `
+        <p class="font-display text-lg font-semibold text-navy-800">${esc(plant.variety_name)}</p>
+        <div class="grid grid-cols-3 gap-2">
+          <button type="button" data-act="water" class="rounded-xl bg-navy-700 px-2 py-4 text-2xl text-beige-50 ring-1 ring-navy-600 active:bg-navy-600" title="Log watering">💧<span class="block text-xs font-semibold">Water</span></button>
+          <button type="button" data-act="harvest" class="rounded-xl bg-sage-600 px-2 py-4 text-2xl text-beige-50 ring-1 ring-sage-500 active:bg-sage-500" title="Log harvest">🧺<span class="block text-xs font-semibold">Harvest</span></button>
+          <button type="button" data-act="note" class="rounded-xl bg-beige-200 px-2 py-4 text-2xl text-navy-800 ring-1 ring-beige-300 active:bg-beige-300" title="Quick note">📝<span class="block text-xs font-semibold">Note</span></button>
+        </div>
+        <div data-harvest-ui class="hidden items-center justify-between gap-2 rounded-xl bg-sage-50 px-3 py-2 ring-1 ring-sage-200">
+          <div class="flex items-center gap-2">
+            <button type="button" data-hv-dec class="rounded-lg bg-beige-200 px-3 py-2 text-lg font-bold">−</button>
+            <span data-hv-qty class="w-10 text-center text-lg font-bold">1</span>
+            <button type="button" data-hv-inc class="rounded-lg bg-beige-200 px-3 py-2 text-lg font-bold">+</button>
+          </div>
+          <button type="button" data-hv-save class="btn-primary text-sm">Log harvest</button>
+        </div>
+        <div data-note-ui class="hidden gap-2">
+          <input type="text" data-note-text class="inp flex-1" placeholder="Quick note…" maxlength="500" />
+          <button type="button" data-note-save class="btn-primary text-sm">Save</button>
+        </div>`;
+      let qty = 1;
+      const qtyEl = card.querySelector('[data-hv-qty]');
+      const harvestUi = card.querySelector('[data-harvest-ui]');
+      const noteUi = card.querySelector('[data-note-ui]');
+      card.querySelector('[data-act="water"]').addEventListener('click', (e) => waterPlant(plant, e.currentTarget));
+      card.querySelector('[data-act="harvest"]').addEventListener('click', () => {
+        noteUi.classList.add('hidden'); noteUi.classList.remove('flex');
+        harvestUi.classList.toggle('hidden'); harvestUi.classList.toggle('flex');
+      });
+      card.querySelector('[data-act="note"]').addEventListener('click', () => {
+        harvestUi.classList.add('hidden'); harvestUi.classList.remove('flex');
+        noteUi.classList.toggle('hidden'); noteUi.classList.toggle('flex');
+        const input = card.querySelector('[data-note-text]');
+        if (!noteUi.classList.contains('hidden')) input.focus();
+      });
+      card.querySelector('[data-hv-dec]').addEventListener('click', () => { qty = Math.max(1, qty - 1); qtyEl.textContent = qty; });
+      card.querySelector('[data-hv-inc]').addEventListener('click', () => { qty += 1; qtyEl.textContent = qty; });
+      card.querySelector('[data-hv-save]').addEventListener('click', (e) => logHarvest(plant.id, qty, e.currentTarget));
+      const noteInput = card.querySelector('[data-note-text]');
+      card.querySelector('[data-note-save]').addEventListener('click', (e) => {
+        const text = noteInput.value.trim();
+        if (!text) { toast('Write the note first.', 'err'); return; }
+        logNote(plant, text, e.currentTarget);
+        noteInput.value = '';
+      });
+      return card;
+    }
+
+    async function refreshToday() {
+      try {
+        const [waterings, harvests, plants] = await Promise.all([
+          api.get(`/api/watering-logs/?date=${today}`).catch(() => []),
+          api.get(`/api/harvests/?date=${today}`).catch(() => []),
+          api.get('/api/plants/').catch(() => []),
+        ]);
+        const names = new Map((Array.isArray(plants) ? plants : []).map((p) => [p.id, p.variety_name]));
+        const items = [];
+        (Array.isArray(waterings) ? waterings : []).forEach((w) => items.push(`💧 Watered ${esc(names.get(w.plant_id) || 'plant')}`));
+        (Array.isArray(harvests) ? harvests : []).forEach((h) => items.push(`🧺 Harvested ${h.quantity} from ${esc(names.get(h.plant_id) || 'plant')}`));
+        $('#quick-today-log').innerHTML = items.length
+          ? items.map((i) => `<li>${i}</li>`).join('')
+          : '<li class="text-navy-400">Nothing yet — go touch grass.</li>';
+      } catch { /* non-fatal */ }
+    }
+
+    async function load() {
+      const [plants, locations] = await Promise.all([
+        api.get('/api/plants/'),
+        api.get('/api/locations/').catch(() => []),
+      ]);
+      const growing = (Array.isArray(plants) ? plants : []).filter((p) => p.status === 'Growing');
+      const locName = new Map((Array.isArray(locations) ? locations : []).map((l) => [l.id, l.name]));
+      const groups = new Map();
+      growing.forEach((p) => {
+        const key = p.location_id || 0;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(p);
+      });
+      host.innerHTML = '';
+      if (!growing.length) {
+        host.innerHTML = '<p class="card text-center text-navy-500">No growing plants yet.</p>';
+        return;
+      }
+      [...groups.entries()].sort((a, b) => a[0] - b[0]).forEach(([locId, plist]) => {
+        const section = document.createElement('section');
+        section.className = 'space-y-3';
+        const header = document.createElement('div');
+        header.className = 'flex items-center justify-between gap-2';
+        header.innerHTML = `<h3 class="font-display text-lg font-semibold text-navy-800">${esc(locName.get(locId) || (locId ? 'Unknown location' : 'No location'))}</h3>`;
+        const waterAll = document.createElement('button');
+        waterAll.type = 'button';
+        waterAll.className = 'btn-ghost text-sm';
+        waterAll.textContent = `💧 Water all (${plist.length})`;
+        waterAll.addEventListener('click', () => waterLocation(plist, waterAll));
+        header.appendChild(waterAll);
+        section.appendChild(header);
+        const grid = document.createElement('div');
+        grid.className = 'grid gap-3 sm:grid-cols-2';
+        plist.forEach((p) => grid.appendChild(plantCard(p)));
+        section.appendChild(grid);
+        host.appendChild(section);
+      });
+      refreshToday();
+    }
+
+    load().catch((error) => toast(`Could not load plants: ${error.message}`, 'err'));
+  }
+
+  /* ------------------------------ Costs ------------------------------ */
+
+  function initCosts() {
+    const form = $('#cost-form');
+    if (!form) return;
+    const today = new Date().toISOString().slice(0, 10);
+    $('#cost-date').value = today;
+    const money = (n) => `$${Number(n || 0).toFixed(2)}`;
+
+    async function load() {
+      const expenses = await api.get('/api/expenses/');
+      const list = Array.isArray(expenses) ? expenses : [];
+      const total = list.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+      $('#costs-total').textContent = money(total);
+      const byCat = {};
+      list.forEach((e) => { byCat[e.category] = (byCat[e.category] || 0) + Number(e.amount || 0); });
+      $('#costs-by-cat').innerHTML = Object.entries(byCat).sort((a, b) => b[1] - a[1])
+        .map(([cat, amt]) => `<span class="pill">${esc(cat)} · ${money(amt)}</span>`).join('')
+        || '<span class="text-sm text-navy-400">—</span>';
+      $('#costs-empty').classList.toggle('hidden', list.length > 0);
+      $('#costs-rows').innerHTML = list.map((e) => `
+        <tr class="border-t border-beige-200">
+          <td class="py-2 pr-3 whitespace-nowrap">${fmtDate(e.date)}</td>
+          <td class="py-2 pr-3"><span class="pill">${esc(e.category)}</span></td>
+          <td class="py-2 pr-3">${esc(e.description || '—')}${e.notes ? `<span class="block text-xs text-navy-400">${esc(e.notes)}</span>` : ''}</td>
+          <td class="py-2 pr-3 text-right font-semibold">${money(e.amount)}</td>
+          <td class="py-2 text-right"><button type="button" data-del-cost="${e.id}" class="text-xs text-red-700 underline">delete</button></td>
+        </tr>`).join('');
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      try {
+        await api.post('/api/expenses/', {
+          date: $('#cost-date').value || today,
+          category: $('#cost-category').value,
+          description: $('#cost-desc').value.trim(),
+          amount: Number($('#cost-amount').value) || 0,
+          notes: $('#cost-notes').value.trim(),
+        });
+        toast('Expense logged 💸', 'ok');
+        $('#cost-desc').value = '';
+        $('#cost-amount').value = '';
+        $('#cost-notes').value = '';
+        load();
+      } catch (error) { toast(`Could not save expense: ${error.message}`, 'err'); }
+    });
+
+    $('#costs-rows').addEventListener('click', async (event) => {
+      const btn = event.target.closest('[data-del-cost]');
+      if (!btn) return;
+      if (!window.confirm('Delete this expense?')) return;
+      try {
+        await api.del(`/api/expenses/${btn.dataset.delCost}`);
+        toast('Expense deleted.', 'ok');
+        load();
+      } catch (error) { toast(`Could not delete: ${error.message}`, 'err'); }
+    });
+
+    load().catch((error) => toast(`Could not load expenses: ${error.message}`, 'err'));
+  }
+
+  /* ------------------------------ Pests ------------------------------ */
+
+  function initPests() {
+    const form = $('#pest-form');
+    if (!form) return;
+    const today = new Date().toISOString().slice(0, 10);
+    $('#pest-date').value = today;
+    let plantNames = new Map();
+
+    function row(log, open) {
+      const plant = log.plant_id ? (plantNames.get(log.plant_id) || `Plant ${log.plant_id}`) : null;
+      return `<li class="rounded-xl bg-beige-50 px-4 py-3 ring-1 ring-beige-200">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <p class="font-semibold text-navy-800">🐛 ${esc(log.pest_name)}
+            ${plant ? `<span class="text-sm font-normal text-navy-400">· ${esc(plant)}</span>` : ''}
+            <span class="text-xs font-normal text-navy-400">· ${fmtDate(log.date)}</span></p>
+          <div class="flex gap-2">
+            ${open ? `<button type="button" data-resolve-pest="${log.id}" class="btn-ghost text-xs">✓ Resolve</button>` : ''}
+            <button type="button" data-del-pest="${log.id}" class="text-xs text-red-700 underline">delete</button>
+          </div>
+        </div>
+        ${log.treatment ? `<p class="mt-1 text-sm text-navy-600">🧪 ${esc(log.treatment)}</p>` : ''}
+        ${log.notes ? `<p class="mt-1 text-sm text-navy-500">${esc(log.notes)}</p>` : ''}
+      </li>`;
+    }
+
+    async function load() {
+      const [logs, plants] = await Promise.all([
+        api.get('/api/pests/'),
+        api.get('/api/plants/').catch(() => []),
+      ]);
+      const list = Array.isArray(logs) ? logs : [];
+      plantNames = new Map((Array.isArray(plants) ? plants : []).map((p) => [p.id, p.variety_name]));
+      const sel = $('#pest-plant');
+      sel.innerHTML = '<option value="">—</option>' + [...plantNames.entries()]
+        .map(([id, name]) => `<option value="${id}">${esc(name)}</option>`).join('');
+      const open = list.filter((l) => !l.resolved);
+      const done = list.filter((l) => l.resolved);
+      $('#pests-open-empty').classList.toggle('hidden', open.length > 0);
+      $('#pests-done-empty').classList.toggle('hidden', done.length > 0);
+      $('#pests-open').innerHTML = open.map((l) => row(l, true)).join('');
+      $('#pests-done').innerHTML = done.map((l) => row(l, false)).join('');
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const name = $('#pest-name').value.trim();
+      if (!name) { toast('Name the pest first.', 'err'); return; }
+      try {
+        await api.post('/api/pests/', {
+          date: $('#pest-date').value || today,
+          pest_name: name,
+          plant_id: $('#pest-plant').value ? Number($('#pest-plant').value) : null,
+          treatment: $('#pest-treatment').value.trim(),
+          notes: $('#pest-notes').value.trim(),
+        });
+        toast('Pest logged 🐛', 'ok');
+        $('#pest-name').value = '';
+        $('#pest-treatment').value = '';
+        $('#pest-notes').value = '';
+        load();
+      } catch (error) { toast(`Could not save: ${error.message}`, 'err'); }
+    });
+
+    $('#panel-pests').addEventListener('click', async (event) => {
+      const resolveBtn = event.target.closest('[data-resolve-pest]');
+      const delBtn = event.target.closest('[data-del-pest]');
+      try {
+        if (resolveBtn) {
+          await api.patch(`/api/pests/${resolveBtn.dataset.resolvePest}`, { resolved: true });
+          toast('Resolved ✅', 'ok');
+          load();
+        } else if (delBtn) {
+          if (!window.confirm('Delete this pest log?')) return;
+          await api.del(`/api/pests/${delBtn.dataset.delPest}`);
+          toast('Deleted.', 'ok');
+          load();
+        }
+      } catch (error) { toast(`Could not update: ${error.message}`, 'err'); }
+    });
+
+    load().catch((error) => toast(`Could not load pests: ${error.message}`, 'err'));
+  }
+
   function boot() {
     setVersion();
     setActiveNavigation();
@@ -1431,6 +1882,10 @@
     initCalendar();
     initImmich();
     initPhotos();
+    initSlideshow();
+    initQuick();
+    initCosts();
+    initPests();
     wireLightboxAndDeletes(reloaders);
   }
 

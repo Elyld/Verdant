@@ -9,7 +9,7 @@ from sqlmodel import Session, func, select
 
 from app.database import get_session
 from app.models import FertilizationLog, ObservationImage, ObservationLog, Post, PostImage
-from app.schemas import CalendarEntry, ReviewRead, Stats, TopPlant
+from app.schemas import CalendarEntry, ReviewRead, SowRow, Stats, TopPlant, YieldRow
 
 router = APIRouter(prefix="/api/stats", tags=["stats"])
 
@@ -154,3 +154,102 @@ def season_review(
         busiest_day=Date.fromisoformat(busiest[0]) if busiest[0] else None,
         busiest_day_count=busiest[1],
     )
+
+
+# --------------------------------------------------------------------------- #
+# Yield leaderboard
+# --------------------------------------------------------------------------- #
+@router.get("/yield", response_model=List[YieldRow], tags=["stats"])
+def yield_leaderboard(
+    year: int = Query(default=None, description="Season year (defaults to current year)"),
+    session: Session = Depends(get_session),
+) -> List[YieldRow]:
+    """Total harvested per plant, ranked — the variety smackdown."""
+    from datetime import date as Date
+
+    from app.models import Harvest, Plant
+
+    if year is None:
+        year = Date.today().year
+    prefix = f"{year}-"
+    harvests = session.exec(
+        select(Harvest).where(Harvest.date.like(f"{prefix}%"))
+    ).all()
+    totals: dict[int, dict] = {}
+    for h in harvests:
+        entry = totals.setdefault(
+            h.plant_id, {"qty": 0, "count": 0, "unit": h.unit or "fruit"}
+        )
+        entry["qty"] += h.quantity or 0
+        entry["count"] += 1
+    plants = {p.id: p for p in session.exec(select(Plant)).all()}
+    rows = [
+        YieldRow(
+            plant_id=pid,
+            variety_name=plants[pid].variety_name if pid in plants else f"Plant {pid}",
+            total_quantity=entry["qty"],
+            harvest_count=entry["count"],
+            unit=entry["unit"],
+        )
+        for pid, entry in totals.items()
+    ]
+    rows.sort(key=lambda r: r.total_quantity, reverse=True)
+    return rows
+
+
+# --------------------------------------------------------------------------- #
+# Seed-starting calendar
+# --------------------------------------------------------------------------- #
+def last_frost_date() -> date_cls:
+    """Configurable via LAST_FROST_DATE (YYYY-MM-DD); defaults to Apr 15."""
+    import os
+
+    raw = os.getenv("LAST_FROST_DATE", "").strip()
+    try:
+        return date_cls.fromisoformat(raw)
+    except ValueError:
+        return date_cls(date_cls.today().year, 4, 15)
+
+
+def _sow_weeks_before(species_type: str, category: str) -> int:
+    s = f"{species_type or ''} {category or ''}".lower()
+    if "pepper" in s:
+        return 8
+    if "tomato" in s:
+        return 6
+    return 6
+
+
+def seed_calendar_rows(session: Session, today: date_cls = None) -> List[SowRow]:
+    """Suggested indoor-start dates from last frost + per-crop offsets."""
+    from datetime import timedelta
+
+    from app.models import Plant
+
+    today = today or date_cls.today()
+    frost = last_frost_date()
+    rows = []
+    for p in session.exec(select(Plant)).all():
+        if p.status not in ("Growing", "Planned", "Seedling"):
+            continue
+        if not p.days_to_maturity:
+            continue
+        suggested = frost - timedelta(weeks=_sow_weeks_before(p.species_type, p.category))
+        started = _coerce_date(p.date_started_indoors)
+        rows.append(
+            SowRow(
+                plant_id=p.id,
+                variety_name=p.variety_name,
+                category=p.category or "",
+                suggested_start=suggested,
+                days_until=(suggested - today).days,
+                started_indoors=started,
+            )
+        )
+    rows.sort(key=lambda r: r.suggested_start)
+    return rows
+
+
+@router.get("/seed-calendar", response_model=List[SowRow], tags=["stats"])
+def seed_calendar(session: Session = Depends(get_session)) -> List[SowRow]:
+    return seed_calendar_rows(session)

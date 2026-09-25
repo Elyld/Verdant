@@ -294,3 +294,69 @@ class AlbumImportFromAlbum(BaseModel):
 class ImportFromUrlRequest(BaseModel):
     urls: List[str] = Field(min_length=1)
     album_id: Optional[int] = None
+
+
+# --------------------------------- Expenses -------------------------------- #
+EXPENSE_CATEGORIES = ["Seeds", "Soil", "Fertilizer", "Tools", "Plants", "Other"]
+
+
+class ExpenseCreate(BaseModel):
+    date: Date
+    category: str = Field(default="Supplies", max_length=40)
+    description: str = Field(default="", max_length=200)
+    amount: float = Field(default=0.0, ge=0)
+    notes: str = ""
+
+
+class ExpenseRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    date: Date
+    category: str
+    description: str
+    amount: float
+    notes: str = ""
+
+    _null_str = field_validator("description", "notes", mode="before")(_none_to_str)
+
+
+# --------------------------------- Pest log -------------------------------- #
+class PestLogCreate(BaseModel):
+    date: Date
+    pest_name: str = Field(min_length=1, max_length=120)
+    plant_id: Optional[int] = None
+    treatment: str = ""
+    notes: str = ""
+
+
+class PestLogRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    date: Date
+    pest_name: str
+    plant_id: Optional[int] = None
+    treatment: str = ""
+    notes: str = ""
+    resolved: bool = False
+
+    _null_str = field_validator("treatment", "notes", mode="before")(_none_to_str)
+
+
+# ------------------------------ Yield & sowing ------------------------------ #
+class YieldRow(BaseModel):
+    plant_id: int
+    variety_name: str
+    total_quantity: int
+    harvest_count: int
+    unit: str
+
+
+class SowRow(BaseModel):
+    plant_id: int
+    variety_name: str
+    category: str
+    suggested_start: Date
+    days_until: int
+    started_indoors: Optional[Date] = None
