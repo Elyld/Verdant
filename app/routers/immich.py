@@ -8,21 +8,22 @@ unchanged for Immich-sourced photos too.
 from __future__ import annotations
 
 import secrets
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app import immich
 from app.database import UPLOAD_DIR, get_session
 from app.models import Album, AlbumImage
-from app.schemas import AlbumCreateResult, AlbumRead
+from app.schemas import ImmichBatchImportResult
 from app.storage import ALLOWED_TYPES, _sniff
 
 router = APIRouter(prefix="/api/immich", tags=["immich"])
 
-MAX_ASSETS = 200
+BATCH_DEFAULT = 50
+BATCH_MAX = 200
 
 
 class ImmichAlbumSummary(BaseModel):
@@ -57,35 +58,65 @@ def list_immich_albums() -> List[dict]:
     ]
 
 
-@router.post("/albums/{immich_album_id}/import", response_model=AlbumCreateResult, status_code=status.HTTP_201_CREATED)
+@router.post("/albums/{immich_album_id}/import", response_model=ImmichBatchImportResult)
 def import_immich_album(
     immich_album_id: str,
+    offset: int = 0,
+    limit: int = BATCH_DEFAULT,
+    album_id: Optional[int] = None,
     session: Session = Depends(get_session),
-) -> AlbumCreateResult:
-    """Copy every photo asset from an Immich album into a new local Album."""
+) -> ImmichBatchImportResult:
+    """Copy one batch of photo assets from an Immich album into a local Album.
+
+    The frontend calls this repeatedly with increasing ``offset`` until
+    ``done`` is true, so albums of any size import without hitting request
+    timeouts. Batches are idempotent: assets already imported (matched by
+    ``source_url``) are skipped, so a retried batch never creates dupes.
+    """
+    if offset < 0 or limit < 1 or limit > BATCH_MAX:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail=f"offset must be >= 0 and 1 <= limit <= {BATCH_MAX}",
+        )
     remote = immich.get_album(immich_album_id)
     assets = immich.list_album_assets(immich_album_id)
-    if not assets:
+    photos = [a for a in assets if a.get("type") in (None, "IMAGE")]
+    total = len(photos)
+    if total == 0:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="That Immich album has no assets.")
-    if len(assets) > MAX_ASSETS:
-        assets = assets[:MAX_ASSETS]
 
-    name = remote.get("albumName") or "Immich import"
-    album = Album(name=name)
-    session.add(album)
-    session.commit()
-    session.refresh(album)
+    if album_id is None:
+        if offset != 0:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="album_id is required when offset > 0",
+            )
+        album = Album(name=remote.get("albumName") or "Immich import")
+        session.add(album)
+        session.commit()
+        session.refresh(album)
+    else:
+        album = session.get(Album, album_id)
+        if album is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Local album not found.")
 
-    created = 0
-    errors: List[str] = []
     target_dir = UPLOAD_DIR / f"albums/{album.id}"
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    for asset in assets:
+    already = set(
+        session.exec(
+            select(AlbumImage.source_url).where(AlbumImage.album_id == album.id)
+        ).all()
+    )
+
+    created = 0
+    errors: List[str] = []
+    for asset in photos[offset : offset + limit]:
         asset_id = asset.get("id")
+        source = f"immich:{asset_id}"
+        if source in already:
+            continue  # retried batch: skip, no dupes
         original_name = asset.get("originalFileName", "") or ""
-        if asset.get("type") not in (None, "IMAGE"):
-            continue  # skip videos, etc.
         try:
             data = immich.download_asset(asset_id)
         except HTTPException as exc:
@@ -105,12 +136,22 @@ def import_immich_album(
                 file_path=f"/uploads/albums/{album.id}/{fname}",
                 title=original_name[:200],
                 original_name=original_name[:200],
-                source_url=f"immich:{asset_id}",
+                source_url=source,
             )
         )
+        already.add(source)
         created += 1
 
-    session.add(album)
     session.commit()
     session.refresh(album)
-    return AlbumCreateResult(album=album, created=created, failed=len(errors), errors=errors[:10])
+    done = offset + limit >= total
+    return ImmichBatchImportResult(
+        album_id=album.id,
+        album_name=album.name,
+        total=total,
+        imported=len(album.images),
+        done=done,
+        created=created,
+        failed=len(errors),
+        errors=errors[:10],
+    )

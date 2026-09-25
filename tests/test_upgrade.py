@@ -141,3 +141,62 @@ def test_list_album_assets_uses_search_and_paginates(monkeypatch):
     monkeypatch.setattr(immich, "_client", fake_client)
     assets = immich.list_album_assets("abc")
     assert [a["id"] for a in assets] == ["a1", "a2", "a3"]
+
+
+JPEG = bytes.fromhex("ffd8ffe000104a4649460001010000010001000000") + b"\x00" * 64
+
+
+def _stub_immich(monkeypatch):
+    """Stub the Immich client: 4 photos + 1 video in album 'big'."""
+    import app.routers.immich as immich_router
+
+    monkeypatch.setattr(
+        immich_router.immich, "get_album",
+        lambda _id: {"id": "big", "albumName": "Batch Garden", "assetCount": 5},
+    )
+    monkeypatch.setattr(
+        immich_router.immich, "list_album_assets",
+        lambda _id: [
+            {"id": f"p{i}", "type": "IMAGE", "originalFileName": f"pic{i}.jpg"}
+            for i in range(4)
+        ] + [{"id": "v9", "type": "VIDEO", "originalFileName": "clip.mp4"}],
+    )
+    monkeypatch.setattr(
+        immich_router.immich, "download_asset", lambda _id: JPEG
+    )
+
+
+def test_immich_import_batches_and_is_idempotent(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app.database import init_db
+    from app.main import app
+
+    _stub_immich(monkeypatch)
+    init_db()
+    with TestClient(app) as client:
+        # batch 1 of 2
+        r1 = client.post("/api/immich/albums/big/import?offset=0&limit=2")
+        assert r1.status_code == 200, r1.text[:200]
+        b1 = r1.json()
+        assert (b1["total"], b1["created"], b1["done"]) == (4, 2, False)
+        assert b1["imported"] == 2
+
+        # retrying batch 1 adds nothing (no dupes)
+        r1b = client.post(
+            f"/api/immich/albums/big/import?offset=0&limit=2&album_id={b1['album_id']}"
+        )
+        assert r1b.json()["created"] == 0
+        assert r1b.json()["imported"] == 2
+
+        # batch 2 finishes (video skipped)
+        r2 = client.post(
+            f"/api/immich/albums/big/import?offset=2&limit=2&album_id={b1['album_id']}"
+        )
+        b2 = r2.json()
+        assert (b2["created"], b2["done"], b2["imported"]) == (2, True, 4)
+        assert b2["album_name"] == "Batch Garden"
+
+        # offset without album_id is rejected
+        bad = client.post("/api/immich/albums/big/import?offset=2&limit=2")
+        assert bad.status_code == 400

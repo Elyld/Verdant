@@ -254,6 +254,20 @@ class AlbumCreateResult(BaseModel):
     errors: List[str] = []
 
 
+class ImmichBatchImportResult(BaseModel):
+    """One batch of an Immich album import. The client repeats the request
+    with increasing offset until done is true."""
+
+    album_id: int
+    album_name: str
+    total: int  # photo assets in the Immich album
+    imported: int  # photos in the local album so far
+    done: bool
+    created: int  # photos added by this batch
+    failed: int
+    errors: List[str] = []
+
+
 class AlbumImportFromAlbum(BaseModel):
     album_id: int
     image_ids: List[int]
