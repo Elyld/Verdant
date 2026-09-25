@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Verdant · Calendar View</title>
+<title>Verdant · Season Review</title>
 <meta name="description" content="Self-hosted gardening blog and observation log." />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%B1%3C/text%3E%3C/svg%3E" />
 <script src="https://cdn.tailwindcss.com"></script>
@@ -55,34 +55,55 @@
 
   <!-- Main content -->
   <main class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-    <section id="panel-calendar" class="space-y-6">
-      <header>
-        <h2 class="font-display text-2xl font-semibold text-navy-800">Garden Calendar</h2>
-        <p class="text-sm text-navy-500">Select a day to view its observations.</p>
+    <section class="space-y-6">
+      <header class="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 class="font-display text-2xl font-semibold text-navy-800">Season in review</h2>
+          <p class="text-sm text-navy-500">Your year in the garden, by the numbers.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button type="button" id="review-prev" class="btn-ghost text-sm" aria-label="Previous year">←</button>
+          <span id="review-year" class="font-display text-xl font-semibold text-navy-800"></span>
+          <button type="button" id="review-next" class="btn-ghost text-sm" aria-label="Next year">→</button>
+        </div>
       </header>
-      <p id="calendar-empty" class="hidden card text-center text-navy-500">No observations yet — add one in Garden Logs to populate the calendar.</p>
-      <div id="calendar-grid" class="grid gap-6 xl:grid-cols-3"></div>
+
+      <dl id="review-stats" class="grid grid-cols-2 gap-3 sm:grid-cols-4"></dl>
+
+      <div class="grid gap-6 lg:grid-cols-2">
+        <div class="card">
+          <h3 class="mb-1 font-display text-lg font-semibold">Observations by month</h3>
+          <p class="mb-4 text-xs text-navy-400">How often you checked in.</p>
+          <div id="review-activity" class="flex h-40 items-end gap-1.5"></div>
+          <div class="mt-2 flex gap-1.5 text-[10px] text-navy-400" id="review-months"></div>
+        </div>
+        <div class="card">
+          <h3 class="mb-1 font-display text-lg font-semibold">Average health by month</h3>
+          <p class="mb-4 text-xs text-navy-400">Mean health score of your observations.</p>
+          <div id="review-health" class="flex h-40 items-end gap-1.5"></div>
+          <div class="mt-2 flex gap-1.5 text-[10px] text-navy-400" id="review-months-2"></div>
+        </div>
+      </div>
+
+      <div class="grid gap-6 lg:grid-cols-2">
+        <div class="card">
+          <h3 class="mb-3 font-display text-lg font-semibold">Most watched plants</h3>
+          <ol id="review-top" class="space-y-2"></ol>
+        </div>
+        <div class="card">
+          <h3 class="mb-3 font-display text-lg font-semibold">Highlights</h3>
+          <ul id="review-highlights" class="space-y-2 text-sm text-navy-600"></ul>
+        </div>
+      </div>
     </section>
   </main>
 
-  <!-- Footer -->
-  <footer class="border-t border-beige-300 bg-beige-50/70 py-6 text-center text-xs text-navy-400">
-    Verdant · self-hosted garden journal ·
-    <a class="underline decoration-sage-400 hover:text-navy-700" href="/docs">API docs</a>
-    <span id="app-version" class="pill" title="Verdant version"></span>
+  <footer class="mx-auto max-w-7xl px-4 pb-10 sm:px-6 lg:px-8">
+    <p class="text-center text-xs text-navy-400">Verdant <span id="app-version"></span> · grown locally 🌿</p>
   </footer>
 </div>
 
-<!-- Day popup -->
-<div id="day-modal" class="hidden" aria-hidden="true"></div>
-
-<!-- Lightbox -->
-<div id="lightbox" class="fixed inset-0 z-50 hidden items-center justify-center bg-navy-900/90 p-4">
-  <img id="lightbox-img" alt="" class="max-h-full max-w-full rounded-xl shadow-botanical" />
-</div>
-
-<!-- Toasts -->
-<div id="toasts" role="status" aria-live="polite" class="pointer-events-none fixed bottom-4 right-4 z-50 flex w-80 flex-col gap-2"></div>
+<div id="toasts" class="pointer-events-none fixed bottom-4 right-4 z-50 flex w-72 flex-col gap-2"></div>
 
 <script src="/static/app.js"></script>
 </body>

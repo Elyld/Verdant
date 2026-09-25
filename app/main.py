@@ -98,3 +98,15 @@ def calendar_page(request: Request) -> HTMLResponse:
 def photos_page(request: Request) -> HTMLResponse:
     """ Photo album slideshow page. """
     return templates.TemplateResponse(request, "photos.html", {"__version__": __version__})
+
+
+@app.get("/plants", include_in_schema=False)
+def plants_page(request: Request) -> HTMLResponse:
+    """Plant profiles: care reminders, timelines, harvests, timelapses."""
+    return templates.TemplateResponse(request, "plants.html", {"__version__": __version__})
+
+
+@app.get("/review", include_in_schema=False)
+def review_page(request: Request) -> HTMLResponse:
+    """Season in review: a year of garden stats."""
+    return templates.TemplateResponse(request, "review.html", {"__version__": __version__})

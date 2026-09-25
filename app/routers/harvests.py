@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_session
 from app.models import Harvest, Plant
+from app.schemas import HarvestCreate
 
 router = APIRouter(prefix="/api/harvests", tags=["harvests"])
 
@@ -32,25 +33,19 @@ def list_harvests(
 
 @router.post("/", response_model=Harvest, status_code=201)
 def create_harvest(
-    plant_id: int,
-    date: str,
-    quantity: int,
-    unit: str = "fruit",
-    weight: Optional[float] = None,
-    notes: Optional[str] = None,
-    session: Session = Depends(get_session)
+    payload: HarvestCreate,
+    session: Session = Depends(get_session),
 ) -> Harvest:
-    # Validate plant exists
-    session.get(Plant, plant_id)  # will raise if not found
-    
+    if not session.get(Plant, payload.plant_id):
+        raise HTTPException(status_code=404, detail=f"Plant {payload.plant_id} not found")
+
     harvest = Harvest(
-        harvest_id=f"HARV-{hash(f'{plant_id}-{date}') % 1000:03d}",
-        plant_id=plant_id,
-        date=date,
-        quantity=quantity,
-        unit=unit,
-        weight=weight,
-        notes=notes
+        plant_id=payload.plant_id,
+        date=payload.date.isoformat(),
+        quantity=payload.quantity,
+        unit=payload.unit,
+        weight=payload.weight,
+        notes=payload.notes,
     )
     session.add(harvest)
     session.commit()
