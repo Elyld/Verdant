@@ -8,6 +8,7 @@ from app.routers.seed_sources import router as seed_sources_router
 from app.routers.harvests import router as harvests_router
 from app.routers.watering_logs import router as watering_logs_router
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -17,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.database import UPLOAD_DIR, init_db
-from app.routers import albums, backup, fertilizations, immich, observations, posts, stats
+from app.routers import albums, backup, digest, fertilizations, immich, observations, posts, stats
 from app.version import __version__
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -29,7 +30,49 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    scheduler = _maybe_start_digest_scheduler()
     yield
+    if scheduler is not None:
+        scheduler.shutdown(wait=False)
+
+
+def _maybe_start_digest_scheduler():
+    """Start the daily Discord digest if DIGEST_ENABLED=true and a webhook is set."""
+    import logging
+
+    from apscheduler.schedulers.background import BackgroundScheduler
+    from apscheduler.triggers.cron import CronTrigger
+    from sqlmodel import Session
+
+    from app.database import engine
+    from app.routers.digest import get_config, run_digest
+
+    log = logging.getLogger("verdant.digest")
+    cfg = get_config()
+    if not cfg.enabled:
+        return None
+    if not cfg.webhook_url:
+        log.warning("DIGEST_ENABLED=true but DISCORD_WEBHOOK_URL is not set; digest not scheduled.")
+        return None
+    try:
+        hour, minute = (int(x) for x in cfg.time.split(":"))
+    except ValueError:
+        log.warning("Bad DIGEST_TIME %r (want HH:MM); digest not scheduled.", cfg.time)
+        return None
+
+    def _job():
+        try:
+            with Session(engine) as session:
+                run_digest(session, cfg.webhook_url)
+        except Exception:
+            log.exception("Scheduled digest failed.")
+
+    local_tz = datetime.now().astimezone().tzinfo
+    scheduler = BackgroundScheduler(timezone=local_tz)
+    scheduler.add_job(_job, CronTrigger(hour=hour, minute=minute), id="morning-digest")
+    scheduler.start()
+    log.info("Morning digest scheduled daily at %02d:%02d (%s).", hour, minute, local_tz)
+    return scheduler
 
 
 app = FastAPI(
@@ -60,6 +103,7 @@ app.include_router(seed_sources_router)
 app.include_router(harvests_router)
 app.include_router(watering_logs_router)
 app.include_router(backup.router)
+app.include_router(digest.router)
 
 @app.get("/api/health", tags=["meta"])
 def health() -> dict:
