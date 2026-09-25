@@ -7,6 +7,7 @@ unchanged for Immich-sourced photos too.
 """
 from __future__ import annotations
 
+import logging
 import secrets
 from typing import List, Optional
 
@@ -21,6 +22,8 @@ from app.schemas import ImmichBatchImportResult
 from app.storage import ALLOWED_TYPES, _sniff
 
 router = APIRouter(prefix="/api/immich", tags=["immich"])
+
+log = logging.getLogger("verdant.immich")
 
 BATCH_DEFAULT = 50
 BATCH_MAX = 200
@@ -144,6 +147,17 @@ def import_immich_album(
 
     session.commit()
     session.refresh(album)
+    if errors:
+        # Per-asset failures used to be invisible (the UI only showed the
+        # created count), so log them where `docker logs` can see them.
+        log.warning(
+            "Immich import batch (album %s, offset %d): %d failed, %d created. First errors: %s",
+            immich_album_id,
+            offset,
+            len(errors),
+            created,
+            "; ".join(errors[:5]),
+        )
     done = offset + limit >= total
     return ImmichBatchImportResult(
         album_id=album.id,
