@@ -84,7 +84,7 @@ def list_album_assets(album_id: str) -> List[dict]:
             try:
                 resp = c.post(
                     "/api/search/metadata",
-                    json={"albumIds": [album_id], "page": page, "size": 1000},
+                    json={"albumIds": [album_id], "withExif": True, "page": page, "size": 1000},
                 )
             except httpx.HTTPError as exc:
                 raise HTTPException(

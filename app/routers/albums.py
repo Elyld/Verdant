@@ -11,9 +11,12 @@ from sqlmodel import Session, select
 
 from app.database import get_session
 from app.models import Album, AlbumImage
+from app.routers.immich import _asset_metadata
+from app import immich as immich_client
 from app.schemas import (
     AlbumCreateResult,
     AlbumImportFromAlbum,
+    AlbumMetadataSyncResult,
     AlbumRead,
     AlbumImageRef,
     ImportFromUrlRequest,
@@ -107,6 +110,53 @@ def get_album(album_id: int, session: Session = Depends(get_session)) -> Album:
     if album is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Album not found")
     return album
+
+
+@router.post("/api/albums/{album_id}/sync-metadata", response_model=AlbumMetadataSyncResult)
+def sync_album_metadata(album_id: int, session: Session = Depends(get_session)) -> AlbumMetadataSyncResult:
+    """Backfill photo metadata (date taken, camera, GPS) from Immich EXIF.
+
+    Only fills blank fields — never overwrites. Meant for photos imported
+    before metadata capture existed.
+    """
+    album = session.get(Album, album_id)
+    if album is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Album not found")
+    if not (album.source_url or "").startswith("immich:"):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Only Immich-imported albums can sync metadata.",
+        )
+    immich_album_id = album.source_url.split(":", 1)[1]
+    assets = immich_client.list_album_assets(immich_album_id)
+    by_source = {f"immich:{a.get('id')}": a for a in assets if a.get("id")}
+    updated = 0
+    for img in album.images:
+        asset = by_source.get(img.source_url)
+        if asset is None:
+            continue
+        meta = _asset_metadata(asset)
+        changed = False
+        if meta["taken_at"] is not None and img.taken_at is None:
+            img.taken_at = meta["taken_at"]
+            changed = True
+        if meta["camera_make"] and not img.camera_make:
+            img.camera_make = meta["camera_make"]
+            changed = True
+        if meta["camera_model"] and not img.camera_model:
+            img.camera_model = meta["camera_model"]
+            changed = True
+        if meta["latitude"] is not None and img.latitude is None:
+            img.latitude = meta["latitude"]
+            changed = True
+        if meta["longitude"] is not None and img.longitude is None:
+            img.longitude = meta["longitude"]
+            changed = True
+        if changed:
+            session.add(img)
+            updated += 1
+    session.commit()
+    return AlbumMetadataSyncResult(album_id=album.id, total=len(album.images), updated=updated)
 
 
 @router.delete("/api/albums/{album_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)

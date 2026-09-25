@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import secrets
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -27,6 +28,38 @@ log = logging.getLogger("verdant.immich")
 
 BATCH_DEFAULT = 50
 BATCH_MAX = 200
+
+
+def _parse_dt(value) -> Optional[datetime]:
+    """Parse an Immich ISO timestamp to naive UTC (matches utcnow storage)."""
+    if not value or not isinstance(value, str):
+        return None
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
+def _as_float(value) -> Optional[float]:
+    try:
+        return float(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _asset_metadata(asset: dict) -> dict:
+    """Pull the photo metadata we keep out of an Immich asset dict."""
+    exif = asset.get("exifInfo") or {}
+    return {
+        "taken_at": _parse_dt(exif.get("dateTimeOriginal") or asset.get("fileCreatedAt")),
+        "camera_make": (exif.get("make") or "").strip()[:100],
+        "camera_model": (exif.get("model") or "").strip()[:100],
+        "latitude": _as_float(exif.get("latitude")),
+        "longitude": _as_float(exif.get("longitude")),
+    }
 
 
 class ImmichAlbumSummary(BaseModel):
@@ -94,7 +127,10 @@ def import_immich_album(
                 status.HTTP_400_BAD_REQUEST,
                 detail="album_id is required when offset > 0",
             )
-        album = Album(name=remote.get("albumName") or "Immich import")
+        album = Album(
+            name=remote.get("albumName") or "Immich import",
+            source_url=f"immich:{immich_album_id}",
+        )
         session.add(album)
         session.commit()
         session.refresh(album)
@@ -133,6 +169,7 @@ def import_immich_album(
 
         fname = f"{secrets.token_hex(16)}{ALLOWED_TYPES[kind]}"
         (target_dir / fname).write_bytes(data)
+        meta = _asset_metadata(asset)
         session.add(
             AlbumImage(
                 album_id=album.id,
@@ -140,6 +177,11 @@ def import_immich_album(
                 title=original_name[:200],
                 original_name=original_name[:200],
                 source_url=source,
+                taken_at=meta["taken_at"],
+                camera_make=meta["camera_make"],
+                camera_model=meta["camera_model"],
+                latitude=meta["latitude"],
+                longitude=meta["longitude"],
             )
         )
         already.add(source)
