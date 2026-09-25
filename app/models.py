@@ -107,6 +107,7 @@ class Album(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True)
     created_at: datetime = Field(default_factory=utcnow)
+    source_url: str = ""  # e.g. "immich:<album-id>" for Immich imports (enables metadata re-sync)
 
     images: List["AlbumImage"] = Relationship(
         back_populates="album",
@@ -125,6 +126,12 @@ class AlbumImage(SQLModel, table=True):
     original_name: str = ""
     source_url: str = ""
     imported_at: datetime = Field(default_factory=utcnow)
+    # Photo metadata pulled from Immich EXIF (populated on import or via sync).
+    taken_at: Optional[datetime] = None
+    camera_make: str = ""
+    camera_model: str = ""
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
     album: Optional["Album"] = Relationship(back_populates="images")
 

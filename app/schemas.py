@@ -229,6 +229,11 @@ class AlbumImageRead(BaseModel):
     original_name: str
     source_url: str
     imported_at: datetime
+    taken_at: Optional[datetime] = None
+    camera_make: str = ""
+    camera_model: str = ""
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 
 class AlbumImageRef(BaseModel):
@@ -244,7 +249,14 @@ class AlbumRead(BaseModel):
     id: int
     name: str
     created_at: datetime
+    source_url: str = ""
     images: List[AlbumImageRead] = []
+
+
+class AlbumMetadataSyncResult(BaseModel):
+    album_id: int
+    total: int
+    updated: int
 
 
 class AlbumCreateResult(BaseModel):
