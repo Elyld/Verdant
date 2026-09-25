@@ -93,6 +93,7 @@ const IMAGES = [0, 1, 2].map((i) => ({
   title: `Photo ${i}`, original_name: `p${i}.jpg`,
 }));
 let immichImportCalls = 0;
+let immichFailMode = false; // when true, every batch fails (e.g. missing asset.download permission)
 global.fetch = async (url, options) => {  const method = (options && options.method) || 'GET';
   let body = null;
   if (url === '/api/immich/status') body = { configured: true };
@@ -100,9 +101,14 @@ global.fetch = async (url, options) => {  const method = (options && options.met
   else if (url.startsWith('/api/immich/albums/imm-1/import') && method === 'POST') {
     // Batched import: two batches then done.
     immichImportCalls += 1;
-    body = immichImportCalls === 1
-      ? { album_id: 7, album_name: 'Garden 2026', total: 3, imported: 2, done: false, created: 2, failed: 0 }
-      : { album_id: 7, album_name: 'Garden 2026', total: 3, imported: 3, done: true, created: 1, failed: 0 };
+    if (immichFailMode) {
+      body = { album_id: 8, album_name: 'Locked', total: 100, imported: 0, done: false, created: 0, failed: 50,
+               errors: ["a.jpg: Immich refused the download (403). The API key needs the 'asset.download' permission."] };
+    } else {
+      body = immichImportCalls === 1
+        ? { album_id: 7, album_name: 'Garden 2026', total: 3, imported: 2, done: false, created: 2, failed: 0 }
+        : { album_id: 7, album_name: 'Garden 2026', total: 3, imported: 3, done: true, created: 1, failed: 0 };
+    }
   }
   else if (url === '/api/albums') body = [{ id: 7, name: 'Garden 2026', images: IMAGES }];
   else if (url === '/api/albums/7') body = { id: 7, name: 'Garden 2026', images: IMAGES };
@@ -144,6 +150,20 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
   check('import fetched in 2 batches', immichImportCalls === 2);
   check('import dispatched albums-changed with new album id', changedDetail && changedDetail.selectId === 7);
   check('import button restored', importBtn.textContent === 'Import album' && importBtn.disabled === false);
+
+  // --- Immich import failure path: a fully-failing batch stops early and
+  // --- the toast names the cause instead of a silent "imported 0".
+  const seenToasts = [];
+  named['#toasts'].append = (c) => { seenToasts.push(c.textContent); };
+  immichFailMode = true;
+  immichImportCalls = 0;
+  named['#immich-album-select'].value = 'imm-1';
+  importBtn.textContent = 'Import album';
+  await importBtn._listeners.click[0]();
+  await tick(150);
+  check('failed batch stops after first request', immichImportCalls === 1);
+  check('failure toast names the permission', seenToasts.some((t) => t.includes('asset.download')));
+  check('import button restored after failure', importBtn.textContent === 'Import album' && importBtn.disabled === false);
 
   // --- Photos slideshow ---
   const picker = named['#photo-album-select'];

@@ -472,19 +472,33 @@
           // never duplicates photos.
           const batchSize = 50;
           let localAlbumId = null, offset = 0, done = false;
-          let totalCreated = 0, albumName = '';
+          let totalCreated = 0, totalFailed = 0, albumName = '';
+          let firstErrors = [];
           while (!done) {
             const qs = `?offset=${offset}&limit=${batchSize}` + (localAlbumId ? `&album_id=${localAlbumId}` : '');
             const result = await api.post(`/api/immich/albums/${encodeURIComponent(immichAlbumId)}/import${qs}`);
             localAlbumId = result.album_id;
             albumName = result.album_name;
             totalCreated += result.created;
+            totalFailed += result.failed || 0;
+            if (result.errors && result.errors.length && firstErrors.length < 3) {
+              firstErrors = firstErrors.concat(result.errors.slice(0, 3 - firstErrors.length));
+            }
             offset += batchSize;
             done = result.done;
+            // A whole batch that fails with nothing imported will never
+            // recover (e.g. a missing API permission): stop instead of
+            // hammering the server with more doomed requests.
+            if (result.created === 0 && (result.failed || 0) > 0) done = true;
             btn.textContent = `Importing… ${result.imported}/${result.total}`;
           }
-          toast(`Imported ${totalCreated} photo${totalCreated === 1 ? '' : 's'} into \u201C${albumName}\u201D.`);
-          document.dispatchEvent(new CustomEvent('verdant:albums-changed', { detail: { selectId: localAlbumId } }));
+          if (totalCreated === 0 && totalFailed > 0) {
+            toast(`Import failed: ${firstErrors[0] || 'every photo failed to download.'}`, 'err');
+          } else {
+            toast(`Imported ${totalCreated} photo${totalCreated === 1 ? '' : 's'} into \u201C${albumName}\u201D.`
+              + (totalFailed ? ` (${totalFailed} failed)` : ''));
+            document.dispatchEvent(new CustomEvent('verdant:albums-changed', { detail: { selectId: localAlbumId } }));
+          }
         } catch (error) {
           toast(`Import failed: ${error.message}`, 'err');
         } finally {

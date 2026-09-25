@@ -109,5 +109,18 @@ def download_asset(asset_id: str, thumbnail: bool = False) -> bytes:
             resp = c.get(path, params={"size": "preview"} if thumbnail else None)
         except httpx.HTTPError as exc:
             raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail=f"Could not reach Immich: {exc}") from exc
+        if resp.status_code == 403 and not thumbnail:
+            # Listing albums only needs asset.view, but downloading originals
+            # needs the separate asset.download permission. Without it every
+            # import silently imports 0 photos, so say exactly what to fix.
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                detail=(
+                    "Immich refused the download (403). The API key needs the "
+                    "'asset.download' permission: in Immich, open Account settings "
+                    "-> API keys -> edit this key -> tick 'asset.download' -> save, "
+                    "then retry the import."
+                ),
+            )
         _raise_for(resp)
         return resp.content

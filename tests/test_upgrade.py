@@ -200,3 +200,79 @@ def test_immich_import_batches_and_is_idempotent(monkeypatch):
         # offset without album_id is rejected
         bad = client.post("/api/immich/albums/big/import?offset=2&limit=2")
         assert bad.status_code == 400
+
+
+def _denied_transport():
+    """Mock Immich server that 403s every original download (missing asset.download)."""
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path.endswith("/original"):
+            return httpx.Response(403, json={"message": "forbidden"})
+        return httpx.Response(404, json={})
+
+    return httpx.MockTransport(handler)
+
+
+def test_download_asset_403_mentions_permission(monkeypatch):
+    transport = _denied_transport()
+
+    def fake_client():
+        base, key = immich._config()
+        return httpx.Client(
+            base_url=base, headers={"x-api-key": key}, transport=transport
+        )
+
+    monkeypatch.setattr(immich, "_client", fake_client)
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as exc_info:
+        immich.download_asset("abc123")
+    assert "asset.download" in exc_info.value.detail
+
+
+def test_immich_import_reports_download_failures(monkeypatch, caplog):
+    """When every download is denied, the batch reports failures instead of a
+    silent 'imported 0'."""
+    import logging
+
+    from fastapi import HTTPException
+    from fastapi.testclient import TestClient
+
+    import app.routers.immich as immich_router
+    from app.database import init_db
+    from app.main import app
+
+    def denied(_id: str):
+        raise HTTPException(
+            status_code=502,
+            detail="Immich refused the download (403). The API key needs the "
+            "'asset.download' permission.",
+        )
+
+    monkeypatch.setattr(
+        immich_router.immich,
+        "get_album",
+        lambda _id: {"id": "locked", "albumName": "Locked", "assetCount": 2},
+    )
+    monkeypatch.setattr(
+        immich_router.immich,
+        "list_album_assets",
+        lambda _id: [
+            {"id": "p1", "type": "IMAGE", "originalFileName": "a.jpg"},
+            {"id": "p2", "type": "IMAGE", "originalFileName": "b.jpg"},
+        ],
+    )
+    monkeypatch.setattr(immich_router.immich, "download_asset", denied)
+
+    init_db()
+    with caplog.at_level(logging.WARNING, logger="verdant.immich"):
+        with TestClient(app) as client:
+            r = client.post("/api/immich/albums/locked/import?offset=0&limit=50")
+    assert r.status_code == 200, r.text[:200]
+    body = r.json()
+    assert body["created"] == 0
+    assert body["failed"] == 2
+    assert body["imported"] == 0
+    assert any("asset.download" in e for e in body["errors"])
+    # failures are logged server-side for `docker logs`
+    assert "2 failed" in caplog.text
