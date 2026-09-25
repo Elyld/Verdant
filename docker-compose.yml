@@ -1,18 +1,34 @@
+# Verdant — plug n' play via GHCR. No build needed:
+#
+#   docker compose up -d
+#
+# Then open http://localhost:3113 (or your GARDEN_PORT).
+#
+# Optional: copy .env.example to .env to set the host port, the public URL,
+# or your Immich server details. Anything in .env is picked up automatically.
+#
+# To build the image locally instead of pulling, uncomment the `build:` line.
+
 services:
   garden:
-    build: .
-    image: verdant-garden-log:2.0.0
+    image: ghcr.io/elyld/verdant:latest
+    # build: .
     container_name: verdant-garden-log
     restart: unless-stopped
     ports:
-      - "3113:8000"
+      - "${GARDEN_PORT:-3113}:8000"
     environment:
       GARDEN_DATA_DIR: /data
       GARDEN_UPLOAD_DIR: /uploads
       GARDEN_DATABASE_URL: sqlite:////data/garden.db
       # Base URL used to resolve relative URLs in "Import from URL".
       # Set to your server's real address, e.g. https://photos.yourdomain.com
-      GARDEN_PUBLIC_URL: http://localhost:3113
+      GARDEN_PUBLIC_URL: ${GARDEN_PUBLIC_URL:-http://localhost:3113}
+      # Immich integration (optional). Leave empty to keep it disabled.
+      # If Verdant runs in Docker on the same machine as Immich, use
+      # http://host.docker.internal:2283 so the container can reach your host.
+      IMMICH_BASE_URL: ${IMMICH_BASE_URL:-}
+      IMMICH_API_KEY: ${IMMICH_API_KEY:-}
     volumes:
       # SQLite database file + uploaded images persist on the host.
       - ./data:/data

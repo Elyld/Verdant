@@ -331,3 +331,30 @@ def test_health_reports_version(client):
     body = client.get("/api/health").json()
     assert body["status"] == "ok"
     assert "version" in body
+
+
+def test_docker_compose_is_plug_n_play():
+    """docker-compose.yml must pull from GHCR and define all env/volumes.
+
+    Guards the one-command setup: `docker compose up -d` with no .env file.
+    """
+    import yaml
+
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(repo, "docker-compose.yml")) as fh:
+        compose = yaml.safe_load(fh)
+    garden = compose["services"]["garden"]
+    assert garden["image"].startswith("ghcr.io/"), "must pull the prebuilt GHCR image"
+    assert "build" not in garden, "compose must pull, not build (build: stays commented out)"
+    env = garden["environment"]
+    for key in ("GARDEN_DATA_DIR", "GARDEN_UPLOAD_DIR", "GARDEN_DATABASE_URL",
+                "GARDEN_PUBLIC_URL", "IMMICH_BASE_URL", "IMMICH_API_KEY"):
+        assert key in env, f"missing env var {key}"
+    volumes = " ".join(str(v) for v in garden["volumes"])
+    assert "/data" in volumes and "/uploads" in volumes
+
+    example_path = os.path.join(repo, ".env.example")
+    assert os.path.exists(example_path), ".env.example must exist"
+    example = open(example_path).read()
+    for key in ("GARDEN_PORT", "GARDEN_PUBLIC_URL", "IMMICH_BASE_URL", "IMMICH_API_KEY"):
+        assert key in example, f".env.example should document {key}"

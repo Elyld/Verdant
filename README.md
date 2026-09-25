@@ -17,13 +17,21 @@ Palette: **sage green**, **navy blue**, **beige** accents.
 
 ## Quick start (Docker — recommended)
 
+No build needed — pull the prebuilt image from GitHub Container Registry:
+
 ```bash
-docker-compose up --build
+docker compose up -d
 ```
 
-Open <http://localhost:8000>. Interactive API docs: <http://localhost:8000/docs>.
+Open <http://localhost:3113>. Interactive API docs: <http://localhost:3113/docs>.
 
-Change the host port with `GARDEN_PORT=9000 docker-compose up --build`.
+That's the whole setup. To change the host port, use another port, or enable the
+Immich import, copy `.env.example` to `.env` and fill in what you need, then
+re-run `docker compose up -d`.
+
+The image (`ghcr.io/elyld/verdant:latest`, also tagged per release) is published
+automatically by the `Publish Docker image` workflow on every push to `main`;
+it builds for both `linux/amd64` and `linux/arm64` (handy for a Raspberry Pi).
 
 ### Persistence
 
@@ -173,9 +181,9 @@ Changelog:
 - The `GET /api/immich/status` endpoint (`/api/immich/status`) must return `200 OK` for the Immich section to appear in the UI.
 
 **Immich section doesn't appear in UI**
-- Verify `IMMICH_BASE_URL` and `IMMICH_API_KEY` are set in `docker-compose.yml` environment section.
-- Use `host.docker.internal:8789` (not a bare IP like `192.168.0.57`) as the `IMMICH_BASE_URL` value when running inside a Docker bridge network. This routes from the Verdant container back to your host.
-- Restart the container after changing env vars: `docker-compose down && docker-compose up -d`.
+- Set `IMMICH_BASE_URL` and `IMMICH_API_KEY` in your `.env` file (copy from `.env.example`), then `docker compose up -d` again.
+- Use `http://host.docker.internal:2283` (not a bare IP like `192.168.0.57`) as the `IMMICH_BASE_URL` value when running inside a Docker bridge network. This routes from the Verdant container back to your host.
+- Restart the container after changing env vars: `docker compose down && docker compose up -d`.
 
 **Port mapping issues**
 - Ensure `ports: - 3119:8000` (or your chosen external port) in `docker-compose.yml` matches your dockge/ Docker setup.
@@ -184,7 +192,7 @@ Changelog:
 ### General
 
 **Changes not taking effect**
-- After editing `docker-compose.yml`, always run `docker-compose down && docker-compose up -d` to pick up changes.
+- After editing `docker-compose.yml`, always run `docker compose down && docker compose up -d` to pick up changes.
 - Browser cache may persist old UI state; use Ctrl+F5 (hard refresh) if the Immich section seems stuck.
 
 **API commands not working from host**
