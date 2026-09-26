@@ -1,8 +1,10 @@
 # 🌿 Verdant — Self-Hosted Garden Journal (v2.13.0)
 
 Your garden, logged. Plant profiles with care reminders, a daily observation log
-with a calendar heatmap, photo albums with slideshows, seed source tracking,
-harvest records, a season-in-review dashboard, CSV import from other trackers,
+with a calendar heatmap, photo albums with slideshows, a seed stash and seedling
+tracker, a drag-and-drop backyard planner, NFC tag shortcuts, harvest records,
+a season-in-review dashboard with a yield-vs-spend scorecard, cost and pest
+tracking, a phone-friendly quick-log page, CSV import from other trackers,
 one-click backup & restore, Immich photo imports, and a morning Discord digest —
 all in a single Docker container. FastAPI + SQLite, no build step, no cloud.
 
@@ -82,10 +84,12 @@ harvests, experiments, lessons learned.
 
 ### 📊 Season Review — your year in the garden
 Totals, averages, best days, most productive plants — a year-end (or
-anytime) dashboard of everything you grew and logged. The **⚖️ Season
-scorecard** answers "was it worth growing?": yield vs. spending per variety,
-ranked — tag purchases to a plant on the Costs page to split costs per
-variety.
+anytime) dashboard of everything you grew and logged. The **🏆 yield
+leaderboard** keeps weighed and counted harvests on separate boards (all
+weights converted to ounces, so grams never get added to ounces), and the
+**⚖️ Season scorecard** answers "was it worth growing?": yield vs. spending
+per variety, ranked — tag purchases to a plant on the Costs page to split
+costs per variety.
 
 ![Season review](docs/screenshots/review.png)
 
@@ -114,6 +118,32 @@ Your fertilizer products live here now: name, NPK ratio, what each is best
 for. The Garden Logs feeding form suggests from the shelf, and NFC tags can
 point straight at a bottle.
 
+![Fertilizers](docs/screenshots/fertilizers.png)
+
+### 🌱 Seedlings — the indoor workstation
+Start seeds inside without losing track: every batch records variety, tray,
+location, warming mat, and grow light, with a stage pipeline from sowing to
+transplant and one-tap sprout logging. Germination progress bars (including
+days-to-sprout) show what's working, and a nudge flags batches that go quiet
+for three weeks. Finished batches keep their stats so next year's setup
+repeats what worked.
+
+![Seedlings](docs/screenshots/seedlings.png)
+
+### ⚡ Quick Log — log it from the garden
+A phone-first page for when you're standing in the garden with dirty hands:
+one-tap watering per location ("Water all"), a harvest +/− stepper, and
+today's entries at a glance. NFC tags can drop you straight here.
+
+### 💰 Costs — was it worth growing?
+Every garden expense in one place, broken down by category. Tag a purchase
+to a plant and the Season Review scorecard splits costs per variety, so you
+can finally answer whether the peppers beat the grocery store.
+
+### 🐛 Pests — the treatment log
+What showed up, what you sprayed or squashed, and whether it worked — a
+running log per pest so next year's battle plan writes itself.
+
 ### 📥 CSV Import — bring your own data
 Moving from another garden tracker? The **Import** page (nav bar → Import)
 walks you through it: pick what you're importing (locations, plants,
@@ -128,8 +158,10 @@ See [Importing from CSV](#importing-from-csv) below for the expected columns.
 
 ### 💾 Backup & Restore — the whole garden in a zip
 One click downloads a zip containing the full database plus every uploaded
-photo. Restoring is the reverse: upload the zip, and you're back. Keep one
-somewhere safe before upgrades.
+photo — or uncheck the photos box for a small, fast database-only backup.
+Restoring is the reverse: upload the zip, and you're back (a photo-less
+backup leaves your current photos untouched). Keep one somewhere safe
+before upgrades.
 
 ![Backup & restore](docs/screenshots/backup.png)
 
@@ -145,7 +177,9 @@ Verdant — no downloading and re-uploading. Needs `IMMICH_BASE_URL` and
 
 ## Quick start (Docker — recommended)
 
-No build needed — pull the prebuilt image from GitHub Container Registry:
+The included `docker-compose.yml` is a plug-n-play base setup — the prebuilt
+image from GitHub Container Registry, two folders for your data, nothing else
+to configure:
 
 ```bash
 docker compose up -d
@@ -153,9 +187,14 @@ docker compose up -d
 
 Open <http://localhost:3113>. Interactive API docs: <http://localhost:3113/docs>.
 
-That's the whole setup. To change the host port, enable the Immich import, or
-turn on the Discord digest, copy `.env.example` to `.env` and fill in what you
-need, then re-run `docker compose up -d`.
+That's genuinely the whole setup: no `.env` file needed, no build step, and
+your data lives in the `./data` and `./uploads` folders next to the compose
+file, so it survives rebuilds and restarts. Paste the same file into Dockge
+or Portainer and it just works there too.
+
+To change the host port, point Verdant at your Immich server, or turn on the
+Discord digest, copy `.env.example` to `.env` and fill in what you need, then
+re-run `docker compose up -d`.
 
 The image (`ghcr.io/elyld/verdant:latest`, also tagged per release) is published
 automatically by the `Publish Docker image` workflow on every push to `main`;
@@ -257,9 +296,9 @@ ignored):
 | Plants | `plant_id`, `variety_name`, `species`, `category`, `status`, `location` (name or id), `date_planted`, `date_started_indoors`, `days_to_maturity`, `light`, `notes`, `water_every_days`, `feed_every_days` |
 | Fertilizers | `fertilizer_id`, `name`, `npk_ratio`, `best_for`, `notes` |
 | Seed sources | `source_id`, `source`, `variety`, `type`, `acquired_date`, `notes` |
-| Watering logs | `log_id`, `date`, `location`, `plant`, `method`, `amount`, `notes` |
-| Fertilization logs | `log_id`, `date`, `fertilizer`, `npk_ratio`, `amount_used`, `plant`, `notes` |
-| Harvests | `harvest_id`, `date`, `plant`, `quantity`, `unit`, `weight_grams`, `notes` |
+| Watering logs | `log_id`, `date`, `location`, `plant`, `method`, `amount` (parsed to number + unit when it looks like one, e.g. `2 gal`), `notes` |
+| Fertilization logs | `log_id`, `date`, `fertilizer`, `npk_ratio`, `amount_used` (free text), `plant`, `notes` |
+| Harvests | `harvest_id`, `date`, `plant`, `quantity`, `unit`, `weight`, `weight_unit` (oz/g/lb/kg — defaults to oz) |
 
 Notes:
 
@@ -274,10 +313,12 @@ Notes:
 ## Backup & restore
 
 **Backup:** open the Backup page (`/backup`) → Download. You get a zip with
-`garden.db` and the entire `uploads/` tree. Store one before every upgrade.
+`garden.db` and, unless you uncheck the box, the entire `uploads/` tree.
+Store one before every upgrade.
 
 **Restore:** on the same page, upload a backup zip. Verdant replaces the
-database and uploads with the backup's contents.
+database with the backup's contents; uploads are replaced too, unless the
+backup was made without photos — then your current photos are left alone.
 
 There's also a JSON export per table via the API (see `/docs`) if you'd
 rather script it.
@@ -418,8 +459,10 @@ server local time. Test with `POST /api/digest/send`.
   (e.g. "2 gal"), with the original text always kept. New **°F/°C toggle** in
   Settings (weather chips honor it), planner vessels get a proper
   **volume (gal/qt/L)** instead of free-text size, and seed packets track
-  **seed count**. (To backfill your existing harvests, re-upload the harvest
-  CSV on the Import page after updating.)
+  **seed count**. Backups are now **optionally photo-less**: uncheck the box
+  on the Backup page for a small database-only zip (restoring one leaves
+  your current photos untouched). (To backfill your existing harvests,
+  re-upload the harvest CSV on the Import page after updating.)
 - **2.12.0** — New **🌱 Seedlings** tab: the indoor seed-starting workstation.
   Track every batch from sow to transplant — tray, location, warming mat,
   grow light, cells sown — with one-tap sprout logging, germination progress

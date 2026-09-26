@@ -1,11 +1,13 @@
 """Backup & restore: the whole database plus uploaded files as one zip download.
 
-Export:  GET  /api/backup/export  -> verdant-backup-<timestamp>.zip
+Export:  GET  /api/backup/export[?include_photos=false]
+         -> verdant-backup[-nophotos]-<timestamp>.zip
          { data.json: every table's rows, files/: the uploaded images }
 
 Import:  POST /api/backup/import  (multipart "file")
          Wipes current data, restores rows (ids preserved so links stay
-         intact) and re-extracts the uploaded files. Reports per-table counts.
+         intact) and re-extracts the uploaded files. A backup made without
+         photos leaves the current uploads untouched. Reports per-table counts.
 """
 from __future__ import annotations
 
@@ -70,8 +72,13 @@ def _upload_relpath(file_path: str) -> str | None:
 
 
 @router.get("/export")
-def export_backup(session: Session = Depends(get_session)):
-    """Download a zip containing data.json (all tables) + files/ (uploads)."""
+def export_backup(include_photos: bool = True, session: Session = Depends(get_session)):
+    """Download a zip containing data.json (all tables) + files/ (uploads).
+
+    include_photos=false skips the uploaded images — a small, fast backup of
+    just the database. The zip records what it contains so restore can
+    behave sensibly.
+    """
     buf = io.BytesIO()
     tables: dict[str, list] = {}
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -79,7 +86,7 @@ def export_backup(session: Session = Depends(get_session)):
             rows = session.exec(select(model).order_by(*_order_columns(model))).all()
             dumped = [r.model_dump(mode="json") for r in rows]
             tables[model.__tablename__] = dumped
-            if model in IMAGE_TABLES:
+            if include_photos and model in IMAGE_TABLES:
                 for d in dumped:
                     rel = _upload_relpath(d.get("file_path") or "")
                     if not rel:
@@ -92,15 +99,17 @@ def export_backup(session: Session = Depends(get_session)):
             "format_version": FORMAT_VERSION,
             "app_version": __version__,
             "exported_at": datetime.now(timezone.utc).isoformat(),
+            "includes_photos": include_photos,
             "tables": tables,
         }
         zf.writestr("data.json", json.dumps(manifest, indent=1))
     buf.seek(0)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    suffix = "" if include_photos else "-nophotos"
     return StreamingResponse(
         buf,
         media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="verdant-backup-{stamp}.zip"'},
+        headers={"Content-Disposition": f'attachment; filename="verdant-backup{suffix}-{stamp}.zip"'},
     )
 
 
@@ -120,27 +129,31 @@ def import_backup(
         raise HTTPException(status_code=400, detail="Not a Verdant backup file.")
 
     tables = manifest.get("tables", {})
+    # A backup exported with include_photos=false carries no files/ entries.
+    # Restoring one must not wipe the photos that are already here.
+    photos_included = any(n.startswith("files/") and not n.endswith("/") for n in zf.namelist())
     try:
         # Wipe children first.
         for model in reversed(TABLES_IN_ORDER):
             session.exec(delete(model))
-        # Clear the upload dir (it is fully app-managed).
-        if UPLOAD_DIR.exists():
-            for child in UPLOAD_DIR.iterdir():
-                if child.is_dir():
-                    shutil.rmtree(child)
-                else:
-                    child.unlink()
-        # Restore uploaded files (zip-slip guarded).
-        base = UPLOAD_DIR.resolve()
-        for name in zf.namelist():
-            if not name.startswith("files/") or name.endswith("/"):
-                continue
-            target = (base / name[len("files/"):]).resolve()
-            if base not in target.parents and target != base:
-                raise HTTPException(status_code=400, detail="Unsafe path in backup zip.")
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(zf.read(name))
+        if photos_included:
+            # Clear the upload dir (it is fully app-managed).
+            if UPLOAD_DIR.exists():
+                for child in UPLOAD_DIR.iterdir():
+                    if child.is_dir():
+                        shutil.rmtree(child)
+                    else:
+                        child.unlink()
+            # Restore uploaded files (zip-slip guarded).
+            base = UPLOAD_DIR.resolve()
+            for name in zf.namelist():
+                if not name.startswith("files/") or name.endswith("/"):
+                    continue
+                target = (base / name[len("files/"):]).resolve()
+                if base not in target.parents and target != base:
+                    raise HTTPException(status_code=400, detail="Unsafe path in backup zip.")
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(zf.read(name))
         # Insert parents first; ids are preserved so foreign keys line up.
         # model_validate (not __init__) coerces ISO date strings back to dates.
         counts: dict[str, int] = {}
@@ -156,4 +169,5 @@ def import_backup(
     except Exception as exc:
         session.rollback()
         raise HTTPException(status_code=400, detail=f"Restore failed: {exc}")
-    return {"restored": counts, "format_version": manifest.get("format_version")}
+    return {"restored": counts, "format_version": manifest.get("format_version"),
+            "photos_included": photos_included}

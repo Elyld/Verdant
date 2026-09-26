@@ -18,7 +18,8 @@
         dlBtn.disabled = true;
         dlBtn.textContent = 'Preparing backup…';
         try {
-          const res = await fetch('/api/backup/export');
+          const withPhotos = $('#backup-include-photos')?.checked !== false;
+          const res = await fetch(`/api/backup/export?include_photos=${withPhotos ? 'true' : 'false'}`);
           if (!res.ok) {
             const data = await res.json().catch(() => ({}));
             throw new Error(data.detail || `Backup failed (${res.status})`);
@@ -33,7 +34,9 @@
           a.click();
           a.remove();
           setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-          toast('Backup downloaded — check your Downloads folder.', 'ok');
+          toast(withPhotos
+            ? 'Backup downloaded — check your Downloads folder.'
+            : 'Database-only backup downloaded (no photos).', 'ok');
         } catch (err) {
           toast(err.message || 'Backup failed.', 'err');
         } finally {
@@ -60,8 +63,11 @@
         if (!res.ok) throw new Error(data.detail || `Restore failed (${res.status})`);
         const counts = data.restored || {};
         const total = Object.values(counts).reduce((a, b) => a + b, 0);
+        const photosNote = data.photos_included === false
+          ? ' <span class="text-navy-500">(no photos in this backup — existing uploads kept)</span>'
+          : '';
         result.classList.remove('hidden');
-        result.innerHTML = `<div class="rounded-xl border border-sage-300 bg-sage-50 p-4 text-sage-800">✅ Restored <b>${total}</b> records from backup. Reloading…</div>`;
+        result.innerHTML = `<div class="rounded-xl border border-sage-300 bg-sage-50 p-4 text-sage-800">✅ Restored <b>${total}</b> records from backup.${photosNote} Reloading…</div>`;
         toast(`Backup restored: ${total} records.`, 'ok');
         setTimeout(() => window.location.reload(), 1500);
       } catch (error) {
