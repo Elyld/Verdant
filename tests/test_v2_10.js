@@ -66,9 +66,9 @@ const named = {};
  'seed-tab-sources', 'seed-tab-catalog', 'seed-vendor-filter', 'seed-add-toggle',
  'seed-tabbtn-sources', 'seed-tabbtn-catalog',
  'packet-modal', 'packet-modal-title', 'packet-submit', 'packet-id', 'packet-variety',
- 'packet-species', 'packet-category', 'packet-year', 'packet-vendor', 'packet-vendor-url',
- 'packet-qty', 'packet-notes', 'packet-photo', 'packet-form', 'packet-close', 'packet-cancel',
- 'packet-categories',
+ 'packet-species', 'packet-category', 'packet-year', 'packet-vendor', 'packet-vendor-list',
+ 'packet-vendor-url', 'packet-qty', 'packet-notes', 'packet-photo', 'packet-form', 'packet-close', 'packet-cancel',
+ 'packet-categories', 'catalog-from-sources',
  'panel-tags', 'tag-list', 'tag-empty', 'tag-form', 'tag-label', 'tag-action',
  'tag-target-wrap', 'tag-target', 'tag-target-lbl', 'tag-text-wrap', 'tag-text',
  'tag-text-lbl', 'tag-action-hint',
@@ -91,6 +91,7 @@ global.document = {
   body: makeEl(),
 };
 global.window = { location: { pathname: '/', origin: 'http://localhost:3119' }, confirm: () => true };
+global.confirm = () => true;
 global.location = { search: '?tab=catalog&add=1', origin: 'http://localhost:3119' };
 Object.defineProperty(global, 'navigator', { value: { clipboard: { writeText: async () => {} } }, configurable: true });
 global.FormData = function () { this.append = () => {}; };
@@ -109,6 +110,8 @@ global.fetch = async (url, options) => {
     { id: 1, variety_name: 'Fatalii', category: 'Pepper', year_acquired: 2025, photo_path: '', vendor_id: null },
   ];
   else if (url === '/api/seed-sources/') resp = [{ id: 2, source: 'Territorial', variety: '' }];
+  else if (url === '/api/seed-packets/vendors') resp = ['Baker Creek', 'Territorial'];
+  else if (url === '/api/seed-packets/from-sources') resp = { created: 3, skipped: 1, total: 4 };
   else if (url === '/api/plants/') resp = [{ id: 5, variety_name: 'Habanero', status: 'Growing' }];
   else if (url === '/api/locations/') resp = [{ id: 3, name: 'Patio' }];
   else if (url === '/api/tags/') resp = [{ id: 9, code: 'abc123', label: 'Neem bottle', action: 'pest', target_text: 'Neem oil', tap_count: 2, last_tapped_at: '2026-09-25T10:00:00' }];
@@ -167,7 +170,14 @@ const JS = (f) => path.join('/home/hatch/workspace/verdant/app/static/js', f);
   check('sources tab hidden', named['#seed-tab-sources'].classList.contains('hidden') === true);
   check('packet grid renders', named['#catalog-grid'].innerHTML.includes('Fatalii'));
   check('add modal opens from ?add=1', named['#packet-modal'].classList.contains('hidden') === false);
-  check('vendor select populated', named['#packet-vendor'].innerHTML.includes('Territorial'));
+  check('vendor datalist populated, each vendor once',
+    (named['#packet-vendor-list'].innerHTML.match(/Territorial/g) || []).length === 1 &&
+    named['#packet-vendor-list'].innerHTML.includes('Baker Creek'));
+  fire(named['#catalog-from-sources'], 'click');
+  await tick(30);
+  const movePost = calls.post.find((c) => c.url === '/api/seed-packets/from-sources');
+  check('move-to-stash posts once', !!movePost);
+  check('move toast reports counts', seenToasts.some((t) => t.includes('Moved 3 sources to the stash') && t.includes('1 already there')));
 
   // ---- tags.js ----
   require(JS('tags.js'));

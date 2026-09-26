@@ -240,3 +240,106 @@ def test_upgrade_adds_new_columns(tmp_path=None):
     _apply_column_migrations(eng)
     cols = [r[1] for r in eng.connect().exec_driver_sql("PRAGMA table_info(expenses)").fetchall()]
     assert "plant_id" in cols
+
+
+# --------------------------------------------------------------------------- #
+# Seed stash fixes: vendor as plain text, move-sources-to-stash, backfill
+# --------------------------------------------------------------------------- #
+def test_packet_vendor_name_and_vendors_endpoint():
+    r = client.post(
+        "/api/seed-packets/",
+        json={"variety_name": "VendorTest Pepper", "vendor_name": "Territorial Seed",
+              "vendor_url": "territorialseed.com"},
+    )
+    assert r.status_code == 201, r.text
+    packet = r.json()
+    assert packet["vendor_name"] == "Territorial Seed"
+    # scheme-less URLs get normalized so the card link works
+    assert packet["vendor_url"] == "https://territorialseed.com"
+
+    r = client.post(
+        "/api/seed-packets/",
+        json={"variety_name": "VendorTest Tomato", "vendor_name": "Territorial Seed"},
+    )
+    assert r.status_code == 201
+
+    r = client.get("/api/seed-packets/vendors")
+    assert r.status_code == 200, r.text
+    vendors = r.json()
+    # each vendor exactly once, no matter how many packets use it
+    assert vendors.count("Territorial Seed") == 1
+
+
+def test_from_sources_conversion():
+    from app.models import SeedSource
+
+    def add_source(code, source, variety, notes):
+        r = client.post(
+            "/api/seed-sources/",
+            json={"source_id": code, "source": source, "variety": variety, "notes": notes},
+        )
+        assert r.status_code == 201, r.text
+
+    add_source("SRC-T1", "Baker Creek", "Aji Pineapple",
+               "URL: rareseeds.com\nAcquired: 2025\nGreat germination.")
+    add_source("SRC-T2", "Baker Creek", "Sungold",
+               "URL: https://rareseeds.com\nAcquired: 2026")
+    add_source("SRC-T3", "Seed Savers", "",
+               "Just the vendor, no variety recorded.")
+
+    r = client.post("/api/seed-packets/from-sources")
+    assert r.status_code == 201, r.text
+    result = r.json()
+    # NB: shared test DB — other test files import seed sources too
+    assert result["created"] >= 3, result
+
+    r = client.get("/api/seed-packets/", params={"q": "Aji Pineapple"})
+    packets = [p for p in r.json() if p["vendor_name"] == "Baker Creek"]
+    assert len(packets) == 1
+    aji = packets[0]
+    assert aji["vendor_url"] == "https://rareseeds.com"
+    assert aji["year_acquired"] == 2025
+    assert "Great germination." in (aji["notes"] or "")
+    assert "URL:" not in (aji["notes"] or "")  # folded lines were extracted
+
+    r = client.get("/api/seed-packets/", params={"q": "Unknown variety"})
+    unknowns = [p for p in r.json() if p["vendor_name"] == "Seed Savers"]
+    assert len(unknowns) == 1
+
+    # idempotent: re-running moves nothing new (my 3 sources all skipped now)
+    before = client.post("/api/seed-packets/from-sources").json()
+    after = client.post("/api/seed-packets/from-sources").json()
+    assert after["created"] == 0
+    assert after["skipped"] >= before["total"] >= 3
+
+
+def test_packet_vendor_name_backfill():
+    """Legacy packets (vendor_id -> seed_sources) get vendor_name on upgrade."""
+    import sqlite3
+
+    db_path = TMP / "legacy-packets.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE seed_sources (id INTEGER PRIMARY KEY, source_id TEXT, source TEXT, variety TEXT)")
+    conn.execute("INSERT INTO seed_sources (id, source_id, source, variety) VALUES (1, 'SRC-1', 'Territorial Seed', 'Habanero')")
+    conn.execute(
+        "CREATE TABLE seed_packets (id INTEGER PRIMARY KEY, packet_id TEXT, variety_name TEXT, "
+        "species_type TEXT, category TEXT, vendor_id INTEGER, vendor_url TEXT, year_acquired INTEGER, "
+        "quantity TEXT, photo_path TEXT, notes TEXT, date_added TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO seed_packets (id, packet_id, variety_name, vendor_id) "
+        "VALUES (1, 'SEEDPK-OLD', 'Habanero', 1)"
+    )
+    conn.commit()
+    conn.close()
+
+    from sqlalchemy import create_engine
+
+    from app.database import _apply_column_migrations
+
+    eng = create_engine(f"sqlite:///{db_path}")
+    _apply_column_migrations(eng)
+    name = eng.connect().exec_driver_sql(
+        "SELECT vendor_name FROM seed_packets WHERE id = 1"
+    ).fetchone()[0]
+    assert name == "Territorial Seed"

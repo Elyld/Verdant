@@ -284,6 +284,7 @@ class SeedPacket(SQLModel, table=True):
     species_type: str = Field(default="")
     category: str = Field(default="", index=True)  # Pepper, Tomato, Herb, Flower...
     vendor_id: Optional[int] = Field(default=None, foreign_key="seed_sources.id", index=True)
+    vendor_name: str = Field(default="", index=True)  # plain vendor name (v2.10.1+: no more vendor repeats)
     vendor_url: str = Field(default="")  # direct link to the vendor / product page
     year_acquired: Optional[int] = Field(default=None, index=True)
     quantity: str = Field(default="")  # "~40 seeds", "1 packet", ...

@@ -1,4 +1,4 @@
-# 🌿 Verdant — Self-Hosted Garden Journal (v2.10.0)
+# 🌿 Verdant — Self-Hosted Garden Journal (v2.10.1)
 
 Your garden, logged. Plant profiles with care reminders, a daily observation log
 with a calendar heatmap, photo albums with slideshows, seed source tracking,
@@ -406,6 +406,10 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.10.1** — Seed stash follow-up: the packet vendor is now a plain text
+  field with autocomplete (each vendor listed once — no more repeats), and a
+  **📦 Move sources to stash** button copies every seed source into the stash
+  as a packet, pulling the vendor link and year out of the imported notes.
 - **2.10.0** — The backyard update. **🗺️ Backyard Planner**: lay out grow
   bags, raised beds, pots and planters on a drag-and-drop canvas per season,
   assign plants to containers, copy last season's layout forward. **🏷️ NFC

@@ -10,7 +10,6 @@
     const params = new URLSearchParams(location.search);
 
     let packets = [];
-    let vendors = [];
 
     function setTab(which) {
       const catalog = which === 'catalog';
@@ -27,8 +26,7 @@
     }
 
     function card(p) {
-      const vendor = vendors.find((v) => v.id === p.vendor_id);
-      const vendorName = vendor ? vendor.source : '';
+      const vendorName = p.vendor_name || '';
       return `<div class="overflow-hidden rounded-xl bg-beige-50 ring-1 ring-beige-200">
         ${p.photo_path
           ? `<button type="button" data-lightbox="${esc(p.photo_path)}" class="block w-full"><img src="${esc(p.photo_path)}" alt="${esc(p.variety_name)} packet" class="h-36 w-full object-cover" loading="lazy" /></button>`
@@ -62,18 +60,18 @@
     }
 
     async function load() {
-      const [pkts, srcs] = await Promise.all([
+      const [pkts, vendorNames] = await Promise.all([
         api.get('/api/seed-packets/').catch(() => []),
-        api.get('/api/seed-sources/').catch(() => []),
+        api.get('/api/seed-packets/vendors').catch(() => []),
       ]);
       packets = Array.isArray(pkts) ? pkts : [];
-      vendors = Array.isArray(srcs) ? srcs : [];
       const cats = [...new Set(packets.map((p) => p.category).filter(Boolean))].sort();
       $('#catalog-category').innerHTML = '<option value="">All types</option>' +
         cats.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
       $('#packet-categories').innerHTML = cats.map((c) => `<option value="${esc(c)}">`).join('');
-      $('#packet-vendor').innerHTML = '<option value="">— none —</option>' +
-        vendors.map((v) => `<option value="${v.id}">${esc(v.source)}${v.variety ? ` · ${esc(v.variety)}` : ''}</option>`).join('');
+      const names = Array.isArray(vendorNames) ? vendorNames : [];
+      $('#packet-vendor-list').innerHTML =
+        names.map((n) => `<option value="${esc(n)}">`).join('');
       const list = filtered();
       $('#catalog-empty').classList.toggle('hidden', list.length > 0);
       grid.innerHTML = list.map(card).join('');
@@ -87,7 +85,7 @@
       $('#packet-species').value = packet ? packet.species_type : '';
       $('#packet-category').value = packet ? packet.category : '';
       $('#packet-year').value = packet ? (packet.year_acquired || '') : new Date().getFullYear();
-      $('#packet-vendor').value = packet && packet.vendor_id ? packet.vendor_id : '';
+      $('#packet-vendor').value = packet ? (packet.vendor_name || '') : '';
       $('#packet-vendor-url').value = packet ? packet.vendor_url : '';
       $('#packet-qty').value = packet ? packet.quantity : '';
       $('#packet-notes').value = packet ? (packet.notes || '') : '';
@@ -105,6 +103,16 @@
     $('#seed-tabbtn-sources').addEventListener('click', () => setTab('sources'));
     $('#seed-tabbtn-catalog').addEventListener('click', () => setTab('catalog'));
     $('#catalog-add').addEventListener('click', () => openModal(null));
+    $('#catalog-from-sources').addEventListener('click', async () => {
+      if (!confirm('Copy every seed source into the stash as a packet? (Already-moved ones are skipped.)')) return;
+      try {
+        const res = await api.post('/api/seed-packets/from-sources', {});
+        toast(`Moved ${res.created} source${res.created === 1 ? '' : 's'} to the stash${res.skipped ? `, ${res.skipped} already there` : ''}.`);
+        load();
+      } catch (err) {
+        toast(err.message || 'Could not move sources.', 'error');
+      }
+    });
     $('#packet-close').addEventListener('click', closeModal);
     $('#packet-cancel').addEventListener('click', closeModal);
     $('#catalog-search').addEventListener('input', load);
@@ -118,7 +126,7 @@
         species_type: $('#packet-species').value.trim(),
         category: $('#packet-category').value.trim(),
         year_acquired: $('#packet-year').value ? Number($('#packet-year').value) : null,
-        vendor_id: $('#packet-vendor').value ? Number($('#packet-vendor').value) : null,
+        vendor_name: $('#packet-vendor').value.trim(),
         vendor_url: $('#packet-vendor-url').value.trim(),
         quantity: $('#packet-qty').value.trim(),
         notes: $('#packet-notes').value.trim(),
