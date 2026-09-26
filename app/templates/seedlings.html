@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Verdant · Seedlings{% endblock %}
+{% block content %}
+<section id="panel-seedlings" class="space-y-6">
+  <header class="flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <h2 class="font-display text-2xl font-semibold text-navy-800">🌱 Seedlings</h2>
+      <p class="text-sm text-navy-500">The indoor-start workstation — trays, warming mats, and everything before transplant.</p>
+    </div>
+    <a href="/plants" class="text-sm text-sage-700 underline">When to start each variety →</a>
+  </header>
+
+  <form id="seedling-form" class="card space-y-3">
+    <h3 id="seedling-form-title" class="font-display text-lg font-semibold text-navy-800">Start a batch</h3>
+    <input id="seedling-id" type="hidden" />
+    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <label class="block"><span class="lbl">Variety</span><input id="seedling-variety" type="text" class="inp" list="seedling-varieties" placeholder="Fatalii" maxlength="120" required /></label>
+      <datalist id="seedling-varieties"></datalist>
+      <label class="block"><span class="lbl">Sow date</span><input id="seedling-sow" type="date" class="inp" /></label>
+      <label class="block"><span class="lbl">Tray</span><input id="seedling-tray" type="text" class="inp" placeholder="Tray A" maxlength="60" /></label>
+      <label class="block"><span class="lbl">Location</span><input id="seedling-location" type="text" class="inp" placeholder="basement shelf" maxlength="120" /></label>
+      <label class="block"><span class="lbl">Grow light</span><input id="seedling-light" type="text" class="inp" placeholder="LED shop light · 16h/day" maxlength="120" /></label>
+      <label class="block"><span class="lbl">Cells sown</span><input id="seedling-cells" type="number" min="1" class="inp" placeholder="12" /></label>
+      <label class="block"><span class="lbl">Seed packet <span class="text-navy-400">(stash)</span></span><select id="seedling-packet" class="inp"><option value="">— none —</option></select></label>
+      <label class="block sm:col-span-2 lg:col-span-3"><span class="lbl">Notes</span><input id="seedling-notes" type="text" class="inp" placeholder="soil mix, dome on/off…" maxlength="300" /></label>
+      <label class="flex items-end gap-2 pb-2"><input id="seedling-heatmat" type="checkbox" class="h-4 w-4 accent-sage-600" /><span class="text-sm text-navy-700">🔥 Warming mat</span></label>
+    </div>
+    <div class="flex gap-3">
+      <button type="submit" id="seedling-submit" class="btn-primary">Start batch</button>
+      <button type="button" id="seedling-cancel" class="btn-ghost hidden">Cancel edit</button>
+    </div>
+  </form>
+
+  <section>
+    <h3 class="font-display text-lg font-semibold text-navy-800">On the go</h3>
+    <div id="seedling-active" class="mt-3 grid gap-4 md:grid-cols-2 xl:grid-cols-3"></div>
+    <p id="seedling-active-empty" class="py-3 text-center text-sm text-navy-400">Nothing started yet — sow your first batch above.</p>
+  </section>
+
+  <section>
+    <h3 class="font-display text-lg font-semibold text-navy-800">Wrapped up <span class="text-sm font-normal text-navy-400">— what worked, for next year</span></h3>
+    <div id="seedling-done" class="mt-3 grid gap-4 md:grid-cols-2 xl:grid-cols-3"></div>
+    <p id="seedling-done-empty" class="py-3 text-center text-sm text-navy-400">Finished batches land here with their germination stats.</p>
+  </section>
+</section>
+{% endblock %}

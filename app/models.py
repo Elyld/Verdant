@@ -340,3 +340,32 @@ class Container(SQLModel, table=True):
 
     plant: Optional["Plant"] = Relationship()
     location: Optional["Location"] = Relationship()
+
+
+class SeedlingBatch(SQLModel, table=True):
+    """One indoor seed-starting batch: a variety sown on a date, in a tray and setup.
+
+    The workstation for the indoor season — trays on warming mats, under lights —
+    tracking everything from sow to transplant so next year's setup repeats what worked.
+    """
+    __tablename__ = "seedling_batches"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    batch_id: str = Field(
+        default_factory=lambda: f"SEEDL-{uuid4().hex[:8].upper()}",
+        unique=True, index=True,
+    )
+    variety_name: str = Field(index=True)
+    packet_id: Optional[int] = Field(default=None, index=True)  # link to the seed stash packet used
+    sow_date: str = Field(default="", index=True)  # ISO YYYY-MM-DD
+    tray: str = Field(default="")        # "Tray A", "1020 #2"
+    location: str = Field(default="")    # "basement shelf", "spare room"
+    heat_mat: bool = Field(default=False)
+    grow_light: str = Field(default="")  # "LED shop light, 16h/day"
+    cells_sown: Optional[int] = Field(default=None)
+    germinated: int = Field(default=0)
+    germination_date: str = Field(default="")  # ISO, first sprout spotted
+    status: str = Field(default="sowing", index=True)
+    # sowing → germinating → growing → hardening → transplanted → finished | failed
+    transplant_date: str = Field(default="")  # ISO
+    notes: str = Field(default="")

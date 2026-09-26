@@ -4,6 +4,7 @@ from __future__ import annotations
 from app.routers.locations import router as locations_router
 from app.routers.plants import router as plants_router
 from app.routers.fertilizers import router as fertilizers_router
+from app.routers.seedling_batches import router as seedling_batches_router
 from app.routers.seed_sources import router as seed_sources_router
 from app.routers.harvests import router as harvests_router
 from app.routers.watering_logs import router as watering_logs_router
@@ -119,6 +120,7 @@ app.include_router(immich.router)
 app.include_router(locations_router)
 app.include_router(plants_router)
 app.include_router(fertilizers_router)
+app.include_router(seedling_batches_router)
 app.include_router(seed_sources_router)
 app.include_router(harvests_router)
 app.include_router(watering_logs_router)
@@ -242,6 +244,12 @@ def match_page(request: Request) -> HTMLResponse:
 def fertilizers_page(request: Request) -> HTMLResponse:
     """Manage the fertilizer product catalog."""
     return templates.TemplateResponse(request, "fertilizers.html", {"__version__": __version__})
+
+
+@app.get("/seedlings", include_in_schema=False)
+def seedlings_page(request: Request) -> HTMLResponse:
+    """The indoor seed-starting workstation."""
+    return templates.TemplateResponse(request, "seedlings.html", {"__version__": __version__})
 
 
 @app.get("/planner", include_in_schema=False)
