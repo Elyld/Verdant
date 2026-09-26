@@ -97,15 +97,19 @@ costs per variety.
 
 ### 🗺️ Backyard Planner — build your backyard
 Lay out your actual growing space on a real grid (1 cell = 1 ft, resizable):
-grow bags, raised beds, pots, planters — each drawn at its true footprint, so
-a 4×8 bed actually looks 4×8 next to a 10-gal bag. Drag containers and they
-snap to the grid (positions save automatically, and you can't drop one on top
-of another). A container holds **many plants** now — a bed lists everything in
-it — and the **🔁 rotation check** flags when you put the same plant family
-where it grew last season. Copy last season's layout into the new year and
-shuffle things around.
+grow bags, raised beds, pots, planters, cattle panel arches, pallets — each
+drawn at its true footprint, so a 4×8 bed actually looks 4×8 next to a 10-gal
+bag. Drag containers and they snap to the grid (positions save automatically,
+and you can't drop one on top of another). A container holds **many plants**
+now — a bed lists everything in it — and the **🔁 rotation check** flags when
+you put the same plant family where it grew last season. Copy last season's
+layout into the new year and shuffle things around. Flip to the **3D view** to
+walk your plan — orbit around the yard and see the beds, bags, arches, and
+plants in space, which makes the layout click in a way a flat grid never does.
+Click any container in 3D to edit it.
 
 ![Backyard planner](docs/screenshots/planner.png)
+![Backyard planner in 3D](docs/screenshots/planner-3d.png)
 
 ### 🏷️ NFC Tags — tap it, log it
 Blank NFC tags turn physical things into shortcuts: tap the fertilizer
@@ -486,8 +490,10 @@ server local time. Test with `POST /api/digest/send`.
   a 10-gal grow bag, and new containers land in the first free spot instead of
   piling up. Containers now hold **many plants** (a bed lists everything in
   it), and a **🔁 rotation check** warns when the same plant family goes back
-  where it grew last season. Old free-form positions migrate to the grid
-  automatically on first load.
+  where it grew last season. New asset kinds: **cattle panel arches** and
+  **pallets**. A **3D view** renders the whole plan in space — orbit around
+  the yard, see every bed, bag, arch, and plant, click any of them to edit.
+  Old free-form positions migrate to the grid automatically on first load.
 - **2.14.0** — Tunnel-ready security, for the day Verdant meets the internet.
   Set `TUNNEL_MODE=true` and the app flips its secure preset: HSTS header on,
   `/docs` off, and the tunnel's proxy headers trusted. Always-on hardening

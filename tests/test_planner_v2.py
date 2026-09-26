@@ -67,6 +67,12 @@ def test_container_gets_grid_placement_and_footprint():
     pot = _container("Grid Pot 1", kind="pot", year=2035)
     assert (pot["grid_w"], pot["grid_h"]) == (1, 1)
 
+    arch = _container("Bean Arch", kind="arch", year=2035)
+    assert (arch["grid_w"], arch["grid_h"]) == (4, 8)
+
+    pallet = _container("Pallet Bin", kind="pallet", year=2035)
+    assert (pallet["grid_w"], pallet["grid_h"]) == (4, 3)
+
 
 def test_new_containers_do_not_overlap():
     a = _container("NoOverlap A", year=2035)

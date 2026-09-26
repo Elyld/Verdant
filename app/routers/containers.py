@@ -67,7 +67,10 @@ def default_footprint(kind: str, size: str) -> tuple:
         if m:
             return max(1, int(m.group(1))), max(1, int(m.group(2)))
         return (4, 4)
-    return {"grow bag": (2, 2), "pot": (1, 1), "planter": (3, 1)}.get(kind or "", (2, 2))
+    return {
+        "grow bag": (2, 2), "pot": (1, 1), "planter": (3, 1),
+        "arch": (4, 8), "pallet": (4, 3),
+    }.get(kind or "", (2, 2))
 
 
 def _rects_overlap(ax, ay, aw, ah, bx, by, bw, bh) -> bool:

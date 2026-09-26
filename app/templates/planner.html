@@ -18,6 +18,10 @@
         <button type="button" id="grid-apply" class="btn-ghost text-sm">Apply</button>
       </span>
       <button type="button" id="planner-copy" class="btn-ghost text-sm" title="Copy another season's layout into this one">📋 Copy season…</button>
+      <span class="flex overflow-hidden rounded-lg text-sm ring-1 ring-beige-300" role="group" aria-label="Planner view">
+        <button type="button" id="view-2d" class="bg-sage-200 px-3 py-1 font-semibold text-navy-800">2D</button>
+        <button type="button" id="view-3d" class="bg-beige-50 px-3 py-1 text-navy-500 hover:bg-beige-100">3D</button>
+      </span>
       <button type="button" id="planner-add" class="btn-primary text-sm">+ Add container</button>
     </div>
   </header>
@@ -35,7 +39,9 @@
   <div id="planner-canvas" class="relative w-full overflow-hidden rounded-2xl bg-beige-50 ring-1 ring-beige-300" style="touch-action: none;">
     <p id="planner-empty" class="absolute inset-0 z-10 hidden items-center justify-center bg-beige-50/80 text-center text-sm text-navy-400">Nothing laid out for this season yet.<br />Add your first container above.</p>
   </div>
-  <p class="text-xs text-navy-400">Drag containers — they snap to the 1&nbsp;ft grid and save automatically. Click one to edit it, resize it, or change what's planted in it.</p>
+  <div id="planner-3d" class="relative hidden w-full overflow-hidden rounded-2xl ring-1 ring-beige-300" style="touch-action: none; min-height: 420px;"></div>
+  <p id="planner-2d-hint" class="text-xs text-navy-400">Drag containers — they snap to the 1&nbsp;ft grid and save automatically. Click one to edit it, resize it, or change what's planted in it.</p>
+  <p id="planner-3d-hint" class="hidden text-xs text-navy-400">Drag to orbit · scroll or pinch to zoom · right-drag to pan · click a container to edit it.</p>
 
   <!-- Add/edit container modal -->
   <div id="container-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-navy-900/70 p-4">
@@ -53,6 +59,8 @@
             <option value="raised bed">🟫 Raised bed</option>
             <option value="pot">🪴 Pot</option>
             <option value="planter">🗄️ Planter</option>
+            <option value="arch">🌉 Cattle panel arch</option>
+            <option value="pallet">🪵 Pallet</option>
           </select></label>
           <label class="block"><span class="lbl">Footprint <span class="font-normal text-navy-400">(grid cells, 1 = 1 ft)</span></span>
             <span class="flex items-center gap-1">
