@@ -1,4 +1,4 @@
-# 🌿 Verdant — Self-Hosted Garden Journal (v2.11.0)
+# 🌿 Verdant — Self-Hosted Garden Journal (v2.12.0)
 
 Your garden, logged. Plant profiles with care reminders, a daily observation log
 with a calendar heatmap, photo albums with slideshows, seed source tracking,
@@ -408,6 +408,13 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.12.0** — New **🌱 Seedlings** tab: the indoor seed-starting workstation.
+  Track every batch from sow to transplant — tray, location, warming mat,
+  grow light, cells sown — with one-tap sprout logging, germination progress
+  bars (including days-to-sprout), a stage pipeline (sowing → germinating →
+  growing → hardening → transplanted), and a stale-batch nudge if nothing
+  sprouts after 3 weeks. Finished batches keep their stats so next year's
+  setup repeats what worked. Batches can link to a stash packet.
 - **2.11.0** — Seed stash: packets now hold a **back-of-packet photo** too, for
   all the growing info printed on the reverse — a ⇄ flip button on the card
   swaps front/back (lightbox follows along). Also, **logo placeholders** are in
