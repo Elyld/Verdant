@@ -8,8 +8,9 @@ from sqlalchemy.orm import Session
 from sqlmodel import SQLModel
 
 from app import frost as frost_mod
+from app import units as units_mod
 from app.database import get_session
-from app.models import Container, Plant, Planting
+from app.models import Container, Harvest, Plant, Planting
 
 router = APIRouter(prefix="/api/containers", tags=["containers"])
 
@@ -292,6 +293,36 @@ def rotation_warnings(
                     reason=f"{label} grew here in {year - 1} — consider rotating",
                 ))
     return warnings
+
+
+@router.get("/yield-map")
+def yield_map(
+    year: int = Query(..., description="Season year to total harvest weight for"),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Total harvested weight (oz) per container for a season, via plantings.
+
+    Keyed by container *name* — names are the stable identity across seasons
+    (container rows are per-season), matching the rotation-warning convention.
+    Rows without a recorded weight are skipped.
+    """
+    ensure_backfilled(session)
+    totals: dict = {}
+    harvests = session.query(Harvest).filter(Harvest.date.like(f"{year}%")).all()
+    for h in harvests:
+        oz = units_mod.to_oz(h.weight, h.weight_unit)
+        if oz is None or oz <= 0:
+            continue
+        planting = (
+            session.query(Planting)
+            .filter(Planting.plant_id == h.plant_id, Planting.season_year == year)
+            .first()
+        )
+        if not planting or not planting.container or not planting.container.name:
+            continue
+        key = planting.container.name
+        totals[key] = round(totals.get(key, 0.0) + oz, 1)
+    return {"year": year, "unit": "oz", "totals": totals}
 
 
 @router.post("/", response_model=Container, status_code=201)

@@ -22,9 +22,13 @@
         <button type="button" id="view-2d" class="bg-sage-200 px-3 py-1 font-semibold text-navy-800">2D</button>
         <button type="button" id="view-3d" class="bg-beige-50 px-3 py-1 text-navy-500 hover:bg-beige-100">3D</button>
       </span>
+      <button type="button" id="heatmap-toggle" class="btn-ghost text-sm" title="Color containers by last season's harvest weight">🔥 Yield</button>
       <button type="button" id="planner-add" class="btn-primary text-sm">+ Add container</button>
     </div>
   </header>
+
+  <div id="weather-strip" class="hidden items-center gap-2 rounded-xl bg-navy-800 px-4 py-2 text-sm text-beige-100"></div>
+  <div id="weather-alerts" class="space-y-2"></div>
 
   <div id="rotation-banner" class="hidden rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-amber-300">
     <div class="flex items-start justify-between gap-3">
@@ -41,6 +45,7 @@
   </div>
   <div id="planner-3d" class="relative hidden w-full overflow-hidden rounded-2xl ring-1 ring-beige-300" style="touch-action: none; min-height: 420px;"></div>
   <p id="planner-2d-hint" class="text-xs text-navy-400">Drag containers — they snap to the 1&nbsp;ft grid and save automatically. Click one to edit it, resize it, or change what's planted in it.</p>
+  <p id="heatmap-legend" class="hidden text-xs text-navy-400"></p>
   <p id="planner-3d-hint" class="hidden text-xs text-navy-400">Drag to orbit · scroll or pinch to zoom · right-drag to pan · click a container to edit it.</p>
 
   <!-- Add/edit container modal -->
@@ -85,6 +90,7 @@
               <select id="container-plant-add" class="inp"><option value="">— pick a plant —</option></select>
               <button type="button" id="container-plant-add-btn" class="btn-ghost shrink-0 text-sm">+ Add</button>
             </span>
+            <div id="companion-hints" class="mt-1 space-y-1"></div>
           </div>
           <label class="block sm:col-span-2"><span class="lbl">Soil notes</span><input id="container-soil" class="inp" maxlength="200" placeholder="Fresh mix + compost, spring 2026" /></label>
         </div>
