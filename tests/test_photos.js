@@ -51,7 +51,7 @@ function makeEl() {
 const named = {};
 const namedAll = {};
 ['photo-album-select', 'slideshow', 'photos-empty', 'slide-stage', 'slide-img',
- 'slide-caption', 'slide-counter', 'slide-play', 'photo-refresh', 'slide-prev',
+ 'slide-caption', 'slide-counter', 'slide-play', 'photo-refresh', 'photo-sync-meta', 'slide-prev',
  'slide-next', 'slide-fullscreen', 'immich-album-select', 'immich-import',
  'calendar-grid', 'calendar-empty', 'day-modal', 'toasts', 'app-version'].forEach((id) => {
   named[`#${id}`] = makeEl();
@@ -112,6 +112,7 @@ global.fetch = async (url, options) => {  const method = (options && options.met
   }
   else if (url === '/api/albums') body = [{ id: 7, name: 'Garden 2026', images: IMAGES }];
   else if (url === '/api/albums/7') body = { id: 7, name: 'Garden 2026', images: IMAGES };
+  else if (url === '/api/albums/7/sync-metadata' && method === 'POST') body = { album_id: 7, total: 3, updated: 2 };
   else if (url === '/api/stats/calendar') body = [];
   else body = {};
   return { ok: true, status: 200, json: async () => body };
@@ -173,6 +174,13 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
   check('imported album auto-selected', picker.value === '7');
   check('slideshow visible after import', !named['#slideshow'].classList.contains('hidden'));
   check('first slide shown', named['#slide-img'].src === '/uploads/albums/7/p0.jpg');
+
+  // --- Sync metadata button ---
+  const syncBtn = named['#photo-sync-meta'];
+  await syncBtn._listeners.click[0]({ currentTarget: syncBtn });
+  await tick(80);
+  check('sync toast reports updated count', seenToasts.some((t) => t.includes('2 of 3 photos')));
+  check('sync button restored', syncBtn.textContent !== 'Syncing…' && syncBtn.disabled === false);
   check('counter reads 1 / 3', named['#slide-counter'].textContent === '1 / 3');
   check('caption shown', named['#slide-caption'].textContent === 'Photo 0');
   check('autoplay started', named['#slide-play'].innerHTML.includes('Pause'));

@@ -82,6 +82,24 @@
 
     picker.addEventListener('change', () => openAlbum(picker.value));
     $('#photo-refresh').addEventListener('click', () => loadAlbums().catch((error) => toast(`Could not load albums: ${error.message}`, 'err')));
+    $('#photo-sync-meta').addEventListener('click', async (event) => {
+      const btn = event.currentTarget;
+      const id = picker.value;
+      if (!id) { toast('Choose an album first.', 'err'); return; }
+      const label = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Syncing…';
+      try {
+        const result = await api.post(`/api/albums/${id}/sync-metadata`);
+        toast(`Synced metadata for ${result.updated} of ${result.total} photos (date, camera, GPS, tags).`);
+        openAlbum(id);
+      } catch (error) {
+        toast(`Sync failed: ${error.message}`, 'err');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = label;
+      }
+    });
     $('#slide-prev').addEventListener('click', () => go(-1));
     $('#slide-next').addEventListener('click', () => go(1));
     playBtn.addEventListener('click', () => { if (timer) stop(); else if (slides.length) play(); });
