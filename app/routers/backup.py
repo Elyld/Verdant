@@ -21,23 +21,7 @@ from fastapi.responses import StreamingResponse
 from sqlmodel import Session, SQLModel, delete, select
 
 from app.database import UPLOAD_DIR, get_session
-from app.models import (
-    Album,
-    AlbumImage,
-    Expense,
-    FertilizationLog,
-    Fertilizer,
-    Harvest,
-    Location,
-    ObservationImage,
-    ObservationLog,
-    PestLog,
-    Plant,
-    Post,
-    PostImage,
-    SeedSource,
-    WateringLog,
-)
+import app.models as models_module
 from app.version import __version__
 
 router = APIRouter(prefix="/api/backup", tags=["backup"])
@@ -45,26 +29,30 @@ router = APIRouter(prefix="/api/backup", tags=["backup"])
 FORMAT_VERSION = 1
 FORMAT_MARKER = "verdant-backup"
 
-# Parents before children (insert order); reversed for wipe order.
-TABLES_IN_ORDER: List[Type[SQLModel]] = [
-    Location,
-    Fertilizer,
-    Plant,
-    Post,
-    ObservationLog,
-    Album,
-    SeedSource,
-    Harvest,
-    WateringLog,
-    FertilizationLog,
-    Expense,
-    PestLog,
-    PostImage,
-    ObservationImage,
-    AlbumImage,
-]
 
-IMAGE_TABLES = {PostImage, ObservationImage, AlbumImage}
+def _discover_models() -> List[Type[SQLModel]]:
+    """Every table model, parents before children (insert order).
+
+    Derived from SQLModel's metadata so a new model is backed up
+    automatically — there is no hand-maintained list to forget.
+    """
+    by_table = {}
+    for name in dir(models_module):
+        obj = getattr(models_module, name)
+        if (
+            isinstance(obj, type)
+            and issubclass(obj, SQLModel)
+            and getattr(obj, "__tablename__", None) in SQLModel.metadata.tables
+        ):
+            by_table[obj.__table__] = obj
+    return [by_table[t] for t in SQLModel.metadata.sorted_tables if t in by_table]
+
+
+# Parents before children (insert order); reversed for wipe order.
+TABLES_IN_ORDER: List[Type[SQLModel]] = _discover_models()
+
+# Image tables carry uploaded files (detected by the file_path column).
+IMAGE_TABLES = {m for m in TABLES_IN_ORDER if "file_path" in m.__table__.columns}
 
 
 def _upload_relpath(file_path: str) -> str | None:

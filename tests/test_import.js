@@ -100,8 +100,10 @@ global.fetch = async (url, options) => {
   return { ok: true, status: 200, json: async () => body };
 };
 
-const src = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'app.js'), 'utf8');
-eval(src); // eslint-disable-line no-eval
+const JS_FILES = ['core.js', 'import.js'];
+for (const f of JS_FILES) {
+  eval(fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'js', f), 'utf8')); // eslint-disable-line no-eval
+}
 
 let failures = 0;
 function check(name, cond) {

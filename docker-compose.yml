@@ -29,6 +29,9 @@ services:
       # http://host.docker.internal:2283 so the container can reach your host.
       IMMICH_BASE_URL: ${IMMICH_BASE_URL:-}
       IMMICH_API_KEY: ${IMMICH_API_KEY:-}
+      # Frost countdown (optional): your average first fall frost, YYYY-MM-DD.
+      # Shows a small "days to first frost" pill in the header.
+      FIRST_FROST_DATE: ${FIRST_FROST_DATE:-}
     volumes:
       # SQLite database file + uploaded images persist on the host.
       - ./data:/data

@@ -253,3 +253,29 @@ def seed_calendar_rows(session: Session, today: date_cls = None) -> List[SowRow]
 @router.get("/seed-calendar", response_model=List[SowRow], tags=["stats"])
 def seed_calendar(session: Session = Depends(get_session)) -> List[SowRow]:
     return seed_calendar_rows(session)
+
+
+# --------------------------------------------------------------------------- #
+# Frost countdown
+# --------------------------------------------------------------------------- #
+def first_frost_date() -> Optional[date_cls]:
+    """Configurable via FIRST_FROST_DATE (YYYY-MM-DD); None when unset."""
+    import os
+
+    raw = os.getenv("FIRST_FROST_DATE", "").strip()
+    try:
+        return date_cls.fromisoformat(raw)
+    except ValueError:
+        return None
+
+
+@router.get("/frost", tags=["stats"])
+def frost_countdown() -> dict:
+    """Days until the first anticipated frost (for the header countdown)."""
+    frost = first_frost_date()
+    if frost is None:
+        return {"first_frost_date": None, "days_until": None}
+    return {
+        "first_frost_date": frost.isoformat(),
+        "days_until": (frost - date_cls.today()).days,
+    }

@@ -341,3 +341,55 @@ def test_immich_import_reports_download_failures(monkeypatch, caplog):
     assert any("asset.download" in e for e in body["errors"])
     # failures are logged server-side for `docker logs`
     assert "2 failed" in caplog.text
+
+
+def test_migration_relaxes_stale_not_null_constraints(tmp_path):
+    """The initial release built fertilization_logs with NOT NULL string
+    columns; the model later made them optional. The migration must relax
+    those stale constraints (table rebuild) so NULL inserts stop 500ing —
+    and leave constraints the model still wants (fertilizer_name) alone."""
+    db = str(tmp_path / "garden.db")
+    engine = create_engine(f"sqlite:///{db}")
+    SQLModel.metadata.create_all(engine)
+    with engine.connect() as conn:
+        conn.exec_driver_sql("DROP TABLE fertilization_logs")
+        conn.exec_driver_sql(
+            "CREATE TABLE fertilization_logs (id INTEGER PRIMARY KEY, date TEXT,"
+            " fertilizer_name TEXT NOT NULL, fertilizer_id INTEGER,"
+            " npk_ratio TEXT NOT NULL, amount_used TEXT NOT NULL,"
+            " plant_id INTEGER, location_id INTEGER, notes TEXT NOT NULL)"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO fertilization_logs (date, fertilizer_name, npk_ratio,"
+            " amount_used, notes) VALUES ('2026-01-05', 'Old Faithful',"
+            " '10-10-10', '1 tbsp', 'legacy row')"
+        )
+        conn.commit()
+    _apply_column_migrations(engine)
+    con = sqlite3.connect(db)
+    try:
+        flags = {
+            r[1]: r[3] for r in con.execute("PRAGMA table_info(fertilization_logs)")
+        }
+        # relaxed: model says nullable
+        assert flags["amount_used"] == 0
+        assert flags["npk_ratio"] == 0
+        assert flags["notes"] == 0
+        # untouched: model still requires these
+        assert flags["fertilizer_name"] == 1
+        assert flags["date"] == 1
+        # legacy data survived the rebuild
+        assert con.execute(
+            "SELECT fertilizer_name, amount_used FROM fertilization_logs"
+        ).fetchone() == ("Old Faithful", "1 tbsp")
+        # NULL inserts now work at the SQL level (no model coercion involved)
+        con.execute(
+            "INSERT INTO fertilization_logs (date, fertilizer_name)"
+            " VALUES ('2026-02-01', 'X')"
+        )
+        con.commit()
+        assert con.execute(
+            "SELECT amount_used FROM fertilization_logs WHERE date = '2026-02-01'"
+        ).fetchone() == (None,)
+    finally:
+        con.close()
