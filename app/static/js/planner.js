@@ -31,6 +31,14 @@
     let cols = 24, rows = 16;
     let editingId = null;
     let pendingPlantings = [];
+    let forecast = null;
+    let tempUnit = 'F';
+    let wxAlerts = [];
+    let companions = [];
+    let heatOn = false;
+    let heatTotals = {};
+    let heatMax = 0;
+    let heatYear = null;
 
     const plantById = (id) => plants.find((p) => p.id === id) || {};
     const plantingsFor = (cid) => plantings.filter((p) => p.container_id === cid);
@@ -73,11 +81,14 @@
       const names = ps.slice(0, 3).map((p) => p.variety_name || '').filter(Boolean);
       const more = ps.length > 3 ? ` +${ps.length - 3} more` : '';
       const hasWarn = warningsFor(c.id).length > 0;
+      const heatOz = heatOn ? heatTotals[c.name] : null;
+      const heatT = heatOz != null && heatMax > 0 ? Math.min(1, heatOz / heatMax) : 0;
+      if (heatT > 0) el.style.backgroundColor = `rgba(217, 119, 6, ${0.12 + 0.55 * heatT})`;
       el.innerHTML = `
         ${hasWarn ? '<span class="absolute right-1 top-1 text-sm" title="Rotation warning — same family grew here last season">⚠️</span>' : ''}
         <span class="${small ? 'text-lg' : 'text-2xl'} leading-none">${KIND_ICON[c.kind] || '🛍️'}</span>
         <span class="w-full truncate ${small ? 'text-[10px]' : 'text-xs'} font-semibold text-navy-800">${esc(c.name)}</span>
-        ${!small ? `<span class="w-full truncate text-[10px] ${ps.length ? 'font-semibold text-sage-700' : 'text-navy-400'}">${ps.length ? esc(names.join(', ')) + more : 'empty'}</span>` : ''}`;
+        ${!small ? `<span class="w-full truncate text-[10px] ${ps.length ? 'font-semibold text-sage-700' : 'text-navy-400'}">${heatT > 0 ? `⚖️ ${heatOz} oz` : (ps.length ? esc(names.join(', ')) + more : 'empty')}</span>` : ''}`;
       el.addEventListener('pointerdown', (e) => startDrag(e, c, el));
       el.addEventListener('click', () => { if (!dragMoved) openModal(c); });
       return el;
@@ -156,7 +167,7 @@
     }
 
     async function load() {
-      const [cs, g, pl, p, l, ys, rw] = await Promise.all([
+      const [cs, g, pl, p, l, ys, rw, fc, al, cp] = await Promise.all([
         api.get(`/api/containers/?year=${year}`).catch(() => []),
         api.get('/api/containers/grid').catch(() => ({ cols: 24, rows: 16 })),
         api.get(`/api/containers/plantings?year=${year}`).catch(() => []),
@@ -164,6 +175,9 @@
         api.get('/api/locations/').catch(() => []),
         api.get('/api/containers/years').catch(() => []),
         api.get(`/api/containers/rotation-warnings?year=${year}`).catch(() => []),
+        api.get('/api/weather/forecast').catch(() => ({ ok: false })),
+        api.get('/api/weather/alerts').catch(() => ({ ok: false, alerts: [] })),
+        api.get('/static/data/companions.json').catch(() => []),
       ]);
       containers = Array.isArray(cs) ? cs : [];
       cols = g.cols || 24;
@@ -173,8 +187,24 @@
       locations = Array.isArray(l) ? l : [];
       years = Array.isArray(ys) ? ys : [];
       warnings = Array.isArray(rw) ? rw : [];
+      forecast = fc && fc.ok ? fc.forecast : null;
+      tempUnit = (fc && fc.temp_unit) || 'F';
+      wxAlerts = al && al.ok && Array.isArray(al.alerts) ? al.alerts : [];
+      companions = Array.isArray(cp) ? cp : [];
       if (!years.includes(year)) years.push(year);
       years.sort((a, b) => b - a);
+      heatYear = years.find((y) => y < year) ?? null;
+      if (heatOn) {
+        // Season changed while the heatmap is on — retotal for the new past season.
+        try {
+          const res = heatYear == null ? null : await api.get(`/api/containers/yield-map?year=${heatYear}`);
+          heatTotals = (res && res.totals) || {};
+          const vals = Object.values(heatTotals);
+          heatMax = vals.length ? Math.max(...vals) : 0;
+          $('#heatmap-legend').textContent = heatYear == null ? '' :
+            `🔥 Yield heatmap — ${heatYear} harvest weight per container (darker = heavier).`;
+        } catch { heatTotals = {}; heatMax = 0; }
+      }
       $('#planner-year').innerHTML = years.map((y) => `<option value="${y}"${y === year ? ' selected' : ''}>${y}</option>`).join('');
       $('#copy-from').innerHTML = years.filter((y) => y !== year).map((y) => `<option value="${y}">${y}</option>`).join('');
       $('#copy-to-label').textContent = year;
@@ -183,8 +213,161 @@
       $('#container-location').innerHTML = '<option value="">— none —</option>' +
         locations.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
       renderWarnings();
+      renderWeather();
+      renderWxAlerts();
       render();
       if (view === '3d' && T) buildScene3D();
+    }
+
+    const ALERT_TONE = {
+      info: 'bg-sky-50 ring-sky-300 text-sky-900',
+      warn: 'bg-amber-50 ring-amber-300 text-amber-900',
+      critical: 'bg-red-50 ring-red-400 text-red-900',
+    };
+
+    function fmtTemp(f) {
+      if (f == null) return '—';
+      return `${Math.round(f)}°${tempUnit}`;
+    }
+
+    function fmtTime(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return '';
+      return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    }
+
+    function renderWeather() {
+      const strip = $('#weather-strip');
+      if (!forecast || !forecast.current) {
+        strip.classList.add('hidden');
+        strip.classList.remove('flex');
+        return;
+      }
+      const cur = forecast.current;
+      const days = forecast.daily || [];
+      const tonight = days[0] ? fmtTemp(days[0].tmin_f) : '—';
+      const tm = days[1] || days[0] || {};
+      const rain = tm.precip_prob != null ? `${tm.precip_prob}%` : '—';
+      const gust = tm.gust_mph != null ? `${Math.round(tm.gust_mph)} mph` : '—';
+      strip.innerHTML =
+        `<span class="font-semibold">${fmtTemp(cur.temp_f)} ${esc(cur.summary || '')}</span>` +
+        `<span class="text-beige-300">·</span><span>🌙 Tonight ${tonight}</span>` +
+        `<span class="text-beige-300">·</span><span>☀️ Tomorrow ${fmtTemp(tm.tmax_f)}</span>` +
+        `<span class="text-beige-300">·</span><span>💧 ${rain}</span>` +
+        `<span class="text-beige-300">·</span><span>💨 ${gust}</span>` +
+        `<span class="ml-auto text-xs text-beige-300">as of ${fmtTime(forecast.as_of)}</span>`;
+      strip.classList.remove('hidden');
+      strip.classList.add('flex');
+    }
+
+    function renderWxAlerts() {
+      const box = $('#weather-alerts');
+      if (!wxAlerts.length) {
+        box.innerHTML = '';
+        return;
+      }
+      box.innerHTML = wxAlerts.map((a) =>
+        `<div class="rounded-xl px-4 py-2.5 text-sm ring-1 ${ALERT_TONE[a.level] || ALERT_TONE.info}">` +
+        `<p class="font-semibold">${esc(a.icon || '')} ${esc(a.title || '')}</p>` +
+        (a.detail ? `<p class="mt-0.5">${esc(a.detail)}</p>` : '') +
+        `</div>`).join('');
+    }
+
+    async function toggleHeatmap() {
+      heatOn = !heatOn;
+      $('#heatmap-toggle').classList.toggle('bg-sage-200', heatOn);
+      const legend = $('#heatmap-legend');
+      if (heatOn) {
+        if (heatYear == null) {
+          toast('No past season to compare yet.', 'info');
+          heatOn = false;
+          $('#heatmap-toggle').classList.remove('bg-sage-200');
+          return;
+        }
+        try {
+          const res = await api.get(`/api/containers/yield-map?year=${heatYear}`);
+          heatTotals = (res && res.totals) || {};
+        } catch (err) {
+          toast(err.message || 'Could not load yield data.', 'error');
+          heatOn = false;
+          $('#heatmap-toggle').classList.remove('bg-sage-200');
+          return;
+        }
+        const vals = Object.values(heatTotals);
+        heatMax = vals.length ? Math.max(...vals) : 0;
+        legend.textContent = `🔥 Yield heatmap — ${heatYear} harvest weight per container (darker = heavier).`;
+        legend.classList.remove('hidden');
+      } else {
+        legend.classList.add('hidden');
+      }
+      render();
+    }
+
+    // Common-name → scientific-name aliases so "tomato" matches Solanum lycopersicum.
+    const PLANT_ALIASES = {
+      tomato: ['tomato', 'solanum lycopersicum'],
+      pepper: ['pepper', 'capsicum', 'chili', 'chile'],
+      bean: ['bean', 'phaseolus'],
+      corn: ['corn', 'zea mays'],
+      cucumber: ['cucumber', 'cucumis sativus'],
+      squash: ['squash', 'cucurbita', 'zucchini'],
+      onion: ['onion', 'allium cepa'],
+      garlic: ['garlic', 'allium sativum'],
+      basil: ['basil', 'ocimum'],
+      marigold: ['marigold', 'tagetes'],
+      carrot: ['carrot', 'daucus carota'],
+      lettuce: ['lettuce', 'lactuca'],
+      cabbage: ['cabbage', 'brassica oleracea'],
+      potato: ['potato', 'solanum tuberosum'],
+      fennel: ['fennel', 'foeniculum'],
+      melon: ['melon', 'citrullus', 'cucumis melo'],
+      eggplant: ['eggplant', 'solanum melongena'],
+    };
+    const matchesKeyword = (text, key) => {
+      const keys = PLANT_ALIASES[key] || [key];
+      return keys.some((k) => text.includes(k));
+    };
+
+    function companionHintsFor(list) {
+      const texts = list.map((pl2) => {
+        const full = plantById(pl2.plant_id);
+        return [pl2.variety_name || full.variety_name, pl2.species_type || full.species_type,
+          pl2.family_genus || full.family_genus].filter(Boolean).join(' ').toLowerCase();
+      });
+      const seen = new Set();
+      const out = [];
+      companions.forEach((cp) => {
+        const a = String(cp.a || '').toLowerCase();
+        const b = String(cp.b || '').toLowerCase();
+        if (!a || !b) return;
+        for (let i = 0; i < texts.length; i++) {
+          for (let j = i + 1; j < texts.length; j++) {
+            const hit = (matchesKeyword(texts[i], a) && matchesKeyword(texts[j], b)) ||
+              (matchesKeyword(texts[i], b) && matchesKeyword(texts[j], a));
+            if (hit && !seen.has(`${a}|${b}`)) {
+              seen.add(`${a}|${b}`);
+              out.push(cp);
+            }
+          }
+        }
+      });
+      return out;
+    }
+
+    function renderCompanionHints(list) {
+      const box = $('#companion-hints');
+      const hints = companionHintsFor(list);
+      if (!hints.length) {
+        box.innerHTML = '';
+        return;
+      }
+      box.innerHTML = hints.map((h) => {
+        const good = h.relation === 'good';
+        return `<p class="text-xs ${good ? 'text-sage-700' : 'text-amber-800'}">` +
+          `${good ? '🌱' : '⚠️'} <strong>${esc(h.a)} × ${esc(h.b)}</strong> — ${esc(h.note || '')}` +
+          (h.source ? ` <span class="text-navy-400">(${esc(h.source)})</span>` : '') + `</p>`;
+      }).join('');
     }
 
     function renderPlantingList() {
@@ -231,6 +414,7 @@
       $('#container-plant-add').innerHTML = '<option value="">— pick a plant —</option>' +
         plants.filter((x) => !added.has(x.id))
           .map((x) => `<option value="${x.id}">${esc(x.variety_name)}</option>`).join('');
+      renderCompanionHints(list);
     }
 
     function openModal(c) {
@@ -292,6 +476,7 @@
     });
 
     $('#planner-add').addEventListener('click', () => openModal(null));
+    $('#heatmap-toggle').addEventListener('click', toggleHeatmap);
     $('#container-close').addEventListener('click', closeModal);
     $('#container-cancel').addEventListener('click', closeModal);
     $('#planner-year').addEventListener('change', (e) => { year = Number(e.target.value); load(); });
