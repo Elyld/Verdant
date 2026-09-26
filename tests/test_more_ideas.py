@@ -215,3 +215,34 @@ def test_quick_log_api_surface(client):
     res = client.get("/api/watering-logs/", params={"date": TODAY.isoformat()})
     assert res.status_code == 200
     assert any(w["plant_id"] == plant["id"] for w in res.json())
+
+
+# --------------------------------------------------------------------------- #
+def test_frost_countdown_with_env(client, monkeypatch):
+    frost = date(YEAR, 11, 15)
+    monkeypatch.setenv("FIRST_FROST_DATE", frost.isoformat())
+    res = client.get("/api/stats/frost")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["first_frost_date"] == frost.isoformat()
+    assert body["days_until"] == (frost - TODAY).days
+
+
+def test_frost_countdown_unset(client, monkeypatch):
+    monkeypatch.delenv("FIRST_FROST_DATE", raising=False)
+    res = client.get("/api/stats/frost")
+    assert res.status_code == 200
+    assert res.json() == {"first_frost_date": None, "days_until": None}
+
+
+def test_all_pages_render_with_base_template(client):
+    """Every page returns 200 and carries the shared header/footer markers."""
+    paths = ["/", "/observations", "/calendar", "/photos", "/plants", "/seeds",
+             "/review", "/import", "/backup", "/slideshow", "/quick", "/costs",
+             "/pests"]
+    for path in paths:
+        res = client.get(path)
+        assert res.status_code == 200, path
+        html = res.text
+        assert 'id="frost-countdown"' in html or path == "/slideshow", path
+        assert "/static/js/core.js" in html, path

@@ -76,6 +76,86 @@ def _apply_column_migrations(target_engine=None) -> None:
                         f'ALTER TABLE "{table.name}" '
                         f'ADD COLUMN "{column.name}" {coltype}'
                     )
+    _relax_not_null_constraints(target_engine, present)
+
+
+def _relax_not_null_constraints(target_engine, present: set[str]) -> None:
+    """Drop stale NOT NULL constraints left by older releases (SQLite only).
+
+    The model is the source of truth and every Verdant data column is
+    nullable; very old databases still carry NOT NULL from the first
+    releases, which 500s inserts that legitimately leave the field empty
+    (e.g. fertilization_logs.amount_used). SQLite cannot ALTER a column, so
+    an affected table is rebuilt: new table from the model schema, data
+    copied over, old table dropped, indexes re-created. Only ever relaxes —
+    constraints are never tightened.
+
+    Runs on its own AUTOCOMMIT connection: PRAGMA foreign_keys is a no-op
+    inside a transaction, and the rebuild must disable enforcement while it
+    swaps the tables.
+    """
+    from sqlalchemy import MetaData
+    from sqlalchemy.schema import CreateTable
+
+    with target_engine.connect().execution_options(
+        isolation_level="AUTOCOMMIT"
+    ) as conn:
+        for table in SQLModel.metadata.sorted_tables:
+            if table.name not in present:
+                continue
+            disk = {
+                row[1]: row[3]  # name -> notnull flag
+                for row in conn.exec_driver_sql(
+                    f'PRAGMA table_info("{table.name}")'
+                ).fetchall()
+            }
+            stale = [
+                column.name
+                for column in table.columns
+                if column.nullable and disk.get(column.name) == 1
+            ]
+            if not stale:
+                continue
+            tmp_name = f"__verdant_rebuild_{table.name}"
+            # Copy every table so foreign keys resolve when compiling the DDL.
+            tmp_meta = MetaData()
+            for other in SQLModel.metadata.sorted_tables:
+                other.to_metadata(
+                    tmp_meta, name=tmp_name if other.name == table.name else None
+                )
+            ddl = str(
+                CreateTable(tmp_meta.tables[tmp_name]).compile(
+                    dialect=target_engine.dialect
+                )
+            )
+            indexes = [
+                row[1]
+                for row in conn.exec_driver_sql(
+                    "SELECT name, sql FROM sqlite_master "
+                    "WHERE type = 'index' AND tbl_name = ? AND sql IS NOT NULL",
+                    (table.name,),
+                ).fetchall()
+            ]
+            common = [c for c in table.columns.keys() if c in disk]
+            cols_csv = ", ".join(f'"{c}"' for c in common)
+            conn.exec_driver_sql("PRAGMA foreign_keys=OFF")
+            try:
+                conn.exec_driver_sql(ddl)
+                conn.exec_driver_sql(
+                    f'INSERT INTO "{tmp_name}" ({cols_csv}) '
+                    f'SELECT {cols_csv} FROM "{table.name}"'
+                )
+                conn.exec_driver_sql(f'DROP TABLE "{table.name}"')
+                conn.exec_driver_sql(
+                    f'ALTER TABLE "{tmp_name}" RENAME TO "{table.name}"'
+                )
+                for index_sql in indexes:
+                    conn.exec_driver_sql(index_sql)
+            except Exception:
+                conn.exec_driver_sql(f'DROP TABLE IF EXISTS "{tmp_name}"')
+                raise
+            finally:
+                conn.exec_driver_sql("PRAGMA foreign_keys=ON")
 
 
 def get_session() -> Iterator[Session]:

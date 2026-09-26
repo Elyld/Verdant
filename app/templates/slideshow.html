@@ -1,36 +1,12 @@
-<!DOCTYPE html>
-<html lang="en" class="h-full" data-version="{{ __version__ }}">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Verdant · Slideshow</title>
-<meta name="description" content="Full-screen garden photo slideshow." />
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%B1%3C/text%3E%3C/svg%3E" />
-<script src="https://cdn.tailwindcss.com"></script>
-<script>
-  tailwind.config = {
-    theme: {
-      extend: {
-        colors: {
-          sage: { 50: '#f2f6f1', 100: '#e2ebdf', 200: '#c6d8c1', 300: '#a4c09d', 400: '#82a87b', 500: '#688d61', 600: '#51704c', 700: '#41593d', 800: '#334631', 900: '#233022' },
-          navy: { 50: '#eef2f7', 100: '#d6e0ec', 200: '#adc0d7', 300: '#7d97b9', 400: '#4f6d94', 500: '#2f4f75', 600: '#233d5c', 700: '#1b3049', 800: '#142337', 900: '#0d1725' },
-          beige: { 50: '#fdfbf6', 100: '#f8f2e6', 200: '#efe4cd', 300: '#e3d3b0', 400: '#d3bd8d', 500: '#c0a469', 600: '#a4884f', 700: '#816b3e', 800: '#5d4d2d', 900: '#3a301c' }
-        },
-        fontFamily: {
-          display: ['Georgia', 'Cambria', 'Times New Roman', 'serif'],
-          body: ['ui-sans-serif', 'system-ui', 'Segoe UI', 'Helvetica', 'Arial', 'sans-serif']
-        },
-        boxShadow: { botanical: '0 10px 30px -12px rgba(20,35,55,0.35)' }
-      }
-    }
-  };
-</script>
-<link rel="stylesheet" href="/static/styles.css" />
+{% extends "base.html" %}
+{% block title %}Verdant · Slideshow{% endblock %}
+{% block body_class %}h-full bg-navy-900 font-body text-beige-100 antialiased{% endblock %}
+{% block head_extra %}
 <style>
   #slide-stage img { max-height: calc(100vh - 10rem); }
 </style>
-</head>
-<body class="h-full bg-navy-900 font-body text-beige-100 antialiased">
+{% endblock %}
+{% block body %}
 <div class="flex h-full flex-col">
 
   <!-- Top bar -->
@@ -71,6 +47,5 @@
 <!-- Toasts -->
 <div id="toasts" role="status" aria-live="polite" class="pointer-events-none fixed bottom-4 right-4 z-50 flex w-80 flex-col gap-2"></div>
 
-<script src="/static/app.js"></script>
-</body>
-</html>
+{% block scripts %}{{ super() }}{% endblock %}
+{% endblock %}
