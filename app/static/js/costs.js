@@ -13,8 +13,18 @@
     const money = (n) => `$${Number(n || 0).toFixed(2)}`;
 
     async function load() {
-      const expenses = await api.get('/api/expenses/');
+      const [expenses, plants] = await Promise.all([
+        api.get('/api/expenses/'),
+        api.get('/api/plants/').catch(() => []),
+      ]);
       const list = Array.isArray(expenses) ? expenses : [];
+      const plantNames = new Map((Array.isArray(plants) ? plants : []).map((p) => [p.id, p.variety_name]));
+      const sel = $('#cost-plant');
+      if (sel && !sel.dataset.loaded) {
+        sel.innerHTML = '<option value="">— whole garden —</option>' +
+          [...plantNames.entries()].map(([id, name]) => `<option value="${id}">${esc(name)}</option>`).join('');
+        sel.dataset.loaded = '1';
+      }
       const total = list.reduce((sum, e) => sum + Number(e.amount || 0), 0);
       $('#costs-total').textContent = money(total);
       const byCat = {};
@@ -27,7 +37,7 @@
         <tr class="border-t border-beige-200">
           <td class="py-2 pr-3 whitespace-nowrap">${fmtDate(e.date)}</td>
           <td class="py-2 pr-3"><span class="pill">${esc(e.category)}</span></td>
-          <td class="py-2 pr-3">${esc(e.description || '—')}${e.notes ? `<span class="block text-xs text-navy-400">${esc(e.notes)}</span>` : ''}</td>
+          <td class="py-2 pr-3">${esc(e.description || '—')}${e.plant_id && plantNames.get(e.plant_id) ? `<span class="block text-xs text-sage-700">🌱 ${esc(plantNames.get(e.plant_id))}</span>` : ''}${e.notes ? `<span class="block text-xs text-navy-400">${esc(e.notes)}</span>` : ''}</td>
           <td class="py-2 pr-3 text-right font-semibold">${money(e.amount)}</td>
           <td class="py-2 text-right"><button type="button" data-del-cost="${e.id}" class="text-xs text-red-700 underline">delete</button></td>
         </tr>`).join('');
@@ -42,11 +52,13 @@
           description: $('#cost-desc').value.trim(),
           amount: Number($('#cost-amount').value) || 0,
           notes: $('#cost-notes').value.trim(),
+          plant_id: $('#cost-plant').value ? Number($('#cost-plant').value) : null,
         });
         toast('Expense logged 💸', 'ok');
         $('#cost-desc').value = '';
         $('#cost-amount').value = '';
         $('#cost-notes').value = '';
+        $('#cost-plant').value = '';
         load();
       } catch (error) { toast(`Could not save expense: ${error.message}`, 'err'); }
     });

@@ -429,6 +429,11 @@
       .then(() => loadReminders())
       .then(() => loadPlants())
       .then(() => loadSowCalendar())
+      .then(() => {
+        // NFC tag deep link: /plants?plant=<id> opens that plant's profile.
+        const pid = new URLSearchParams(location.search).get('plant');
+        if (pid && /^\d+$/.test(pid)) openProfile(Number(pid));
+      })
       .catch((error) => toast(`Could not load plants: ${error.message}`, 'err'));
     return { plants: loadPlants };
   }

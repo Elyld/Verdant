@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Verdant · Backyard Planner{% endblock %}
+{% block content %}
+<section id="panel-planner" class="space-y-4">
+  <header class="flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <h2 class="font-display text-2xl font-semibold text-navy-800">🗺️ Backyard Planner</h2>
+      <p class="text-sm text-navy-500">Your actual backyard — every bag, bed, and pot, and what's growing in it. Drag things where they really are.</p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <label class="text-sm text-navy-500" for="planner-year">Season</label>
+      <select id="planner-year" class="inp text-sm"></select>
+      <button type="button" id="planner-copy" class="btn-ghost text-sm" title="Copy another season's layout into this one">📋 Copy season…</button>
+      <button type="button" id="planner-add" class="btn-primary text-sm">+ Add container</button>
+    </div>
+  </header>
+
+  <div id="planner-canvas" class="relative w-full overflow-hidden rounded-2xl bg-beige-50 ring-1 ring-beige-300" style="aspect-ratio: 16/10; touch-action: none;">
+    <div class="pointer-events-none absolute inset-0 opacity-40" style="background-image: linear-gradient(to right, rgba(47,79,117,.08) 1px, transparent 1px), linear-gradient(to bottom, rgba(47,79,117,.08) 1px, transparent 1px); background-size: 10% 10%;"></div>
+    <p id="planner-empty" class="absolute inset-0 hidden items-center justify-center text-center text-sm text-navy-400">Nothing laid out for this season yet.<br />Add your first container above.</p>
+  </div>
+  <p class="text-xs text-navy-400">Drag containers to move them — positions save automatically. Click one to rename it, resize it, or assign a plant.</p>
+
+  <!-- Add/edit container modal -->
+  <div id="container-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-navy-900/70 p-4">
+    <div class="card max-h-[90vh] w-full max-w-md space-y-4 overflow-y-auto">
+      <div class="flex items-center justify-between">
+        <h3 id="container-modal-title" class="font-display text-lg font-semibold text-navy-800">Add container</h3>
+        <button type="button" id="container-close" class="btn-ghost text-sm">✕</button>
+      </div>
+      <form id="container-form" class="space-y-3" autocomplete="off">
+        <input type="hidden" id="container-id" />
+        <div class="grid gap-3 sm:grid-cols-2">
+          <label class="block"><span class="lbl">Name *</span><input id="container-name" class="inp" required maxlength="80" placeholder="Grow bag 3" /></label>
+          <label class="block"><span class="lbl">Kind</span><select id="container-kind" class="inp">
+            <option value="grow bag">🛍️ Grow bag</option>
+            <option value="raised bed">🟫 Raised bed</option>
+            <option value="pot">🪴 Pot</option>
+            <option value="planter">🗄️ Planter</option>
+          </select></label>
+          <label class="block"><span class="lbl">Size</span><input id="container-size" class="inp" maxlength="40" placeholder="10 gal" /></label>
+          <label class="block"><span class="lbl">Location</span><select id="container-location" class="inp"><option value="">— none —</option></select></label>
+          <label class="block sm:col-span-2"><span class="lbl">Plant growing in it</span><select id="container-plant" class="inp"><option value="">— empty —</option></select></label>
+          <label class="block sm:col-span-2"><span class="lbl">Soil notes</span><input id="container-soil" class="inp" maxlength="200" placeholder="Fresh mix + compost, spring 2026" /></label>
+        </div>
+        <div class="flex gap-2">
+          <button type="submit" class="btn-primary text-sm" id="container-submit">Add container</button>
+          <button type="button" class="btn-ghost text-sm" id="container-cancel">Cancel</button>
+          <button type="button" class="hidden text-sm text-red-700 underline" id="container-delete">delete</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Copy season modal -->
+  <div id="copy-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-navy-900/70 p-4">
+    <div class="card w-full max-w-sm space-y-4">
+      <h3 class="font-display text-lg font-semibold text-navy-800">Copy a season's layout</h3>
+      <label class="block"><span class="lbl">Copy from</span><select id="copy-from" class="inp"></select></label>
+      <p class="text-sm text-navy-500">Copies every container — positions, sizes, soil notes, and plant assignments — into <span id="copy-to-label" class="font-semibold"></span>.</p>
+      <div class="flex gap-2">
+        <button type="button" id="copy-go" class="btn-primary text-sm">Copy it</button>
+        <button type="button" id="copy-cancel" class="btn-ghost text-sm">Cancel</button>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

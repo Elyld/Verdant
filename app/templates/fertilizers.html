@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Verdant · Fertilizers{% endblock %}
+{% block content %}
+<section id="panel-fertilizers" class="space-y-6">
+  <header>
+    <h2 class="font-display text-2xl font-semibold text-navy-800">Fertilizers</h2>
+    <p class="text-sm text-navy-500">Your fertilizer shelf — what you feed with, and what it's for.</p>
+  </header>
+
+  <form id="fert-product-form" class="card space-y-3">
+    <h3 class="font-display text-lg font-semibold text-navy-800">Add a fertilizer</h3>
+    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <label class="block"><span class="lbl">Name</span><input id="fert-prod-name" type="text" class="inp" placeholder="Fish emulsion" maxlength="120" required /></label>
+      <label class="block"><span class="lbl">NPK ratio</span><input id="fert-prod-npk" type="text" class="inp" placeholder="5-1-1" maxlength="20" /></label>
+      <label class="block"><span class="lbl">Best for</span><input id="fert-prod-best" type="text" class="inp" placeholder="Leafy growth" maxlength="120" /></label>
+      <label class="block"><span class="lbl">Notes</span><input id="fert-prod-notes" type="text" class="inp" placeholder="optional" maxlength="200" /></label>
+    </div>
+    <button type="submit" class="btn-primary">Add fertilizer</button>
+  </form>
+
+  <section class="card">
+    <h3 class="font-display text-lg font-semibold text-navy-800">On the shelf</h3>
+    <div id="fert-products" class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"></div>
+    <p id="fert-products-empty" class="py-3 text-center text-sm text-navy-400">No fertilizers yet — add your first above.</p>
+  </section>
+</section>
+{% endblock %}

@@ -61,6 +61,26 @@
     }
     loadPlantLinks();
 
+    // Fertilizer catalog: datalist suggestions + NFC tag prefill (?fertilizer=<id>).
+    (async () => {
+      try {
+        const ferts = await api.get('/api/fertilizers/');
+        if (Array.isArray(ferts)) {
+          $('#fert-catalog').innerHTML = ferts.map((f) => `<option value="${esc(f.name)}">${esc(f.npk_ratio || '')}`).join('');
+          const prefill = new URLSearchParams(location.search).get('fertilizer');
+          if (prefill && /^\d+$/.test(prefill)) {
+            const match = ferts.find((f) => f.id === Number(prefill));
+            if (match) {
+              $('#fert-name').value = match.name;
+              if (match.npk_ratio) $('#fert-npk').value = match.npk_ratio;
+              fertForm.scrollIntoView({ block: 'center', behavior: 'smooth' });
+              $('#fert-amount').focus({ preventScroll: true });
+            }
+          }
+        }
+      } catch { /* catalog is supplementary */ }
+    })();
+
     fertForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       try {

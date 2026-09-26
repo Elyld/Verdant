@@ -48,6 +48,23 @@
         <ol id="review-yield" class="space-y-2"></ol>
         <p id="review-yield-empty" class="py-2 text-center text-sm text-navy-400">No harvests logged yet this year.</p>
       </div>
+
+      <div class="card">
+        <h3 class="mb-1 font-display text-lg font-semibold">⚖️ Season scorecard</h3>
+        <p class="mb-3 text-sm text-navy-500">Was it worth growing? Yield vs. what you spent, per variety. <span class="text-navy-400">(Tip: tag purchases to a plant on the <a href="/costs" class="underline decoration-sage-400">Costs</a> page to split costs per variety.)</span></p>
+        <p id="scorecard-summary" class="mb-3 text-sm font-semibold text-navy-700"></p>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead><tr class="text-left text-xs uppercase tracking-widest text-navy-400">
+              <th class="py-2 pr-3">Variety</th><th class="py-2 pr-3 text-right">Harvests</th>
+              <th class="py-2 pr-3 text-right">Total</th><th class="py-2 pr-3 text-right">oz/plant</th>
+              <th class="py-2 pr-3 text-right">Spent</th><th class="py-2 text-right">$/oz</th>
+            </tr></thead>
+            <tbody id="scorecard-rows"></tbody>
+          </table>
+        </div>
+        <p id="scorecard-empty" class="py-2 text-center text-sm text-navy-400">No harvests or costs logged yet this year.</p>
+      </div>
     </section>
 {% endblock %}
 {% block footer %}

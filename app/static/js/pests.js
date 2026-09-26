@@ -85,6 +85,13 @@
     });
 
     load().catch((error) => toast(`Could not load pests: ${error.message}`, 'err'));
+
+    // NFC tag deep link: /pests?product=<name> pre-fills the treatment field.
+    const product = new URLSearchParams(location.search).get('product');
+    if (product) {
+      $('#pest-treatment').value = product;
+      $('#pest-name').focus();
+    }
   }
 
   globalThis.Verdant.onBoot(initPests);

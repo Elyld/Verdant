@@ -1,5 +1,6 @@
 """SQLModel table definitions for the Gardening Blog & Observation Log."""
 
+import secrets
 from datetime import date as Date
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -234,6 +235,11 @@ class Expense(SQLModel, table=True):
     description: str = Field(default="")
     amount: float = Field(default=0.0)  # dollars
     notes: Optional[str] = None
+    # Optional: tie a purchase to a plant so the season scorecard can split
+    # costs per variety (e.g. that 10-gal bag of soil was for the Habanero).
+    plant_id: Optional[int] = Field(default=None, foreign_key="plants.id", index=True)
+
+    plant: Optional["Plant"] = Relationship()
 
 
 # --------------------------------------------------------------------------- #
@@ -261,3 +267,74 @@ class Setting(SQLModel, table=True):
 
     key: str = Field(primary_key=True, max_length=64)
     value: str = Field(default="", max_length=2000)
+
+
+# --------------------------------------------------------------------------- #
+# Seed packets — the seed stash inventory (what's in the binder)
+# --------------------------------------------------------------------------- #
+class SeedPacket(SQLModel, table=True):
+    __tablename__ = "seed_packets"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    packet_id: str = Field(
+        default_factory=lambda: f"SEEDPK-{uuid4().hex[:8].upper()}",
+        unique=True, index=True,
+    )
+    variety_name: str = Field(index=True)
+    species_type: str = Field(default="")
+    category: str = Field(default="", index=True)  # Pepper, Tomato, Herb, Flower...
+    vendor_id: Optional[int] = Field(default=None, foreign_key="seed_sources.id", index=True)
+    vendor_url: str = Field(default="")  # direct link to the vendor / product page
+    year_acquired: Optional[int] = Field(default=None, index=True)
+    quantity: str = Field(default="")  # "~40 seeds", "1 packet", ...
+    photo_path: str = Field(default="")  # /uploads/... packet photo
+    notes: Optional[str] = None
+    date_added: str = Field(default="", index=True)  # ISO YYYY-MM-DD
+
+    vendor: Optional["SeedSource"] = Relationship()
+
+
+# --------------------------------------------------------------------------- #
+# NFC garden tags — tap a tag, jump straight to the right screen
+# --------------------------------------------------------------------------- #
+# Actions: plant (open plant profile), quick_plant (quick-log for a plant),
+# fertilize (log feeding with fertilizer pre-selected), pest (pest log with
+# product pre-filled), harvest (quick-log harvest stepper), location
+# (quick-log filtered to a location), seed_add (seed catalog add form),
+# water (quick-log watering for a location).
+class GardenTag(SQLModel, table=True):
+    __tablename__ = "garden_tags"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    code: str = Field(
+        default_factory=lambda: secrets.token_urlsafe(6),
+        unique=True, index=True,
+    )
+    label: str = Field(index=True)  # "Neem oil bottle"
+    action: str = Field(index=True)
+    target_id: Optional[int] = Field(default=None, index=True)
+    target_text: str = Field(default="")  # freeform target, e.g. a product name
+    tap_count: int = Field(default=0)
+    last_tapped_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+# --------------------------------------------------------------------------- #
+# Containers — the backyard builder: grow bags, raised beds, pots, planters
+# --------------------------------------------------------------------------- #
+class Container(SQLModel, table=True):
+    __tablename__ = "containers"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(index=True)  # "Grow bag 3"
+    kind: str = Field(default="grow bag", index=True)  # grow bag, raised bed, pot, planter
+    size: str = Field(default="")  # "10 gal", "4x8 ft"
+    location_id: Optional[int] = Field(default=None, foreign_key="locations.id", index=True)
+    season_year: int = Field(index=True)
+    x: float = Field(default=10.0)  # canvas position, 0-100
+    y: float = Field(default=10.0)
+    plant_id: Optional[int] = Field(default=None, foreign_key="plants.id", index=True)
+    soil_notes: str = Field(default="")
+
+    plant: Optional["Plant"] = Relationship()
+    location: Optional["Location"] = Relationship()

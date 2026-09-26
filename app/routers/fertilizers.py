@@ -1,5 +1,7 @@
 """API router for fertilizer products and catalog."""
 from typing import List, Optional
+from uuid import uuid4
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
@@ -29,12 +31,12 @@ def list_fertilizers(
 
 @router.post("/", response_model=Fertilizer, status_code=201)
 def create_fertilizer(
-    name: str,
-    npk_ratio: Optional[str] = None,
-    best_for: Optional[str] = None,
-    notes: Optional[str] = None,
+    payload: dict,
     session: Session = Depends(get_session)
 ) -> Fertilizer:
+    name = (payload.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="name is required")
     # Check if fertilizer already exists
     existing = session.query(Fertilizer).filter(Fertilizer.name == name).first()
     if existing:
@@ -42,13 +44,13 @@ def create_fertilizer(
             status_code=409,
             detail=f"Fertilizer with name '{name}' already exists"
         )
-    
+
     fert = Fertilizer(
-        fertilizer_id=f"FERT-{hash(name) % 1000:03d}",
+        fertilizer_id=f"FERT-{uuid4().hex[:8].upper()}",
         name=name,
-        npk_ratio=npk_ratio,
-        best_for=best_for,
-        notes=notes
+        npk_ratio=(payload.get("npk_ratio") or "").strip() or None,
+        best_for=(payload.get("best_for") or "").strip() or None,
+        notes=(payload.get("notes") or "").strip() or None,
     )
     session.add(fert)
     session.commit()

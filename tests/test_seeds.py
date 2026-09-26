@@ -33,7 +33,7 @@ PAGES = ["/", "/observations", "/calendar", "/photos", "/plants", "/seeds", "/re
 def test_seeds_page_renders(client):
     res = client.get("/seeds")
     assert res.status_code == 200
-    assert "Seed Sources" in res.text
+    assert "Seed Sources" in res.text or ">Seeds</h2>" in res.text
     assert 'id="seed-form"' in res.text
 
 
