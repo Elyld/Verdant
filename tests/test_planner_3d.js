@@ -58,7 +58,7 @@ const named = {};
  'container-modal', 'container-modal-title', 'container-submit',
  'container-delete', 'container-id', 'container-name', 'container-kind',
  'container-grid-w', 'container-grid-h',
- 'container-size', 'container-volume-value', 'container-volume-unit',
+ 'container-size', 'container-height', 'container-volume-value', 'container-volume-unit',
  'container-location', 'container-plantings',
  'container-plant-add', 'container-plant-add-btn', 'container-soil',
  'container-close', 'container-cancel', 'container-form',
@@ -95,7 +95,7 @@ global.fetch = async (url, options) => {
   else if (url === '/api/plants/') resp = [{ id: 5, variety_name: 'Kentucky Wonder' }];
   else if (url === '/api/locations/') resp = [];
   else if (url.startsWith('/api/containers/') && url.includes('year=')) resp = [
-    { id: 12, name: 'Bean Arch', kind: 'arch', grid_x: 2, grid_y: 2, grid_w: 4, grid_h: 8, season_year: 2026 },
+    { id: 12, name: 'Bean Arch', kind: 'arch', grid_x: 2, grid_y: 2, grid_w: 4, grid_h: 4, season_year: 2026 },
     { id: 13, name: 'Pallet Bin', kind: 'pallet', grid_x: 8, grid_y: 2, grid_w: 4, grid_h: 3, season_year: 2026 },
   ];
   else if (method !== 'GET') resp = { id: 99 };
@@ -127,10 +127,18 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
   const palletCard = canvas._children.find((c) => c.dataset && c.dataset.containerId === 13);
   check('arch card rendered', !!archCard);
   check('arch card shows bridge icon', archCard && archCard.innerHTML.includes('🌉'));
-  check('arch card spans 4x8 cells', archCard && archCard.style.gridColumn === '3 / span 4' && archCard.style.gridRow === '3 / span 8');
+  check('arch card spans 4x4 cells', archCard && archCard.style.gridColumn === '3 / span 4' && archCard.style.gridRow === '3 / span 4');
   check('pallet card rendered', !!palletCard);
   check('pallet card shows wood icon', palletCard && palletCard.innerHTML.includes('🪵'));
   check('arch card shows its plant', archCard && archCard.innerHTML.includes('Kentucky Wonder'));
+
+  // modal: arch kind pre-fills 4x4 footprint and 7 ft height
+  fire(named['#planner-add'], 'click');
+  check('new modal height blank for grow bag', named['#container-height'].value === '');
+  named['#container-kind'].value = 'arch';
+  fire(named['#container-kind'], 'change', { target: named['#container-kind'] });
+  check('arch kind pre-fills 4x4 footprint', named['#container-grid-w'].value === 4 && named['#container-grid-h'].value === 4);
+  check('arch kind pre-fills 7 ft height', named['#container-height'].value === 7);
 
   // view toggle exists, starts in 2D
   check('2D button active initially', named['#view-2d'].className.includes('bg-sage-200'));

@@ -14,7 +14,8 @@
     'arch': 'bg-navy-100 ring-navy-300',
     'pallet': 'bg-beige-200 ring-beige-400',
   };
-  const FOOTPRINTS = { 'grow bag': [2, 2], 'raised bed': [4, 4], 'pot': [1, 1], 'planter': [3, 1], 'arch': [4, 8], 'pallet': [4, 3] };
+  const FOOTPRINTS = { 'grow bag': [2, 2], 'raised bed': [4, 4], 'pot': [1, 1], 'planter': [3, 1], 'arch': [4, 4], 'pallet': [4, 3] };
+  const KIND_HEIGHT = { 'arch': 7 }; // default height in feet, used by the 3D view
 
   function initPlanner() {
     const canvas = $('#planner-canvas');
@@ -245,6 +246,7 @@
       $('#container-grid-w').value = c && c.grid_w ? c.grid_w : fp[0];
       $('#container-grid-h').value = c && c.grid_h ? c.grid_h : fp[1];
       $('#container-size').value = c ? (c.size || '') : '';
+      $('#container-height').value = c && c.height_ft != null ? c.height_ft : (KIND_HEIGHT[c ? c.kind : 'grow bag'] || '');
       $('#container-volume-value').value = c && c.volume_value != null ? c.volume_value : '';
       $('#container-volume-unit').value = c ? (c.volume_unit || '') : '';
       $('#container-location').value = c && c.location_id ? c.location_id : '';
@@ -264,6 +266,7 @@
       const fp = FOOTPRINTS[e.target.value] || [2, 2];
       $('#container-grid-w').value = fp[0];
       $('#container-grid-h').value = fp[1];
+      $('#container-height').value = KIND_HEIGHT[e.target.value] || '';
     });
 
     $('#container-plant-add-btn').addEventListener('click', async () => {
@@ -321,6 +324,7 @@
         size: $('#container-size').value.trim(),
         volume_value: $('#container-volume-value').value ? Number($('#container-volume-value').value) : null,
         volume_unit: $('#container-volume-unit').value,
+        height_ft: $('#container-height').value ? Number($('#container-height').value) : null,
         location_id: $('#container-location').value ? Number($('#container-location').value) : null,
         soil_notes: $('#container-soil').value.trim(),
         season_year: year,
@@ -557,30 +561,49 @@
       g.userData.topY = 0.42;
     }
 
-    function buildArch(THREE, g, w, h) {
+    function buildArch(THREE, g, w, h, height) {
       const span = Math.min(w, h);
       const len = Math.max(w, h);
-      const r = Math.max(1, span / 2);
-      // half-cylinder shell: axis along X, top half only (reads as a panel arch)
-      const geo = new THREE.CylinderGeometry(r, r, len, 14, 1, true, 0, Math.PI);
-      geo.rotateZ(Math.PI / 2);
-      const panel = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
-        color: 0x7d97b9, wireframe: true, transparent: true, opacity: 0.85,
+      const a = Math.max(0.75, span / 2);
+      const hh = Math.max(1.5, height || 4);
+      // wire grid bent into a half-ellipse: ribs across the span, runs along the length
+      const nCross = 9;
+      const arcT = [];
+      for (let j = 0; j < nCross; j++) arcT.push((j / (nCross - 1)) * Math.PI);
+      const pts = [];
+      const nRibs = Math.max(4, Math.round(len * 0.75));
+      for (let i = 0; i < nRibs; i++) {
+        const z = -len / 2 + (i / (nRibs - 1)) * len;
+        let prev = null;
+        for (const t of arcT) {
+          const p = [a * Math.cos(t), hh * Math.sin(t), z];
+          if (prev) pts.push(...prev, ...p);
+          prev = p;
+        }
+      }
+      for (const t of arcT) {
+        const x = a * Math.cos(t), y = hh * Math.sin(t);
+        pts.push(x, y, -len / 2, x, y, len / 2);
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+      const wires = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({
+        color: 0x7d97b9, transparent: true, opacity: 0.9,
       }));
-      if (h > w) panel.rotation.y = Math.PI / 2; // run along Z when the footprint is taller
-      g.add(panel);
+      if (w > h) wires.rotation.y = Math.PI / 2; // run along X when the footprint is wider
+      g.add(wires);
       const footGeo = new THREE.BoxGeometry(0.18, 0.5, 0.18);
       const footMat = new THREE.MeshStandardMaterial({ color: 0x4f6d94, roughness: 0.8 });
-      const off = r - 0.15, along = len / 2 - 0.35;
-      const pts = h > w
-        ? [[-off, -along], [off, -along], [-off, along], [off, along]]
-        : [[-along, -off], [-along, off], [along, -off], [along, off]];
-      pts.forEach(([fx, fz]) => {
+      const off = a * 0.92, along = len / 2 - 0.35;
+      const corners = w > h
+        ? [[-along, -off], [-along, off], [along, -off], [along, off]]
+        : [[-off, -along], [off, -along], [-off, along], [off, along]];
+      corners.forEach(([fx, fz]) => {
         const f = new THREE.Mesh(footGeo, footMat);
         f.position.set(fx, 0.25, fz);
         g.add(f);
       });
-      g.userData.topY = r;
+      g.userData.topY = hh;
     }
 
     function addPlants3D(THREE, g, w, h, kind, c) {
@@ -706,7 +729,7 @@
         g.position.set((c.grid_x || 0) + w / 2 - cols / 2, 0, (c.grid_y || 0) + h / 2 - rows / 2);
         g.userData.containerId = c.id;
         const kind = c.kind || 'grow bag';
-        if (kind === 'arch') buildArch(THREE, g, w, h);
+        if (kind === 'arch') buildArch(THREE, g, w, h, c.height_ft || KIND_HEIGHT.arch || 4);
         else if (kind === 'pallet') buildPallet(THREE, g, w, h);
         else buildVessel(THREE, g, w, h, kind);
         addPlants3D(THREE, g, w, h, kind, c);

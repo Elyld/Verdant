@@ -68,10 +68,28 @@ def test_container_gets_grid_placement_and_footprint():
     assert (pot["grid_w"], pot["grid_h"]) == (1, 1)
 
     arch = _container("Bean Arch", kind="arch", year=2035)
-    assert (arch["grid_w"], arch["grid_h"]) == (4, 8)
+    assert (arch["grid_w"], arch["grid_h"]) == (4, 4)
+    assert arch["height_ft"] == 7  # arches default to 7 ft tall
 
     pallet = _container("Pallet Bin", kind="pallet", year=2035)
     assert (pallet["grid_w"], pallet["grid_h"]) == (4, 3)
+    assert pallet["height_ft"] is None
+
+
+def test_container_height_create_and_patch():
+    bag = _container("Tall Bag", kind="grow bag", year=2035)
+    assert bag["height_ft"] is None
+
+    arch = _container("Custom Arch", kind="arch", year=2035, height_ft=8)
+    assert arch["height_ft"] == 8
+
+    r = client.patch(f"/api/containers/{arch['id']}", json={"height_ft": 6.5})
+    assert r.status_code == 200
+    assert r.json()["height_ft"] == 6.5
+
+    r = client.patch(f"/api/containers/{arch['id']}", json={"height_ft": None})
+    assert r.status_code == 200
+    assert r.json()["height_ft"] is None
 
 
 def test_new_containers_do_not_overlap():

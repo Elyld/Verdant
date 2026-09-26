@@ -344,6 +344,8 @@ class Container(SQLModel, table=True):
     # Structured volume for pots/bags/planters (number + unit: gal, qt, L).
     volume_value: Optional[float] = None
     volume_unit: Optional[str] = Field(default="")
+    # Height in feet, used by the 3D planner view (arches default to 7).
+    height_ft: Optional[float] = Field(default=None)
     location_id: Optional[int] = Field(default=None, foreign_key="locations.id", index=True)
     season_year: int = Field(index=True)
     x: float = Field(default=10.0)  # legacy canvas position, 0-100 (superseded by grid_*)

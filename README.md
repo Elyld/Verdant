@@ -490,7 +490,8 @@ server local time. Test with `POST /api/digest/send`.
   a 10-gal grow bag, and new containers land in the first free spot instead of
   piling up. Containers now hold **many plants** (a bed lists everything in
   it), and a **🔁 rotation check** warns when the same plant family goes back
-  where it grew last season. New asset kinds: **cattle panel arches** and
+  where it grew last season. New asset kinds: **cattle panel arches** (7 ft
+  tall by default, height editable per container for the 3D view) and
   **pallets**. A **3D view** renders the whole plan in space — orbit around
   the yard, see every bed, bag, arch, and plant, click any of them to edit.
   Old free-form positions migrate to the grid automatically on first load.

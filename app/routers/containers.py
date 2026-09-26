@@ -69,8 +69,13 @@ def default_footprint(kind: str, size: str) -> tuple:
         return (4, 4)
     return {
         "grow bag": (2, 2), "pot": (1, 1), "planter": (3, 1),
-        "arch": (4, 8), "pallet": (4, 3),
+        "arch": (4, 4), "pallet": (4, 3),
     }.get(kind or "", (2, 2))
+
+
+def default_height(kind: str) -> Optional[float]:
+    """Default height in feet for a container kind (used by the 3D view)."""
+    return {"arch": 7.0}.get(kind or "")
 
 
 def _rects_overlap(ax, ay, aw, ah, bx, by, bw, bh) -> bool:
@@ -305,12 +310,20 @@ def create_container(payload: dict, session: Session = Depends(get_session)) -> 
     except (TypeError, ValueError):
         w, h = dw, dh
     gx, gy = first_free_spot(session, year, w, h, cols, rows)
+    raw_h = payload.get("height_ft")
+    try:
+        height_ft = float(raw_h) if raw_h not in (None, "") else default_height(kind)
+    except (TypeError, ValueError):
+        height_ft = default_height(kind)
+    if height_ft is not None:
+        height_ft = max(0.5, height_ft)
     container = Container(
         name=name,
         kind=kind,
         size=size,
         volume_value=payload.get("volume_value"),
         volume_unit=(payload.get("volume_unit") or "").strip().lower(),
+        height_ft=height_ft,
         location_id=payload.get("location_id"),
         season_year=year,
         x=float(payload.get("x", 10)),
@@ -341,6 +354,8 @@ def update_container(
                 value = max(0, int(value))
             if key in ("grid_w", "grid_h") and value is not None:
                 value = max(1, int(value))
+            if key == "height_ft":
+                value = None if value in (None, "") else max(0.5, float(value))
             setattr(container, key, value)
     session.add(container)
     session.commit()
@@ -378,6 +393,7 @@ def copy_season(
         copy = Container(
             name=src.name, kind=src.kind, size=src.size,
             volume_value=src.volume_value, volume_unit=src.volume_unit,
+            height_ft=src.height_ft,
             location_id=src.location_id, season_year=to_year,
             x=src.x, y=src.y,
             grid_x=src.grid_x, grid_y=src.grid_y,
