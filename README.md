@@ -1,4 +1,4 @@
-# 🌿 Verdant — Self-Hosted Garden Journal (v2.13.0)
+# 🌿 Verdant — Self-Hosted Garden Journal (v2.14.0)
 
 Your garden, logged. Plant profiles with care reminders, a daily observation log
 with a calendar heatmap, photo albums with slideshows, a seed stash and seedling
@@ -197,6 +197,27 @@ That's genuinely the whole setup: no `.env` file needed, no build step, and
 your data lives in the `./data` and `./uploads` folders next to the compose
 file, so it survives rebuilds and restarts. Paste the same file into Dockge
 or Portainer and it just works there too.
+
+### Reaching Verdant outside your LAN (Cloudflare Tunnel)
+
+Verdant is tunnel-ready: no sign-on inside the app, Cloudflare handles
+identity at the edge.
+
+1. In the Cloudflare dashboard: **Zero Trust → Networks → Tunnels** → create
+   a tunnel, add a public hostname pointing at `http://garden:8000`, and copy
+   the tunnel token.
+2. In `docker-compose.yml`: comment out the `ports:` block on the garden
+   service (so the app is *not* on your LAN directly — only the tunnel can
+   reach it), and uncomment the `cloudflared` service at the bottom.
+3. In your `.env`: `TUNNEL_TOKEN=<token>` and `TUNNEL_MODE=true`.
+4. `docker compose up -d`.
+5. Add a **Cloudflare Access** policy (e.g. email one-time PIN) on the
+   hostname — that's the sign-on, handled by Cloudflare, not Verdant.
+
+`TUNNEL_MODE=true` flips the secure preset: HSTS header on, `/docs` off, and
+the tunnel's proxy headers trusted so rate limiting sees real client IPs.
+(Keep `ports:` if you still want LAN access too — the tunnel keeps working,
+but LAN clients bypass Cloudflare Access.)
 
 To change the host port, point Verdant at your Immich server, or turn on the
 Discord digest, copy `.env.example` to `.env` and fill in what you need, then
@@ -455,6 +476,14 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.14.0** — Tunnel-ready security, for the day Verdant meets the internet.
+  Set `TUNNEL_MODE=true` and the app flips its secure preset: HSTS header on,
+  `/docs` off, and the tunnel's proxy headers trusted. Always-on hardening
+  underneath: security headers on every response, per-IP rate limiting on the
+  API (1200/min, health checks exempt), and the container entrypoint honors
+  `HOST`/`PORT`. `docker-compose.yml` ships a commented-out `cloudflared`
+  service — pair it with a Cloudflare Access policy and there's no sign-on
+  inside Verdant at all. Zero behavior change on plain LAN use.
 - **2.13.0** — Measurement cleanup, so units finally mean what they say.
   Harvests carry a weight **unit** (oz/g/lb/kg) alongside the weight, and the
   yield **scorecard converts everything to ounces** — no more adding grams to

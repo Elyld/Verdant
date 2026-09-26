@@ -82,7 +82,7 @@
   <footer class="border-t border-beige-300 bg-beige-50/70 py-6 text-center text-xs text-navy-400">
     <!-- LOGO: small placeholder copy of the logo in the footer. -->
     <img src="/static/img/logo-placeholder.svg" alt="" class="mr-1 inline h-4 w-4 rounded align-[-2px]" />Verdant · self-hosted garden journal ·
-    <a class="underline decoration-sage-400 hover:text-navy-700" href="/docs">API docs</a> ·
+    {% if docs_enabled %}<a class="underline decoration-sage-400 hover:text-navy-700" href="/docs">API docs</a> ·{% endif %}
     <a class="underline decoration-sage-400 hover:text-navy-700" href="/backup">💾 Backup</a> ·
     <a class="underline decoration-sage-400 hover:text-navy-700" href="/settings">⚙️ Settings</a>
     <span id="app-version" class="pill" title="Verdant version"></span>

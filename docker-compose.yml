@@ -20,6 +20,11 @@ services:
     environment:
       GARDEN_DATA_DIR: /data
       GARDEN_UPLOAD_DIR: /uploads
+      # Tunnel-ready (optional): set TUNNEL_MODE=true in your .env when Verdant
+      # sits behind a Cloudflare Tunnel. Flips the secure preset: HSTS header,
+      # /docs disabled, and the tunnel's proxy headers trusted so rate limiting
+      # sees real client IPs. No behavior change when false (default).
+      TUNNEL_MODE: ${TUNNEL_MODE:-false}
       GARDEN_DATABASE_URL: sqlite:////data/garden.db
       # Base URL used to resolve relative URLs in "Import from URL".
       # Set to your server's real address, e.g. https://photos.yourdomain.com
@@ -46,3 +51,25 @@ services:
       timeout: 5s
       start_period: 10s
       retries: 3
+
+  # --- Cloudflare Tunnel (optional) ---
+  # To reach Verdant from outside your LAN without opening any ports:
+  #   1. In the Cloudflare dashboard: Zero Trust -> Networks -> Tunnels ->
+  #      create a tunnel, add a public hostname pointing at http://garden:8000.
+  #      Copy the tunnel token.
+  #   2. Comment out the `ports:` block on the garden service above, so the app
+  #      is NOT on your LAN directly — only this tunnel container can reach it.
+  #      (Keep `ports:` if you want LAN access too; the tunnel still works,
+  #      but LAN clients bypass Cloudflare Access.)
+  #   3. Put TUNNEL_TOKEN=<token> and TUNNEL_MODE=true in your .env.
+  #   4. Uncomment the service below and `docker compose up -d`.
+  #   5. Add a Cloudflare Access policy (e.g. email one-time PIN) on the
+  #      hostname — that's the sign-on, handled by Cloudflare, not Verdant.
+  #
+  # cloudflared:
+  #   image: cloudflare/cloudflared:latest
+  #   container_name: verdant-tunnel
+  #   restart: unless-stopped
+  #   command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
+  #   depends_on:
+  #     - garden

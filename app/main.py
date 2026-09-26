@@ -20,6 +20,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.database import UPLOAD_DIR, init_db
 from app.models import GardenTag, utcnow
+from app.security import RateLimitMiddleware, SecurityHeadersMiddleware, docs_enabled
 from app.routers import albums, backup, containers, digest, expenses, fertilizations, immich, import_csv, observations, pests, posts, seed_packets, settings as settings_router, stats, tags
 from app.routers.tags import tag_destination
 from app.version import __version__
@@ -28,6 +29,7 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+templates.env.globals["docs_enabled"] = docs_enabled()
 
 
 @asynccontextmanager
@@ -110,6 +112,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Tunnel-ready security: headers + /docs gate (inner), per-IP rate limiting.
+# Inert by default; TUNNEL_MODE=true flips the secure preset. See app/security.py.
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RateLimitMiddleware)
 
 app.include_router(posts.router)
 app.include_router(fertilizations.router)
