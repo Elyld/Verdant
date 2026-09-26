@@ -106,10 +106,20 @@ you put the same plant family where it grew last season. Copy last season's
 layout into the new year and shuffle things around. Flip to the **3D view** to
 walk your plan — orbit around the yard and see the beds, bags, arches, and
 plants in space, which makes the layout click in a way a flat grid never does.
-Click any container in 3D to edit it.
+Click any container in 3D to edit it. A **🌤️ weather strip** runs across the
+top of the planner — current conditions, tonight's low, tomorrow's high,
+rain chance, and wind gusts — and **garden alerts** underneath it read your
+actual data: frost warnings that name your tender containers, heat alerts for
+the thirsty pots and bags, rain-skip nudges when you watered recently, spray
+wash-off warnings, wind alerts for the arches, and a tomato blight watch.
+Hit **🔥 Yield** to tint every container by last season's harvest weight
+(darker = heavier), so the spots that earned their keep jump out. Open any
+container and the **🌱 companion hints** suggest good and bad neighbors from a
+curated, extension-service-sourced list.
 
 ![Backyard planner](docs/screenshots/planner.png)
 ![Backyard planner in 3D](docs/screenshots/planner-3d.png)
+![Backyard planner with weather and yield heatmap](docs/screenshots/planner-heatmap.png)
 
 ### 🏷️ NFC Tags — tap it, log it
 Blank NFC tags turn physical things into shortcuts: tap the fertilizer
@@ -495,6 +505,17 @@ server local time. Test with `POST /api/digest/send`.
   **pallets**. A **3D view** renders the whole plan in space — orbit around
   the yard, see every bed, bag, arch, and plant, click any of them to edit.
   Old free-form positions migrate to the grid automatically on first load.
+  Then came the **intelligence batch**: a **🌤️ weather strip** across the top
+  of the planner (live conditions, tonight's low, tomorrow's high, rain
+  chance, wind gusts — powered by Open-Meteo, set your coordinates in
+  Settings), plus **garden alerts** that read your actual data — frost warnings
+  naming your tender containers, heat alerts for the thirsty pots, rain-skip
+  nudges when you watered recently, spray wash-off warnings, wind alerts for
+  the arches, and a tomato blight watch. The **🔥 Yield heatmap** tints every
+  container by last season's harvest weight so you can see at a glance which
+  spots earned their keep, and the **🌱 companion hints** in each container's
+  modal suggest good (and bad) neighbors from a curated,
+  extension-service-sourced list.
 - **2.14.0** — Tunnel-ready security, for the day Verdant meets the internet.
   Set `TUNNEL_MODE=true` and the app flips its secure preset: HSTS header on,
   `/docs` off, and the tunnel's proxy headers trusted. Always-on hardening
