@@ -8,6 +8,41 @@
   function initBackup() {
     const form = $('#restore-form');
     if (!form) return {};
+
+    // Download button: fetch the zip so we can show progress and real errors
+    // instead of a silent link that looks like it did nothing.
+    const dlBtn = $('#backup-download');
+    if (dlBtn) {
+      dlBtn.addEventListener('click', async () => {
+        const orig = dlBtn.textContent;
+        dlBtn.disabled = true;
+        dlBtn.textContent = 'Preparing backup…';
+        try {
+          const res = await fetch('/api/backup/export');
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.detail || `Backup failed (${res.status})`);
+          }
+          const blob = await res.blob();
+          const cd = res.headers.get('Content-Disposition') || '';
+          const m = /filename="([^"]+)"/.exec(cd);
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = m ? m[1] : 'verdant-backup.zip';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+          toast('Backup downloaded — check your Downloads folder.', 'ok');
+        } catch (err) {
+          toast(err.message || 'Backup failed.', 'err');
+        } finally {
+          dlBtn.disabled = false;
+          dlBtn.textContent = orig;
+        }
+      });
+    }
+
     const result = $('#restore-result');
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
