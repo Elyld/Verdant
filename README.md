@@ -135,14 +135,20 @@ A phone-first page for when you're standing in the garden with dirty hands:
 one-tap watering per location ("Water all"), a harvest +/− stepper, and
 today's entries at a glance. NFC tags can drop you straight here.
 
+![Quick Log](docs/screenshots/quick.png)
+
 ### 💰 Costs — was it worth growing?
 Every garden expense in one place, broken down by category. Tag a purchase
 to a plant and the Season Review scorecard splits costs per variety, so you
 can finally answer whether the peppers beat the grocery store.
 
+![Costs](docs/screenshots/costs.png)
+
 ### 🐛 Pests — the treatment log
 What showed up, what you sprayed or squashed, and whether it worked — a
 running log per pest so next year's battle plan writes itself.
+
+![Pests](docs/screenshots/pests.png)
 
 ### 📥 CSV Import — bring your own data
 Moving from another garden tracker? The **Import** page (nav bar → Import)
