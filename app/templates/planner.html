@@ -10,16 +10,38 @@
     <div class="flex flex-wrap items-center gap-2">
       <label class="text-sm text-navy-500" for="planner-year">Season</label>
       <select id="planner-year" class="inp text-sm"></select>
+      <span class="flex items-center gap-1 text-sm text-navy-500" title="Grid size — 1 cell = 1 ft">
+        <label for="grid-cols">Grid</label>
+        <input id="grid-cols" type="number" min="4" max="60" class="inp w-16 text-sm" />
+        <span>×</span>
+        <input id="grid-rows" type="number" min="4" max="60" class="inp w-16 text-sm" />
+        <button type="button" id="grid-apply" class="btn-ghost text-sm">Apply</button>
+      </span>
       <button type="button" id="planner-copy" class="btn-ghost text-sm" title="Copy another season's layout into this one">📋 Copy season…</button>
+      <span class="flex overflow-hidden rounded-lg text-sm ring-1 ring-beige-300" role="group" aria-label="Planner view">
+        <button type="button" id="view-2d" class="bg-sage-200 px-3 py-1 font-semibold text-navy-800">2D</button>
+        <button type="button" id="view-3d" class="bg-beige-50 px-3 py-1 text-navy-500 hover:bg-beige-100">3D</button>
+      </span>
       <button type="button" id="planner-add" class="btn-primary text-sm">+ Add container</button>
     </div>
   </header>
 
-  <div id="planner-canvas" class="relative w-full overflow-hidden rounded-2xl bg-beige-50 ring-1 ring-beige-300" style="aspect-ratio: 16/10; touch-action: none;">
-    <div class="pointer-events-none absolute inset-0 opacity-40" style="background-image: linear-gradient(to right, rgba(47,79,117,.08) 1px, transparent 1px), linear-gradient(to bottom, rgba(47,79,117,.08) 1px, transparent 1px); background-size: 10% 10%;"></div>
-    <p id="planner-empty" class="absolute inset-0 hidden items-center justify-center text-center text-sm text-navy-400">Nothing laid out for this season yet.<br />Add your first container above.</p>
+  <div id="rotation-banner" class="hidden rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-amber-300">
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <p class="font-semibold">🔁 Rotation check</p>
+        <ul id="rotation-list" class="mt-1 list-disc space-y-0.5 pl-5"></ul>
+      </div>
+      <button type="button" id="rotation-dismiss" class="btn-ghost text-sm">✕</button>
+    </div>
   </div>
-  <p class="text-xs text-navy-400">Drag containers to move them — positions save automatically. Click one to rename it, resize it, or assign a plant.</p>
+
+  <div id="planner-canvas" class="relative w-full overflow-hidden rounded-2xl bg-beige-50 ring-1 ring-beige-300" style="touch-action: none;">
+    <p id="planner-empty" class="absolute inset-0 z-10 hidden items-center justify-center bg-beige-50/80 text-center text-sm text-navy-400">Nothing laid out for this season yet.<br />Add your first container above.</p>
+  </div>
+  <div id="planner-3d" class="relative hidden w-full overflow-hidden rounded-2xl ring-1 ring-beige-300" style="touch-action: none; min-height: 420px;"></div>
+  <p id="planner-2d-hint" class="text-xs text-navy-400">Drag containers — they snap to the 1&nbsp;ft grid and save automatically. Click one to edit it, resize it, or change what's planted in it.</p>
+  <p id="planner-3d-hint" class="hidden text-xs text-navy-400">Drag to orbit · scroll or pinch to zoom · right-drag to pan · click a container to edit it.</p>
 
   <!-- Add/edit container modal -->
   <div id="container-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-navy-900/70 p-4">
@@ -37,8 +59,18 @@
             <option value="raised bed">🟫 Raised bed</option>
             <option value="pot">🪴 Pot</option>
             <option value="planter">🗄️ Planter</option>
+            <option value="arch">🌉 Cattle panel arch</option>
+            <option value="pallet">🪵 Pallet</option>
           </select></label>
+          <label class="block"><span class="lbl">Footprint <span class="font-normal text-navy-400">(grid cells, 1 = 1 ft)</span></span>
+            <span class="flex items-center gap-1">
+              <input id="container-grid-w" type="number" min="1" max="60" class="inp" />
+              <span class="text-navy-400">×</span>
+              <input id="container-grid-h" type="number" min="1" max="60" class="inp" />
+            </span>
+          </label>
           <label class="block"><span class="lbl">Size</span><input id="container-size" class="inp" maxlength="40" placeholder="4x8 ft (beds)" /></label>
+          <label class="block"><span class="lbl">Height <span class="font-normal text-navy-400">(ft, 3D view)</span></span><input id="container-height" type="number" min="0" step="0.5" class="inp" placeholder="7 for arches" /></label>
           <label class="block"><span class="lbl">Volume <span class="font-normal text-navy-400">(pots / bags)</span></span>
             <span class="flex gap-1">
               <input id="container-volume-value" type="number" min="0" step="any" class="inp" placeholder="10" />
@@ -46,7 +78,14 @@
             </span>
           </label>
           <label class="block"><span class="lbl">Location</span><select id="container-location" class="inp"><option value="">— none —</option></select></label>
-          <label class="block sm:col-span-2"><span class="lbl">Plant growing in it</span><select id="container-plant" class="inp"><option value="">— empty —</option></select></label>
+          <div class="block sm:col-span-2">
+            <span class="lbl">Plants growing in it</span>
+            <ul id="container-plantings" class="mb-2 space-y-1"></ul>
+            <span class="flex gap-1">
+              <select id="container-plant-add" class="inp"><option value="">— pick a plant —</option></select>
+              <button type="button" id="container-plant-add-btn" class="btn-ghost shrink-0 text-sm">+ Add</button>
+            </span>
+          </div>
           <label class="block sm:col-span-2"><span class="lbl">Soil notes</span><input id="container-soil" class="inp" maxlength="200" placeholder="Fresh mix + compost, spring 2026" /></label>
         </div>
         <div class="flex gap-2">
@@ -63,7 +102,7 @@
     <div class="card w-full max-w-sm space-y-4">
       <h3 class="font-display text-lg font-semibold text-navy-800">Copy a season's layout</h3>
       <label class="block"><span class="lbl">Copy from</span><select id="copy-from" class="inp"></select></label>
-      <p class="text-sm text-navy-500">Copies every container — positions, sizes, soil notes, and plant assignments — into <span id="copy-to-label" class="font-semibold"></span>.</p>
+      <p class="text-sm text-navy-500">Copies every container — grid positions, footprints, soil notes, and plant assignments — into <span id="copy-to-label" class="font-semibold"></span>.</p>
       <div class="flex gap-2">
         <button type="button" id="copy-go" class="btn-primary text-sm">Copy it</button>
         <button type="button" id="copy-cancel" class="btn-ghost text-sm">Cancel</button>

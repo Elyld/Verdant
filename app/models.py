@@ -344,15 +344,40 @@ class Container(SQLModel, table=True):
     # Structured volume for pots/bags/planters (number + unit: gal, qt, L).
     volume_value: Optional[float] = None
     volume_unit: Optional[str] = Field(default="")
+    # Height in feet, used by the 3D planner view (arches default to 7).
+    height_ft: Optional[float] = Field(default=None)
     location_id: Optional[int] = Field(default=None, foreign_key="locations.id", index=True)
     season_year: int = Field(index=True)
-    x: float = Field(default=10.0)  # canvas position, 0-100
+    x: float = Field(default=10.0)  # legacy canvas position, 0-100 (superseded by grid_*)
     y: float = Field(default=10.0)
+    # Grid placement: cell coordinates (top-left) and footprint in cells.
+    # Null until backfilled from the legacy x/y on first read.
+    grid_x: Optional[int] = Field(default=None)
+    grid_y: Optional[int] = Field(default=None)
+    grid_w: Optional[int] = Field(default=None)
+    grid_h: Optional[int] = Field(default=None)
     plant_id: Optional[int] = Field(default=None, foreign_key="plants.id", index=True)
     soil_notes: str = Field(default="")
 
     plant: Optional["Plant"] = Relationship()
     location: Optional["Location"] = Relationship()
+
+
+# --------------------------------------------------------------------------- #
+# Plantings — which plants grow in a container in a season (many per container)
+# --------------------------------------------------------------------------- #
+class Planting(SQLModel, table=True):
+    __tablename__ = "plantings"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    container_id: int = Field(foreign_key="containers.id", index=True)
+    plant_id: int = Field(foreign_key="plants.id", index=True)
+    season_year: int = Field(index=True)
+    slot: int = Field(default=0)  # position within the container (row/slot number)
+    notes: str = Field(default="")
+
+    container: Optional["Container"] = Relationship()
+    plant: Optional["Plant"] = Relationship()
 
 
 class SeedlingBatch(SQLModel, table=True):

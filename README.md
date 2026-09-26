@@ -1,4 +1,4 @@
-# 🌿 Verdant — Self-Hosted Garden Journal (v2.14.0)
+# 🌿 Verdant — Self-Hosted Garden Journal (v2.15.0)
 
 Your garden, logged. Plant profiles with care reminders, a daily observation log
 with a calendar heatmap, photo albums with slideshows, a seed stash and seedling
@@ -96,12 +96,20 @@ costs per variety.
 ![Season scorecard](docs/screenshots/scorecard.png)
 
 ### 🗺️ Backyard Planner — build your backyard
-Lay out your actual growing space: grow bags, raised beds, pots, planters —
-sized, positioned where they really sit, with a plant assigned to each.
-Drag containers around the canvas (positions save automatically), copy last
-season's layout into the new year and shuffle things around.
+Lay out your actual growing space on a real grid (1 cell = 1 ft, resizable):
+grow bags, raised beds, pots, planters, cattle panel arches, pallets — each
+drawn at its true footprint, so a 4×8 bed actually looks 4×8 next to a 10-gal
+bag. Drag containers and they snap to the grid (positions save automatically,
+and you can't drop one on top of another). A container holds **many plants**
+now — a bed lists everything in it — and the **🔁 rotation check** flags when
+you put the same plant family where it grew last season. Copy last season's
+layout into the new year and shuffle things around. Flip to the **3D view** to
+walk your plan — orbit around the yard and see the beds, bags, arches, and
+plants in space, which makes the layout click in a way a flat grid never does.
+Click any container in 3D to edit it.
 
 ![Backyard planner](docs/screenshots/planner.png)
+![Backyard planner in 3D](docs/screenshots/planner-3d.png)
 
 ### 🏷️ NFC Tags — tap it, log it
 Blank NFC tags turn physical things into shortcuts: tap the fertilizer
@@ -476,6 +484,17 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.15.0** — Planner 2.0: the backyard builder grows up. A real **grid
+  system** (1 cell = 1 ft, resizable up to 60×60) with snap-to-grid dragging —
+  containers are drawn at their **true footprint**, so a 4×8 raised bed dwarfs
+  a 10-gal grow bag, and new containers land in the first free spot instead of
+  piling up. Containers now hold **many plants** (a bed lists everything in
+  it), and a **🔁 rotation check** warns when the same plant family goes back
+  where it grew last season. New asset kinds: **cattle panel arches** (7 ft
+  tall by default, height editable per container for the 3D view) and
+  **pallets**. A **3D view** renders the whole plan in space — orbit around
+  the yard, see every bed, bag, arch, and plant, click any of them to edit.
+  Old free-form positions migrate to the grid automatically on first load.
 - **2.14.0** — Tunnel-ready security, for the day Verdant meets the internet.
   Set `TUNNEL_MODE=true` and the app flips its secure preset: HSTS header on,
   `/docs` off, and the tunnel's proxy headers trusted. Always-on hardening
