@@ -54,6 +54,7 @@
           <div class="flex flex-wrap items-center gap-2">
             <input id="catalog-search" type="search" class="inp text-sm" placeholder="Search varieties…" />
             <select id="catalog-category" class="inp text-sm"><option value="">All types</option></select>
+            <button type="button" id="catalog-from-sources" class="btn-ghost text-sm" title="Copy your seed sources into the stash as packets">📦 Move sources to stash</button>
             <button type="button" id="catalog-add" class="btn-primary text-sm">+ Add packet</button>
           </div>
         </div>
@@ -75,7 +76,7 @@
               <label class="block"><span class="lbl">Species</span><input id="packet-species" class="inp" maxlength="120" placeholder="Capsicum chinense" /></label>
               <label class="block"><span class="lbl">Type</span><input id="packet-category" class="inp" maxlength="40" placeholder="Pepper" list="packet-categories" /><datalist id="packet-categories"></datalist></label>
               <label class="block"><span class="lbl">Year bought</span><input id="packet-year" type="number" class="inp" min="1990" max="2100" placeholder="2026" /></label>
-              <label class="block"><span class="lbl">Vendor</span><select id="packet-vendor" class="inp"><option value="">— none —</option></select></label>
+              <label class="block"><span class="lbl">Vendor</span><input id="packet-vendor" class="inp" maxlength="120" list="packet-vendor-list" placeholder="Territorial Seed" autocomplete="off" /><datalist id="packet-vendor-list"></datalist></label>
               <label class="block"><span class="lbl">Vendor link</span><input id="packet-vendor-url" type="url" class="inp" maxlength="300" placeholder="https://…" /></label>
               <label class="block"><span class="lbl">Quantity</span><input id="packet-qty" class="inp" maxlength="60" placeholder="~40 seeds" /></label>
               <label class="block"><span class="lbl">Packet photo</span><input id="packet-photo" type="file" accept="image/*" class="inp text-sm" /></label>

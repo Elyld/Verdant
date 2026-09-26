@@ -77,6 +77,33 @@ def _apply_column_migrations(target_engine=None) -> None:
                         f'ADD COLUMN "{column.name}" {coltype}'
                     )
     _relax_not_null_constraints(target_engine, present)
+    _backfill_packet_vendor_names(target_engine)
+
+
+def _backfill_packet_vendor_names(target_engine) -> None:
+    """One-time backfill: packets created while the vendor was a link into
+    seed_sources get the vendor's name copied onto vendor_name, so the packet
+    stands alone (the vendor dropdown no longer lists one row per variety)."""
+    with target_engine.connect() as conn:
+        tables = {
+            row[0]
+            for row in conn.exec_driver_sql(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+        if "seed_packets" not in tables or "seed_sources" not in tables:
+            return
+        cols = {
+            row[1] for row in conn.exec_driver_sql('PRAGMA table_info("seed_packets")').fetchall()
+        }
+        if "vendor_name" not in cols or "vendor_id" not in cols:
+            return
+        conn.exec_driver_sql(
+            "UPDATE seed_packets SET vendor_name = "
+            "(SELECT source FROM seed_sources WHERE seed_sources.id = seed_packets.vendor_id) "
+            "WHERE (vendor_name IS NULL OR vendor_name = '') AND vendor_id IS NOT NULL"
+        )
+        conn.commit()
 
 
 def _relax_not_null_constraints(target_engine, present: set[str]) -> None:
