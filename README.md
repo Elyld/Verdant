@@ -1,4 +1,4 @@
-# 🌿 Verdant — Self-Hosted Garden Journal (v2.5.0)
+# 🌿 Verdant — Self-Hosted Garden Journal (v2.9.0)
 
 Your garden, logged. Plant profiles with care reminders, a daily observation log
 with a calendar heatmap, photo albums with slideshows, seed source tracking,
@@ -27,7 +27,12 @@ maturity, light needs, and custom care intervals. Verdant computes what's
 **overdue, due today, or coming up** for watering and feeding. Each profile
 also has a photo timeline and a per-plant timelapse view.
 
+Photos you assign on the 🎯 Match photos page appear in a **Photos** gallery
+on the plant's profile, with a lightbox on click.
+
 ![Plant profiles](docs/screenshots/plants.png)
+
+![Plant photo gallery](docs/screenshots/plant-photos.png)
 
 ### 👀 Observations — the daily log
 Log health (1–10), watering, pest sightings, and freeform notes per plant, per
@@ -46,6 +51,13 @@ an album reuses its existing Verdant album instead of duplicating it, and
 one to a plant — assigned photos show up in a gallery on the plant's profile.
 
 ![Photo albums](docs/screenshots/photos.png)
+
+The 🎯 Match photos page (linked from the Photos tab) is where imported
+photos get claimed: flip through them one by one, see each photo's taken
+date, camera, GPS, and tags, and assign it to a plant with a keystroke.
+Bulk-assign a whole day's photos at once when you already know what they are.
+
+![Match photos to plants](docs/screenshots/match.png)
 
 ### 🌰 Seeds — sources & vendors
 Track where every seed came from: vendors, trades, or saved seed. Grouped by
@@ -359,6 +371,27 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.9.0** — Immich album dedup: re-importing an album reuses the existing
+  Verdant album instead of duplicating it, and **🧹 Merge duplicates** folds
+  older double-imports into one (deleting the re-downloaded duplicate files).
+  New **🎯 Match photos** page: flip through imported photos one by one and
+  assign each to a plant (arrow-key navigation, bulk-assign a whole day's
+  photos at once) — assigned photos appear in a gallery on the plant's
+  profile. XMP sidecar keywords from Immich are captured as photo tags on
+  import, backfilled for existing imports via the **🔄 Sync metadata** button.
+- **2.8.0** — Settings page: pick your USDA hardiness zone once and Verdant
+  derives your frost dates; morning digest controls (webhook, time, enabled)
+  moved out of env vars into the UI.
+- **2.7.0** — Tidy-up: interface cleanups and polish across the app.
+- **2.6.0** — Full-screen `/slideshow` page with date/camera EXIF captions
+  and 3/5/10/30s intervals; yield leaderboard on the Review page; `/quick`
+  mobile quick-log (one-tap watering, harvest +/− stepper, "Water all" per
+  location); expense tracking with per-category breakdown; seed-starting
+  calendar on the Plants page tuned to your last frost date; pest treatment
+  log.
+- **2.5.1** — NULL-handling fixes: pre-existing rows with NULL camera/source
+  fields no longer 500 the Photos tab; CSV import copes with legacy NOT NULL
+  constraints in old databases.
 - **2.5.0** — CSV import: bring your own data from another garden tracker.
   Upload → preview (counts, warnings, sample rows) → import, for locations,
   plants, fertilizers, seed sources, watering, fertilization, and harvests.
