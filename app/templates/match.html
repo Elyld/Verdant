@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Verdant · Match photos{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <header>
+    <h2 class="font-display text-2xl font-semibold text-navy-800">Match photos to plants</h2>
+    <p class="text-sm text-navy-500">Flip through your imported photos and tell Verdant which plant each one shows. Assigned photos appear on the plant's profile.</p>
+  </header>
+
+  <div class="card flex flex-wrap items-end gap-3">
+    <div>
+      <label class="lbl" for="match-album">Album</label>
+      <select id="match-album" class="inp w-auto min-w-48">
+        <option value="">All albums</option>
+      </select>
+    </div>
+    <label class="flex items-center gap-2 text-sm text-navy-700">
+      <input type="checkbox" id="match-unassigned" class="h-4 w-4 accent-sage-600" checked />
+      Unassigned only
+    </label>
+    <button type="button" id="match-reload" class="btn-ghost text-sm">Reload</button>
+    <p id="match-progress" class="ml-auto text-sm text-navy-500"></p>
+  </div>
+
+  <div id="match-empty" class="card text-center text-navy-500">
+    Nothing to match — every photo in this view already has a plant. 🎉
+  </div>
+
+  <div id="match-workspace" class="hidden grid gap-6 lg:grid-cols-3">
+    <div class="lg:col-span-2">
+      <div class="card overflow-hidden p-0">
+        <div class="relative bg-navy-900">
+          <img id="match-photo" class="mx-auto max-h-[70vh] w-auto object-contain" alt="Photo to match" />
+          <button type="button" id="match-prev" class="slide-nav left-2" aria-label="Previous photo">&#8249;</button>
+          <button type="button" id="match-next" class="slide-nav right-2" aria-label="Next photo">&#8250;</button>
+        </div>
+        <div class="space-y-1 p-4">
+          <p id="match-caption" class="text-sm font-medium text-navy-700"></p>
+          <p id="match-meta" class="text-xs text-navy-400"></p>
+          <p id="match-tags" class="text-xs text-navy-400"></p>
+          <p id="match-counter" class="text-xs text-navy-400"></p>
+        </div>
+      </div>
+    </div>
+    <div class="space-y-4">
+      <div class="card">
+        <label class="lbl" for="match-plant">This photo shows…</label>
+        <select id="match-plant" class="inp">
+          <option value="">Choose a plant…</option>
+        </select>
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button type="button" id="match-assign" class="btn-primary text-sm">Assign &amp; next →</button>
+          <button type="button" id="match-skip" class="btn-ghost text-sm">Skip →</button>
+          <button type="button" id="match-unassign" class="btn-ghost text-sm">Unassign</button>
+        </div>
+        <p class="mt-2 text-xs text-navy-400">Tip: ← → keys flip through photos.</p>
+      </div>
+      <div class="card">
+        <h3 class="mb-1 font-display text-base font-semibold">Bulk assign</h3>
+        <p id="match-bulk-hint" class="mb-3 text-xs text-navy-400">Photos taken on the same day are usually the same plant session.</p>
+        <button type="button" id="match-bulk" class="btn-ghost text-sm" disabled>Assign day's photos</button>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

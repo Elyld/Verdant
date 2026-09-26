@@ -64,10 +64,11 @@
     </li>`;
   }
 
-  function plantModalHtml(plant, timeline, locationName) {
+  function plantModalHtml(plant, timeline, locationName, matched) {
     const events = timeline.events || [];
     const photos = timeline.photos || [];
     const harvests = events.filter((e) => e.kind === 'harvest');
+    const matchedPhotos = Array.isArray(matched) ? matched : [];
     const today = new Date().toISOString().slice(0, 10);
     return `
       <div class="mb-4 flex items-start justify-between gap-3">
@@ -120,6 +121,12 @@
             <p class="mt-2 text-xs text-navy-400">Reminders appear up top when watering or feeding is due.</p>
           </section>
           <section>
+            <h4 class="mb-2 font-display text-lg font-semibold">Photos <span class="pill ml-1">${matchedPhotos.length}</span></h4>
+            ${matchedPhotos.length ? `<div class="flex flex-wrap gap-1.5">${matchedPhotos.map((img) => `<button type="button" data-lightbox="${esc(img.file_path)}"><img src="${esc(img.file_path)}" class="h-16 w-16 rounded-lg object-cover" alt="${esc(img.taken_at ? fmtDate(img.taken_at) : (img.title || 'Plant photo'))}" loading="lazy" title="${esc(img.taken_at ? fmtDate(img.taken_at) : '')}"></button>`).join('')}</div>
+            <p class="mt-2 text-xs text-navy-400"><a href="/match" class="underline">Match more photos</a> to this plant.</p>`
+              : '<p class="mb-1 text-sm text-navy-400">No photos matched yet. <a href="/match" class="underline">Match photos</a> to build this gallery.</p>'}
+          </section>
+          <section>
             <h4 class="mb-2 font-display text-lg font-semibold">Harvests <span class="pill ml-1">${harvests.length}</span></h4>
             ${harvests.length ? `<ul class="mb-3 space-y-1.5 text-sm">${harvests.map((h) => `<li class="flex justify-between gap-2"><span>🧺 ${esc(h.title.replace('Harvested ', ''))}</span><span class="text-navy-400">${fmtDate(h.date)}</span></li>`).join('')}</ul>` : '<p class="mb-3 text-sm text-navy-400">No harvests logged yet.</p>'}
             <form data-harvest-form="${plant.id}" class="grid grid-cols-2 gap-2 rounded-xl border border-beige-200 bg-beige-50 p-3">
@@ -166,10 +173,10 @@
     render();
   }
 
-  function openPlantModal(plant, timeline, locationName) {
+  function openPlantModal(plant, timeline, locationName, matched) {
     const modal = $('#plant-modal');
     if (!modal) return;
-    modal.innerHTML = `<div class="modal-backdrop" data-close></div><div class="modal-card modal-wide card" role="dialog" aria-modal="true" aria-label="${esc(plant.variety_name)}">${plantModalHtml(plant, timeline, locationName)}</div>`;
+    modal.innerHTML = `<div class="modal-backdrop" data-close></div><div class="modal-card modal-wide card" role="dialog" aria-modal="true" aria-label="${esc(plant.variety_name)}">${plantModalHtml(plant, timeline, locationName, matched)}</div>`;
     modal.classList.remove('hidden');
     modal.classList.add('modal-open');
     modal.setAttribute('aria-hidden', 'false');
@@ -249,11 +256,12 @@
 
     async function openProfile(plantId) {
       try {
-        const [plant, timeline] = await Promise.all([
+        const [plant, timeline, matched] = await Promise.all([
           api.get(`/api/plants/${plantId}`),
           api.get(`/api/plants/${plantId}/timeline`),
+          api.get(`/api/album-images/?plant_id=${plantId}&limit=200`).catch(() => []),
         ]);
-        openPlantModal(plant, timeline, locationName(plant.location_id));
+        openPlantModal(plant, timeline, locationName(plant.location_id), Array.isArray(matched) ? matched : []);
       } catch (error) { toast(`Could not open plant: ${error.message}`, 'err'); }
     }
 

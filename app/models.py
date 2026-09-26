@@ -132,8 +132,14 @@ class AlbumImage(SQLModel, table=True):
     camera_model: str = ""
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    # XMP/keyword tags from Immich (comma-separated). Immich ingests XMP
+    # sidecar keywords as tags, so this is where sideloaded XMP data lands.
+    tags: str = ""
+    # The plant this photo shows, assigned by hand on the /match page.
+    plant_id: Optional[int] = Field(default=None, foreign_key="plants.id", index=True)
 
     album: Optional["Album"] = Relationship(back_populates="images")
+    plant: Optional["Plant"] = Relationship(back_populates="album_images")
 
 class Location(SQLModel, table=True):
     __tablename__ = "locations"
@@ -169,6 +175,7 @@ class Plant(SQLModel, table=True):
     fertilization_logs: List["FertilizationLog"] = Relationship(back_populates="plant")
     observation_logs: List["ObservationLog"] = Relationship(back_populates="plant")
     harvests: List["Harvest"] = Relationship(back_populates="plant")
+    album_images: List["AlbumImage"] = Relationship(back_populates="plant")
 
 class Fertilizer(SQLModel, table=True):
     __tablename__ = "fertilizers"

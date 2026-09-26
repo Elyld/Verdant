@@ -225,3 +225,9 @@ def pests_page(request: Request) -> HTMLResponse:
 def settings_page(request: Request) -> HTMLResponse:
     """Garden location, frost dates, and digest preferences."""
     return templates.TemplateResponse(request, "settings.html", {"__version__": __version__})
+
+
+@app.get("/match", include_in_schema=False)
+def match_page(request: Request) -> HTMLResponse:
+    """Flip through imported photos and assign them to plants."""
+    return templates.TemplateResponse(request, "match.html", {"__version__": __version__})
