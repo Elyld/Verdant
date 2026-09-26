@@ -224,10 +224,14 @@ def seed_calendar_rows(session: Session, today: date_cls = None) -> List[SowRow]
     """Suggested indoor-start dates from last frost + per-crop offsets."""
     from datetime import timedelta
 
+    from app import frost as frost_mod
     from app.models import Plant
 
     today = today or date_cls.today()
-    frost = last_frost_date()
+    resolved, source, _ = frost_mod.resolve_frost(session, "last", today=today)
+    # Settings/zone values are annualized upcoming dates; the env var keeps
+    # its long-standing raw behavior so existing setups don't shift.
+    frost = resolved if source in ("exact", "zone") else last_frost_date()
     rows = []
     for p in session.exec(select(Plant)).all():
         if p.status not in ("Growing", "Planned", "Seedling"):
@@ -258,24 +262,21 @@ def seed_calendar(session: Session = Depends(get_session)) -> List[SowRow]:
 # --------------------------------------------------------------------------- #
 # Frost countdown
 # --------------------------------------------------------------------------- #
-def first_frost_date() -> Optional[date_cls]:
-    """Configurable via FIRST_FROST_DATE (YYYY-MM-DD); None when unset."""
-    import os
-
-    raw = os.getenv("FIRST_FROST_DATE", "").strip()
-    try:
-        return date_cls.fromisoformat(raw)
-    except ValueError:
-        return None
-
-
 @router.get("/frost", tags=["stats"])
-def frost_countdown() -> dict:
-    """Days until the first anticipated frost (for the header countdown)."""
-    frost = first_frost_date()
+def frost_countdown(session: Session = Depends(get_session)) -> dict:
+    """Days until the first anticipated frost (for the header countdown).
+
+    Resolved from Settings exact date > USDA zone average > FIRST_FROST_DATE.
+    Past dates roll to next year so the countdown never goes negative.
+    """
+    from app import frost as frost_mod
+
+    frost, source, zone = frost_mod.resolve_frost(session, "first")
     if frost is None:
-        return {"first_frost_date": None, "days_until": None}
+        return {"first_frost_date": None, "days_until": None, "source": None, "label": ""}
     return {
         "first_frost_date": frost.isoformat(),
         "days_until": (frost - date_cls.today()).days,
+        "source": source,
+        "label": frost_mod.frost_label(source, zone),
     }

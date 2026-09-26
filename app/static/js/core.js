@@ -38,6 +38,7 @@
     },
     get(path) { return this.request('GET', path); },
     post(path, json) { return this.request('POST', path, { json }); },
+    put(path, json) { return this.request('PUT', path, { json }); },
     patch(path, json) { return this.request('PATCH', path, { json }); },
     del(path) { return this.request('DELETE', path); },
     upload(path, form) { return this.request('POST', path, { form }); },
