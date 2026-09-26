@@ -131,3 +131,41 @@ def test_backup_page_renders(client):
     res = client.get("/backup")
     assert res.status_code == 200
     assert "Backup &amp; restore" in res.text or "Backup & restore" in res.text
+
+
+def test_export_without_photos(client):
+    seed(client)
+    res = client.get("/api/backup/export?include_photos=false")
+    assert res.status_code == 200, res.text
+    assert "-nophotos-" in res.headers["content-disposition"]
+    zf = zipfile.ZipFile(io.BytesIO(res.content))
+    manifest = json.loads(zf.read("data.json"))
+    assert manifest["includes_photos"] is False
+    assert manifest["tables"]["plants"], "data rows still exported"
+    assert not [n for n in zf.namelist() if n.startswith("files/")], zf.namelist()
+
+
+def test_export_default_still_includes_photos(client):
+    zf = download_backup(client)
+    manifest = json.loads(zf.read("data.json"))
+    assert manifest["includes_photos"] is True
+    assert [n for n in zf.namelist() if n.startswith("files/")]
+
+
+def test_restore_without_photos_keeps_uploads(client):
+    seed(client)
+    res = client.get("/api/backup/export?include_photos=false")
+    assert res.status_code == 200
+    backup_bytes = res.content
+    from app.database import UPLOAD_DIR as _UD
+
+    before = {p.name for p in _UD.rglob("*") if p.is_file()}
+    assert before, "expected an uploaded file before restore"
+    res = client.post(
+        "/api/backup/import",
+        files={"file": ("verdant-backup-nophotos.zip", backup_bytes, "application/zip")},
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["photos_included"] is False
+    after = {p.name for p in _UD.rglob("*") if p.is_file()}
+    assert before <= after, "photo-less restore must not wipe current uploads"
