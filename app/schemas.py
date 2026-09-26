@@ -49,6 +49,8 @@ class FertilizationCreate(BaseModel):
     fertilizer_name: str = Field(min_length=1, max_length=120)
     npk_ratio: str = Field(default="", max_length=40)
     amount_used: str = Field(default="", max_length=80)
+    amount_value: Optional[float] = Field(default=None, ge=0)
+    amount_unit: str = Field(default="", max_length=8)
     notes: str = ""
     plant_id: Optional[int] = None
     location_id: Optional[int] = None
@@ -59,6 +61,8 @@ class FertilizationUpdate(BaseModel):
     fertilizer_name: Optional[str] = Field(default=None, min_length=1, max_length=120)
     npk_ratio: Optional[str] = Field(default=None, max_length=40)
     amount_used: Optional[str] = Field(default=None, max_length=80)
+    amount_value: Optional[float] = Field(default=None, ge=0)
+    amount_unit: Optional[str] = Field(default=None, max_length=8)
     notes: Optional[str] = None
     fertilizer_id: Optional[int] = None
     plant_id: Optional[int] = None
@@ -73,12 +77,14 @@ class FertilizationRead(BaseModel):
     fertilizer_name: str
     npk_ratio: str
     amount_used: str
+    amount_value: Optional[float] = None
+    amount_unit: str = ""
     notes: str
     fertilizer_id: Optional[int] = None
     plant_id: Optional[int] = None
     location_id: Optional[int] = None
 
-    _null_str = field_validator("npk_ratio", "amount_used", "notes", mode="before")(_none_to_str)
+    _null_str = field_validator("npk_ratio", "amount_used", "amount_unit", "notes", mode="before")(_none_to_str)
 
 
 # ----------------------------- Observation logs ---------------------------- #
@@ -161,6 +167,7 @@ class HarvestCreate(BaseModel):
     quantity: int = Field(ge=1)
     unit: str = Field(default="fruit", max_length=40)
     weight: Optional[float] = Field(default=None, ge=0)
+    weight_unit: str = Field(default="oz", max_length=8)
     notes: str = ""
 
 
@@ -170,6 +177,8 @@ class WateringCreate(BaseModel):
     date: Date
     method: str = ""
     amount: str = ""
+    amount_value: Optional[float] = Field(default=None, ge=0)
+    amount_unit: str = Field(default="", max_length=8)
     notes: str = ""
 
 
@@ -374,12 +383,28 @@ class PestLogRead(BaseModel):
 
 
 # ------------------------------ Yield & sowing ------------------------------ #
-class YieldRow(BaseModel):
+class YieldWeightRow(BaseModel):
+    """A variety's harvests measured by weight, normalized to ounces."""
+
     plant_id: int
     variety_name: str
+    total_oz: float
+    harvest_count: int
+
+
+class YieldCountRow(BaseModel):
+    """A variety's harvests counted in pieces — only ever summed within one unit."""
+
+    plant_id: int
+    variety_name: str
+    unit: str
     total_quantity: int
     harvest_count: int
-    unit: str
+
+
+class YieldBoard(BaseModel):
+    by_weight: List[YieldWeightRow]
+    by_count: List[YieldCountRow]
 
 
 class SowRow(BaseModel):

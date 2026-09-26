@@ -79,13 +79,21 @@
       $('#review-highlights').innerHTML = highlights.map((h) => `<li>${h}</li>`).join('');
 
       const medals = ['🥇', '🥈', '🥉'];
-      const yields = await api.get(`/api/stats/yield?year=${year}`).catch(() => []);
-      $('#review-yield-empty').classList.toggle('hidden', yields.length > 0);
-      $('#review-yield').innerHTML = yields.slice(0, 10).map((y, i) => `
+      const row = (name, pill, i) => `
         <li class="flex items-center justify-between gap-2 text-sm">
-          <span class="text-navy-800">${medals[i] || `<b class="text-navy-400">${i + 1}.</b>`} ${esc(y.variety_name)}</span>
-          <span class="pill">${y.total_quantity} ${esc(y.unit)} · ${y.harvest_count} picks</span>
-        </li>`).join('');
+          <span class="text-navy-800">${medals[i] || `<b class="text-navy-400">${i + 1}.</b>`} ${esc(name)}</span>
+          <span class="pill">${pill}</span>
+        </li>`;
+      const yields = await api.get(`/api/stats/yield?year=${year}`).catch(() => null);
+      const byWeight = (yields && yields.by_weight) || [];
+      const byCount = (yields && yields.by_count) || [];
+      $('#review-yield-empty').classList.toggle('hidden', byWeight.length > 0 || byCount.length > 0);
+      $('#review-yield-weight').innerHTML = byWeight.slice(0, 10).map((y, i) =>
+        row(y.variety_name, `${y.total_oz} oz · ${y.harvest_count} picks`, i)).join('')
+        || '<li class="text-sm text-navy-400">No weighed harvests yet — add a weight when you log a harvest.</li>';
+      $('#review-yield-count').innerHTML = byCount.slice(0, 10).map((y, i) =>
+        row(y.variety_name, `${y.total_quantity} ${esc(y.unit)} · ${y.harvest_count} picks`, i)).join('')
+        || '<li class="text-sm text-navy-400">Nothing counted by pieces yet.</li>';
 
       const score = await api.get(`/api/stats/scorecard?year=${year}`).catch(() => null);
       const rows = score && Array.isArray(score.varieties) ? score.varieties : [];

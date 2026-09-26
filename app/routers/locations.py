@@ -32,7 +32,6 @@ def create_location(
     name: str,
     type: str = "Container",
     light: str = "Full Sun",
-    pot_size: Optional[str] = None,
     notes: Optional[str] = None,
     session: Session = Depends(get_session)
 ) -> Location:
@@ -40,7 +39,6 @@ def create_location(
         name=name,
         type=type,
         light=light,
-        pot_size=pot_size,
         notes=notes
     )
     existing = session.query(Location).filter(

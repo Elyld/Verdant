@@ -1,4 +1,4 @@
-# 🌿 Verdant — Self-Hosted Garden Journal (v2.12.0)
+# 🌿 Verdant — Self-Hosted Garden Journal (v2.13.0)
 
 Your garden, logged. Plant profiles with care reminders, a daily observation log
 with a calendar heatmap, photo albums with slideshows, seed source tracking,
@@ -408,6 +408,18 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.13.0** — Measurement cleanup, so units finally mean what they say.
+  Harvests carry a weight **unit** (oz/g/lb/kg) alongside the weight, and the
+  yield **scorecard converts everything to ounces** — no more adding grams to
+  ounces. The Review page leaderboard is now **split into two boards**: one
+  ranked by weight, one by piece count, never mixed. CSV re-imports now
+  **backfill weights** onto existing harvest rows, and watering/fertilization
+  amounts are parsed into number + unit when they look like one
+  (e.g. "2 gal"), with the original text always kept. New **°F/°C toggle** in
+  Settings (weather chips honor it), planner vessels get a proper
+  **volume (gal/qt/L)** instead of free-text size, and seed packets track
+  **seed count**. (To backfill your existing harvests, re-upload the harvest
+  CSV on the Import page after updating.)
 - **2.12.0** — New **🌱 Seedlings** tab: the indoor seed-starting workstation.
   Track every batch from sow to transplant — tray, location, warming mat,
   grow light, cells sown — with one-tap sprout logging, germination progress

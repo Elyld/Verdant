@@ -132,9 +132,10 @@
             <form data-harvest-form="${plant.id}" class="grid grid-cols-2 gap-2 rounded-xl border border-beige-200 bg-beige-50 p-3">
               <div><label class="lbl">Date</label><input type="date" class="inp text-sm" data-hv-date value="${today}" required /></div>
               <div><label class="lbl">Quantity</label><input type="number" min="1" value="1" class="inp text-sm" data-hv-qty required /></div>
-              <div><label class="lbl">Unit</label><select class="inp text-sm" data-hv-unit><option>fruit</option><option>vegetables</option><option>oz</option><option>lbs</option><option>bunch</option><option>head</option><option>handful</option></select></div>
-              <div><label class="lbl">Weight (oz)</label><input type="number" min="0" step="0.1" class="inp text-sm" data-hv-weight placeholder="optional" /></div>
+              <div><label class="lbl">Unit</label><select class="inp text-sm" data-hv-unit><option>fruit</option><option>bunch</option><option>head</option><option>handful</option><option>oz</option><option>g</option><option>lb</option><option>kg</option></select></div>
+              <div><label class="lbl">Weight</label><div class="flex gap-1"><input type="number" min="0" step="0.1" class="inp text-sm" data-hv-weight placeholder="optional" /><select class="inp text-sm w-20 shrink-0" data-hv-weight-unit><option>oz</option><option>g</option><option>lb</option><option>kg</option></select></div></div>
               <div class="col-span-2"><label class="lbl">Notes</label><input class="inp text-sm" data-hv-notes maxlength="200" placeholder="optional" /></div>
+              <p class="col-span-2 text-xs text-navy-400">Tip: pick a weight unit above and the weight fills itself in — or count pieces and add the weighed total here.</p>
               <button type="submit" class="btn-primary col-span-2 text-sm">Log harvest</button>
             </form>
           </section>
@@ -410,6 +411,7 @@
             quantity: Number(q('[data-hv-qty]').value),
             unit: q('[data-hv-unit]').value,
             weight: q('[data-hv-weight]').value ? Number(q('[data-hv-weight]').value) : null,
+            weight_unit: q('[data-hv-weight-unit]').value,
             notes: q('[data-hv-notes]').value.trim(),
           });
           toast('Harvest logged 🧺', 'ok');

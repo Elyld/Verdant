@@ -35,7 +35,7 @@
       el.innerHTML = `
         <span class="text-2xl leading-none">${KIND_ICON[c.kind] || '🛍️'}</span>
         <span class="w-full truncate text-xs font-semibold text-navy-800">${esc(c.name)}</span>
-        ${c.size ? `<span class="text-[10px] text-navy-500">${esc(c.size)}</span>` : ''}
+        ${c.size ? `<span class="text-[10px] text-navy-500">${esc(c.size)}</span>` : (c.volume_value ? `<span class="text-[10px] text-navy-500">${esc(String(c.volume_value))} ${esc(c.volume_unit || '')}</span>` : '')}
         <span class="w-full truncate text-[10px] ${c.plant_id ? 'font-semibold text-sage-700' : 'text-navy-400'}">${c.plant_id ? esc(plantName(c.plant_id)) : 'empty'}</span>`;
       el.addEventListener('pointerdown', (e) => startDrag(e, c, el));
       el.addEventListener('click', () => { if (!dragMoved) openModal(c); });
@@ -115,6 +115,8 @@
       $('#container-name').value = c ? c.name : '';
       $('#container-kind').value = c ? c.kind : 'grow bag';
       $('#container-size').value = c ? (c.size || '') : '';
+      $('#container-volume-value').value = c && c.volume_value != null ? c.volume_value : '';
+      $('#container-volume-unit').value = c ? (c.volume_unit || '') : '';
       $('#container-location').value = c && c.location_id ? c.location_id : '';
       $('#container-plant').value = c && c.plant_id ? c.plant_id : '';
       $('#container-soil').value = c ? (c.soil_notes || '') : '';
@@ -140,6 +142,8 @@
         name: $('#container-name').value.trim(),
         kind: $('#container-kind').value,
         size: $('#container-size').value.trim(),
+        volume_value: $('#container-volume-value').value ? Number($('#container-volume-value').value) : null,
+        volume_unit: $('#container-volume-unit').value,
         location_id: $('#container-location').value ? Number($('#container-location').value) : null,
         plant_id: $('#container-plant').value ? Number($('#container-plant').value) : null,
         soil_notes: $('#container-soil').value.trim(),

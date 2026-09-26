@@ -28,6 +28,7 @@ SETTING_KEYS = (
     "digest_enabled",
     "discord_webhook_url",
     "digest_time",
+    "temperature_unit",
 )
 
 # Set by app.main at startup so saving new digest settings re-arms the
@@ -47,6 +48,7 @@ class SettingsUpdate(BaseModel):
     digest_enabled: bool = False
     discord_webhook_url: str = ""
     digest_time: str = "08:00"
+    temperature_unit: str = "F"  # "F" or "C" — display unit for weather temps (stored Celsius)
 
 
 def _validate(payload: SettingsUpdate) -> None:
@@ -62,6 +64,8 @@ def _validate(payload: SettingsUpdate) -> None:
         raise HTTPException(400, f"Bad digest_time {payload.digest_time!r} (want HH:MM, 24h).")
     if payload.digest_enabled and not payload.discord_webhook_url.strip():
         raise HTTPException(400, "Digest is on but no Discord webhook URL was given.")
+    if payload.temperature_unit not in ("F", "C"):
+        raise HTTPException(400, f"Bad temperature_unit {payload.temperature_unit!r} (want 'F' or 'C').")
 
 
 def _frost_preview(session: Session, which: str) -> dict:
@@ -80,10 +84,14 @@ def _frost_preview(session: Session, which: str) -> dict:
 def current_settings(session: Session) -> dict:
     """Everything the settings form needs, with the resolved frost preview."""
     digest = effective_digest_config(session)
+    temp_unit = frost_mod.get_setting(session, "temperature_unit") or "F"
+    if temp_unit not in ("F", "C"):
+        temp_unit = "F"
     return {
         "zone": frost_mod.get_setting(session, "zone"),
         "frost_date": frost_mod.get_setting(session, "frost_date"),
         "last_frost_date": frost_mod.get_setting(session, "last_frost_date"),
+        "temperature_unit": temp_unit,
         "digest_enabled": digest.enabled,
         "discord_webhook_url": digest.webhook_url,
         "digest_time": digest.time,
@@ -109,6 +117,7 @@ def save_settings(payload: SettingsUpdate, session: Session = Depends(get_sessio
     frost_mod.set_setting(session, "digest_enabled", "true" if payload.digest_enabled else "false")
     frost_mod.set_setting(session, "discord_webhook_url", payload.discord_webhook_url.strip())
     frost_mod.set_setting(session, "digest_time", payload.digest_time.strip() or "08:00")
+    frost_mod.set_setting(session, "temperature_unit", payload.temperature_unit)
     session.commit()
     if _reschedule_digest is not None and payload.digest_time.strip() != old_time:
         _reschedule_digest()

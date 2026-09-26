@@ -139,6 +139,7 @@ def test_fertilization_import_empty_amount_on_legacy_db(tmp_path):
             "CREATE TABLE fertilization_logs (id INTEGER PRIMARY KEY, date TEXT,"
             " fertilizer_name TEXT NOT NULL, fertilizer_id INTEGER,"
             " npk_ratio TEXT NOT NULL, amount_used TEXT NOT NULL,"
+            " amount_value REAL, amount_unit TEXT,"
             " plant_id INTEGER, location_id INTEGER, notes TEXT NOT NULL)"
         )
         conn.commit()

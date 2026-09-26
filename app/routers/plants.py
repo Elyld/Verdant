@@ -166,7 +166,8 @@ def plant_timeline(plant_id: int, session: Session = Depends(get_session)) -> Pl
             continue
         qty = f"{harvest.quantity} {harvest.unit}"
         if harvest.weight:
-            qty += f" ({harvest.weight} oz)"
+            wunit = (harvest.weight_unit or "oz").strip() or "oz"
+            qty += f" ({harvest.weight:g} {wunit})"
         events.append(TimelineEvent(
             kind="harvest", date=day, id=harvest.id,
             title=f"Harvested {qty}",

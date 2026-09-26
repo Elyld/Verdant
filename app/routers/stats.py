@@ -9,7 +9,8 @@ from sqlmodel import Session, func, select
 
 from app.database import get_session
 from app.models import FertilizationLog, ObservationImage, ObservationLog, Post, PostImage
-from app.schemas import CalendarEntry, ReviewRead, SowRow, Stats, TopPlant, YieldRow
+from app.schemas import CalendarEntry, ReviewRead, SowRow, Stats, TopPlant, YieldBoard, YieldCountRow, YieldWeightRow
+from app import units as units_mod
 
 router = APIRouter(prefix="/api/stats", tags=["stats"])
 
@@ -123,7 +124,9 @@ def season_review(
     harvests = list(
         session.exec(select(Harvest).where(Harvest.date.like(f"{prefix}%"))).all()
     )
-    total_weight = sum(h.weight for h in harvests if h.weight) or None
+    total_weight = sum(
+        units_mod.to_oz(h.weight, h.weight_unit) or 0.0 for h in harvests if h.weight
+    ) or None
 
     photos = session.exec(
         select(func.count())
@@ -159,12 +162,17 @@ def season_review(
 # --------------------------------------------------------------------------- #
 # Yield leaderboard
 # --------------------------------------------------------------------------- #
-@router.get("/yield", response_model=List[YieldRow], tags=["stats"])
+@router.get("/yield", response_model=YieldBoard, tags=["stats"])
 def yield_leaderboard(
     year: int = Query(default=None, description="Season year (defaults to current year)"),
     session: Session = Depends(get_session),
-) -> List[YieldRow]:
-    """Total harvested per plant, ranked — the variety smackdown."""
+) -> YieldBoard:
+    """Harvest rankings, split so units can never mix.
+
+    by_weight ranks weighed harvests (everything normalized to ounces);
+    by_count ranks piece-counts, summed only within the same unit —
+    "45 fruit" never gets added to "3 lbs" anymore.
+    """
     from datetime import date as Date
 
     from app.models import Harvest, Plant
@@ -175,26 +183,56 @@ def yield_leaderboard(
     harvests = session.exec(
         select(Harvest).where(Harvest.date.like(f"{prefix}%"))
     ).all()
-    totals: dict[int, dict] = {}
-    for h in harvests:
-        entry = totals.setdefault(
-            h.plant_id, {"qty": 0, "count": 0, "unit": h.unit or "fruit"}
-        )
-        entry["qty"] += h.quantity or 0
-        entry["count"] += 1
     plants = {p.id: p for p in session.exec(select(Plant)).all()}
-    rows = [
-        YieldRow(
-            plant_id=pid,
-            variety_name=plants[pid].variety_name if pid in plants else f"Plant {pid}",
-            total_quantity=entry["qty"],
-            harvest_count=entry["count"],
-            unit=entry["unit"],
-        )
-        for pid, entry in totals.items()
-    ]
-    rows.sort(key=lambda r: r.total_quantity, reverse=True)
-    return rows
+    name_of = lambda pid: plants[pid].variety_name if pid in plants else f"Plant {pid}"
+
+    by_w: dict[int, dict] = {}
+    by_c: dict[tuple[int, str], dict] = {}
+    for h in harvests:
+        oz = units_mod.to_oz(h.weight, h.weight_unit)
+        if oz is None and units_mod.is_weight_unit(h.unit):
+            # Legacy rows recorded "8 lbs" as quantity+unit with no weight.
+            oz = units_mod.to_oz(float(h.quantity or 0), h.unit)
+        if oz:
+            entry = by_w.setdefault(h.plant_id, {"oz": 0.0, "count": 0})
+            entry["oz"] += oz
+            entry["count"] += 1
+        else:
+            unit = h.unit or "fruit"
+            entry = by_c.setdefault(
+                (h.plant_id, unit), {"qty": 0, "count": 0, "unit": unit}
+            )
+            entry["qty"] += h.quantity or 0
+            entry["count"] += 1
+
+    weight_rows = sorted(
+        (
+            YieldWeightRow(
+                plant_id=pid,
+                variety_name=name_of(pid),
+                total_oz=round(e["oz"], 1),
+                harvest_count=e["count"],
+            )
+            for pid, e in by_w.items()
+        ),
+        key=lambda r: r.total_oz,
+        reverse=True,
+    )
+    count_rows = sorted(
+        (
+            YieldCountRow(
+                plant_id=pid,
+                variety_name=name_of(pid),
+                unit=e["unit"],
+                total_quantity=e["qty"],
+                harvest_count=e["count"],
+            )
+            for (pid, _unit), e in by_c.items()
+        ),
+        key=lambda r: r.total_quantity,
+        reverse=True,
+    )
+    return YieldBoard(by_weight=weight_rows, by_count=count_rows)
 
 
 # --------------------------------------------------------------------------- #
@@ -232,7 +270,7 @@ def season_scorecard(
         row["plants"].add(h.plant_id)
         row["harvest_events"] += 1
         row["total_qty"] += h.quantity or 0
-        row["total_oz"] += h.weight or 0.0
+        row["total_oz"] += units_mod.to_oz(h.weight, h.weight_unit) or 0.0
 
     for e in expenses:
         if e.plant_id and e.plant_id in by_id:

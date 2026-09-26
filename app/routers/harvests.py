@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.database import get_session
 from app.models import Harvest, Plant
 from app.schemas import HarvestCreate
+from app import units as units_mod
 
 router = APIRouter(prefix="/api/harvests", tags=["harvests"])
 
@@ -39,12 +40,22 @@ def create_harvest(
     if not session.get(Plant, payload.plant_id):
         raise HTTPException(status_code=404, detail=f"Plant {payload.plant_id} not found")
 
+    # Single source of truth for weighed harvests: if the unit itself is a
+    # weight ("8 lbs"), the quantity IS the weight — derive it instead of
+    # asking twice and risking the two disagreeing.
+    weight = payload.weight
+    weight_unit = units_mod.normalize_weight_unit(payload.weight_unit)
+    if weight is None and units_mod.is_weight_unit(payload.unit):
+        weight = float(payload.quantity)
+        weight_unit = units_mod.normalize_weight_unit(payload.unit)
+
     harvest = Harvest(
         plant_id=payload.plant_id,
         date=payload.date.isoformat(),
         quantity=payload.quantity,
         unit=payload.unit,
-        weight=payload.weight,
+        weight=weight,
+        weight_unit=weight_unit,
         notes=payload.notes,
     )
     session.add(harvest)
@@ -67,6 +78,8 @@ def update_harvest(
     harvest = _get_or_404(session, harvest_id)
     for key, value in payload.items():
         if hasattr(harvest, key) and key != "id":
+            if key == "weight_unit":
+                value = units_mod.normalize_weight_unit(value)
             setattr(harvest, key, value)
     session.add(harvest)
     session.commit()
