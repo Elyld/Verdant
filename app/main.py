@@ -13,12 +13,14 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.database import UPLOAD_DIR, init_db
-from app.routers import albums, backup, digest, expenses, fertilizations, immich, import_csv, observations, pests, posts, settings as settings_router, stats
+from app.models import GardenTag, utcnow
+from app.routers import albums, backup, containers, digest, expenses, fertilizations, immich, import_csv, observations, pests, posts, seed_packets, settings as settings_router, stats, tags
+from app.routers.tags import tag_destination
 from app.version import __version__
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -126,6 +128,9 @@ app.include_router(import_csv.router)
 app.include_router(expenses.router)
 app.include_router(pests.router)
 app.include_router(settings_router.router)
+app.include_router(seed_packets.router)
+app.include_router(tags.router)
+app.include_router(containers.router)
 
 @app.get("/api/health", tags=["meta"])
 def health() -> dict:
@@ -231,3 +236,41 @@ def settings_page(request: Request) -> HTMLResponse:
 def match_page(request: Request) -> HTMLResponse:
     """Flip through imported photos and assign them to plants."""
     return templates.TemplateResponse(request, "match.html", {"__version__": __version__})
+
+
+@app.get("/fertilizers", include_in_schema=False)
+def fertilizers_page(request: Request) -> HTMLResponse:
+    """Manage the fertilizer product catalog."""
+    return templates.TemplateResponse(request, "fertilizers.html", {"__version__": __version__})
+
+
+@app.get("/planner", include_in_schema=False)
+def planner_page(request: Request) -> HTMLResponse:
+    """Backyard builder: lay out containers and raised beds per season."""
+    return templates.TemplateResponse(request, "planner.html", {"__version__": __version__})
+
+
+@app.get("/tags", include_in_schema=False)
+def tags_page(request: Request) -> HTMLResponse:
+    """NFC tag manager: create tags and get the URLs to write onto them."""
+    return templates.TemplateResponse(request, "tags.html", {"__version__": __version__})
+
+
+@app.get("/t/{code}", include_in_schema=False)
+def tap_tag(code: str, request: Request):
+    """NFC tap target: /t/<code> counts the tap and redirects to the tag's action."""
+    from sqlmodel import Session as SQLSession
+
+    from app.database import engine
+
+    with SQLSession(engine) as session:
+        tag = session.query(GardenTag).filter(GardenTag.code == code).first()
+        if not tag:
+            return templates.TemplateResponse(
+                request, "tag_missing.html", {"__version__": __version__}, status_code=404
+            )
+        tag.tap_count += 1
+        tag.last_tapped_at = utcnow()
+        session.add(tag)
+        session.commit()
+        return RedirectResponse(url=tag_destination(tag), status_code=302)

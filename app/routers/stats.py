@@ -198,6 +198,83 @@ def yield_leaderboard(
 
 
 # --------------------------------------------------------------------------- #
+# Season scorecard — was it worth growing? (yield vs. cost per variety)
+# --------------------------------------------------------------------------- #
+@router.get("/scorecard", tags=["stats"])
+def season_scorecard(
+    year: int = Query(default=None, description="Season year (defaults to current year)"),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Per-variety yield, direct costs, and cost-per-ounce — the season verdict."""
+    from datetime import date as Date
+
+    from app.models import Expense, Harvest, Plant
+
+    if year is None:
+        year = Date.today().year
+    prefix = f"{year}-"
+
+    plants = session.exec(select(Plant)).all()
+    by_id = {p.id: p for p in plants}
+
+    harvests = session.exec(select(Harvest).where(Harvest.date.like(f"{prefix}%"))).all()
+    expenses = session.exec(select(Expense).where(Expense.date.like(f"{prefix}%"))).all()
+
+    per_variety: dict[str, dict] = {}
+    for h in harvests:
+        plant = by_id.get(h.plant_id)
+        variety = plant.variety_name if plant else f"Plant {h.plant_id}"
+        row = per_variety.setdefault(
+            variety,
+            {"variety": variety, "plants": set(), "harvest_events": 0,
+             "total_qty": 0, "total_oz": 0.0, "direct_cost": 0.0},
+        )
+        row["plants"].add(h.plant_id)
+        row["harvest_events"] += 1
+        row["total_qty"] += h.quantity or 0
+        row["total_oz"] += h.weight or 0.0
+
+    for e in expenses:
+        if e.plant_id and e.plant_id in by_id:
+            variety = by_id[e.plant_id].variety_name
+            row = per_variety.setdefault(
+                variety,
+                {"variety": variety, "plants": set(), "harvest_events": 0,
+                 "total_qty": 0, "total_oz": 0.0, "direct_cost": 0.0},
+            )
+            row["plants"].add(e.plant_id)
+            row["direct_cost"] += e.amount or 0.0
+
+    rows = []
+    for variety, row in per_variety.items():
+        n = len(row["plants"]) or 1
+        rows.append(
+            {
+                "variety": variety,
+                "plants": len(row["plants"]),
+                "harvest_events": row["harvest_events"],
+                "total_qty": row["total_qty"],
+                "total_oz": round(row["total_oz"], 1),
+                "oz_per_plant": round(row["total_oz"] / n, 1),
+                "direct_cost": round(row["direct_cost"], 2),
+                "cost_per_oz": round(row["direct_cost"] / row["total_oz"], 2)
+                if row["total_oz"] > 0 and row["direct_cost"] > 0 else None,
+            }
+        )
+    rows.sort(key=lambda r: r["total_oz"], reverse=True)
+
+    return {
+        "year": year,
+        "varieties": rows,
+        "total_spent": round(sum(e.amount or 0.0 for e in expenses), 2),
+        "total_oz": round(sum(r["total_oz"] for r in rows), 1),
+        "unassigned_spent": round(
+            sum(e.amount or 0.0 for e in expenses if not e.plant_id), 2
+        ),
+    }
+
+
+# --------------------------------------------------------------------------- #
 # Seed-starting calendar
 # --------------------------------------------------------------------------- #
 def last_frost_date() -> date_cls:

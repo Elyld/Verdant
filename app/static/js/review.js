@@ -86,6 +86,22 @@
           <span class="text-navy-800">${medals[i] || `<b class="text-navy-400">${i + 1}.</b>`} ${esc(y.variety_name)}</span>
           <span class="pill">${y.total_quantity} ${esc(y.unit)} · ${y.harvest_count} picks</span>
         </li>`).join('');
+
+      const score = await api.get(`/api/stats/scorecard?year=${year}`).catch(() => null);
+      const rows = score && Array.isArray(score.varieties) ? score.varieties : [];
+      $('#scorecard-empty').classList.toggle('hidden', rows.length > 0);
+      $('#scorecard-summary').textContent = score
+        ? `💸 $${score.total_spent.toFixed(2)} spent this season · 🧺 ${score.total_oz} oz harvested${score.unassigned_spent ? ` · $${score.unassigned_spent.toFixed(2)} not tied to a plant` : ''}`
+        : '';
+      $('#scorecard-rows').innerHTML = rows.map((r, i) => `
+        <tr class="border-t border-beige-200">
+          <td class="py-2 pr-3 font-semibold text-navy-800">${medals[i] || ''} ${esc(r.variety)}</td>
+          <td class="py-2 pr-3 text-right">${r.harvest_events}</td>
+          <td class="py-2 pr-3 text-right">${r.total_qty} pcs · ${r.total_oz} oz</td>
+          <td class="py-2 pr-3 text-right">${r.oz_per_plant}</td>
+          <td class="py-2 pr-3 text-right">$${r.direct_cost.toFixed(2)}</td>
+          <td class="py-2 text-right">${r.cost_per_oz != null ? `$${r.cost_per_oz.toFixed(2)}` : '<span class="text-navy-400">—</span>'}</td>
+        </tr>`).join('');
     }
 
     $('#review-prev').addEventListener('click', () => { year -= 1; load().catch((e) => toast(e.message, 'err')); });

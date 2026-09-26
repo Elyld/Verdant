@@ -119,11 +119,18 @@
     }
 
     async function load() {
+      const params = new URLSearchParams(location.search);
+      const onlyPlant = params.get('plant') ? Number(params.get('plant')) : null;
+      const onlyLocation = params.get('location') ? Number(params.get('location')) : null;
+      const action = params.get('action');
       const [plants, locations] = await Promise.all([
         api.get('/api/plants/'),
         api.get('/api/locations/').catch(() => []),
       ]);
-      const growing = (Array.isArray(plants) ? plants : []).filter((p) => p.status === 'Growing');
+      let growing = (Array.isArray(plants) ? plants : []).filter((p) => p.status === 'Growing');
+      // NFC tag prefill: narrow to one plant or one location.
+      if (onlyPlant) growing = growing.filter((p) => p.id === onlyPlant);
+      if (onlyLocation) growing = growing.filter((p) => p.location_id === onlyLocation);
       const locName = new Map((Array.isArray(locations) ? locations : []).map((l) => [l.id, l.name]));
       const groups = new Map();
       growing.forEach((p) => {
@@ -156,6 +163,15 @@
         host.appendChild(section);
       });
       refreshToday();
+      // NFC tag prefill: spotlight the relevant action button.
+      if (action === 'water' || action === 'harvest') {
+        const btn = host.querySelector(`[data-act="${action}"]`);
+        if (btn) {
+          btn.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          btn.classList.add('ring-4', 'ring-sage-300');
+          setTimeout(() => btn.classList.remove('ring-4', 'ring-sage-300'), 4000);
+        }
+      }
     }
 
     load().catch((error) => toast(`Could not load plants: ${error.message}`, 'err'));

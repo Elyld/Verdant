@@ -4,15 +4,21 @@
 <section class="space-y-6">
       <header class="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 class="font-display text-2xl font-semibold text-navy-800">Seed Sources</h2>
-          <p class="text-sm text-navy-500">Where every seed came from — vendors, saved seeds, and trades.</p>
+          <h2 class="font-display text-2xl font-semibold text-navy-800">Seeds</h2>
+          <p class="text-sm text-navy-500">Where every seed came from — and what's in the stash.</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
+          <div class="flex rounded-lg bg-beige-200/60 p-0.5 text-sm" role="tablist" aria-label="Seeds views">
+            <button type="button" id="seed-tabbtn-sources" class="rounded-md px-3 py-1.5 font-semibold" role="tab">Sources</button>
+            <button type="button" id="seed-tabbtn-catalog" class="rounded-md px-3 py-1.5 font-semibold" role="tab">🌱 My seed stash</button>
+          </div>
           <label class="sr-only" for="seed-vendor-filter">Filter by vendor</label>
           <select id="seed-vendor-filter" class="inp text-sm"><option value="">All vendors</option></select>
           <button type="button" id="seed-add-toggle" class="btn-primary text-sm">+ Add seeds</button>
         </div>
       </header>
+
+      <div id="seed-tab-sources">
 
       <!-- Add / edit seed source form -->
       <form id="seed-form" class="card hidden space-y-4" autocomplete="off">
@@ -40,6 +46,48 @@
       <!-- Vendor groups -->
       <div id="seed-groups" class="space-y-6"></div>
       <div id="seeds-empty" class="card hidden text-center text-navy-500">No seed sources yet. Add your vendors above — your seed stash lives here.</div>
+      </div><!-- /#seed-tab-sources -->
+
+      <div id="seed-tab-catalog" class="hidden space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <p class="text-sm text-navy-500">Every packet in the binder — photo, vendor, type, year. Tap the binder's NFC tag to add more.</p>
+          <div class="flex flex-wrap items-center gap-2">
+            <input id="catalog-search" type="search" class="inp text-sm" placeholder="Search varieties…" />
+            <select id="catalog-category" class="inp text-sm"><option value="">All types</option></select>
+            <button type="button" id="catalog-add" class="btn-primary text-sm">+ Add packet</button>
+          </div>
+        </div>
+        <div id="catalog-grid" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"></div>
+        <p id="catalog-empty" class="card hidden text-center text-navy-500">No packets catalogued yet. Add your first above.</p>
+      </div>
+
+      <!-- Packet add/edit modal -->
+      <div id="packet-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-navy-900/70 p-4">
+        <div class="card max-h-[90vh] w-full max-w-lg space-y-4 overflow-y-auto">
+          <div class="flex items-center justify-between">
+            <h3 id="packet-modal-title" class="font-display text-lg font-semibold text-navy-800">Add seed packet</h3>
+            <button type="button" id="packet-close" class="btn-ghost text-sm">✕</button>
+          </div>
+          <form id="packet-form" class="space-y-3" autocomplete="off">
+            <input type="hidden" id="packet-id" />
+            <div class="grid gap-3 sm:grid-cols-2">
+              <label class="block"><span class="lbl">Variety *</span><input id="packet-variety" class="inp" required maxlength="120" placeholder="Habanero" /></label>
+              <label class="block"><span class="lbl">Species</span><input id="packet-species" class="inp" maxlength="120" placeholder="Capsicum chinense" /></label>
+              <label class="block"><span class="lbl">Type</span><input id="packet-category" class="inp" maxlength="40" placeholder="Pepper" list="packet-categories" /><datalist id="packet-categories"></datalist></label>
+              <label class="block"><span class="lbl">Year bought</span><input id="packet-year" type="number" class="inp" min="1990" max="2100" placeholder="2026" /></label>
+              <label class="block"><span class="lbl">Vendor</span><select id="packet-vendor" class="inp"><option value="">— none —</option></select></label>
+              <label class="block"><span class="lbl">Vendor link</span><input id="packet-vendor-url" type="url" class="inp" maxlength="300" placeholder="https://…" /></label>
+              <label class="block"><span class="lbl">Quantity</span><input id="packet-qty" class="inp" maxlength="60" placeholder="~40 seeds" /></label>
+              <label class="block"><span class="lbl">Packet photo</span><input id="packet-photo" type="file" accept="image/*" class="inp text-sm" /></label>
+            </div>
+            <label class="block"><span class="lbl">Notes</span><textarea id="packet-notes" rows="2" class="inp" placeholder="Germination notes, lot number…"></textarea></label>
+            <div class="flex gap-2">
+              <button type="submit" class="btn-primary text-sm" id="packet-submit">Add packet</button>
+              <button type="button" class="btn-ghost text-sm" id="packet-cancel">Cancel</button>
+            </div>
+          </form>
+        </div>
+      </div>
     </section>
 {% endblock %}
 {% block overlays %}

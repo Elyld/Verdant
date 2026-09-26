@@ -39,6 +39,7 @@ def create_expense(
         description=payload.description,
         amount=payload.amount,
         notes=payload.notes,
+        plant_id=payload.plant_id,
     )
     session.add(expense)
     session.commit()

@@ -333,6 +333,7 @@ class ExpenseCreate(BaseModel):
     description: str = Field(default="", max_length=200)
     amount: float = Field(default=0.0, ge=0)
     notes: str = ""
+    plant_id: Optional[int] = None
 
 
 class ExpenseRead(BaseModel):
@@ -344,6 +345,7 @@ class ExpenseRead(BaseModel):
     description: str
     amount: float
     notes: str = ""
+    plant_id: Optional[int] = None
 
     _null_str = field_validator("description", "notes", mode="before")(_none_to_str)
 

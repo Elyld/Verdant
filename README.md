@@ -1,4 +1,4 @@
-# 🌿 Verdant — Self-Hosted Garden Journal (v2.9.0)
+# 🌿 Verdant — Self-Hosted Garden Journal (v2.10.0)
 
 Your garden, logged. Plant profiles with care reminders, a daily observation log
 with a calendar heatmap, photo albums with slideshows, seed source tracking,
@@ -65,6 +65,13 @@ vendor, filterable, linkable to the plants you grew from them.
 
 ![Seed sources](docs/screenshots/seeds.png)
 
+### 🌱 Seed stash — the binder, catalogued
+Every packet you own, inventoried: a photo of the packet, vendor (with link),
+type, year bought, and how many seeds are left. Searchable and filterable —
+stick an NFC tag on the binder and tapping it opens the "add packet" form.
+
+![Seed stash](docs/screenshots/seed-stash.png)
+
 ### ✍️ Blog — garden stories
 Markdown blog posts with photo galleries, for the season's stories — first
 harvests, experiments, lessons learned.
@@ -73,9 +80,37 @@ harvests, experiments, lessons learned.
 
 ### 📊 Season Review — your year in the garden
 Totals, averages, best days, most productive plants — a year-end (or
-anytime) dashboard of everything you grew and logged.
+anytime) dashboard of everything you grew and logged. The **⚖️ Season
+scorecard** answers "was it worth growing?": yield vs. spending per variety,
+ranked — tag purchases to a plant on the Costs page to split costs per
+variety.
 
 ![Season review](docs/screenshots/review.png)
+
+![Season scorecard](docs/screenshots/scorecard.png)
+
+### 🗺️ Backyard Planner — build your backyard
+Lay out your actual growing space: grow bags, raised beds, pots, planters —
+sized, positioned where they really sit, with a plant assigned to each.
+Drag containers around the canvas (positions save automatically), copy last
+season's layout into the new year and shuffle things around.
+
+![Backyard planner](docs/screenshots/planner.png)
+
+### 🏷️ NFC Tags — tap it, log it
+Blank NFC tags turn physical things into shortcuts: tap the fertilizer
+bottle and the feeding form opens with that fertilizer pre-selected; tap the
+seed binder and the "add packet" form opens; tap a grow bag and that plant's
+profile opens. The Tags page manages every tag — write its URL onto a blank
+tag once with any NFC writer app, then your phone opens it with a tap, no
+app needed.
+
+![NFC tags](docs/screenshots/tags.png)
+
+### 🧪 Fertilizers — the shelf
+Your fertilizer products live here now: name, NPK ratio, what each is best
+for. The Garden Logs feeding form suggests from the shelf, and NFC tags can
+point straight at a bottle.
 
 ### 📥 CSV Import — bring your own data
 Moving from another garden tracker? The **Import** page (nav bar → Import)
@@ -371,6 +406,18 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.10.0** — The backyard update. **🗺️ Backyard Planner**: lay out grow
+  bags, raised beds, pots and planters on a drag-and-drop canvas per season,
+  assign plants to containers, copy last season's layout forward. **🏷️ NFC
+  Tags**: `/t/<code>` tap links with a tag manager page — stick tags on
+  fertilizer bottles, spray bottles, the harvest basket, the seed binder, or
+  plant containers and land on exactly the right pre-filled screen; taps are
+  counted. **🌱 Seed stash**: a real seed-packet catalog (photo, vendor link,
+  type, year bought, quantity) as a second tab on the Seeds page. **🧪
+  Fertilizers** finally gets a management page (name, NPK, best-for); the
+  Garden Logs feeding form suggests from the shelf. **⚖️ Season scorecard**
+  on the Review page: yield vs. spending per variety, ranked — expenses can
+  now be tied to a plant on the Costs page.
 - **2.9.0** — Immich album dedup: re-importing an album reuses the existing
   Verdant album instead of duplicating it, and **🧹 Merge duplicates** folds
   older double-imports into one (deleting the re-downloaded duplicate files).
