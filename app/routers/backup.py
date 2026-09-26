@@ -51,6 +51,12 @@ def _discover_models() -> List[Type[SQLModel]]:
 # Parents before children (insert order); reversed for wipe order.
 TABLES_IN_ORDER: List[Type[SQLModel]] = _discover_models()
 
+def _order_columns(model):
+    """Deterministic export order: primary key columns (not every table has `id`)."""
+    pk = list(model.__table__.primary_key.columns)
+    return pk or [next(iter(model.__table__.columns.values()))]
+
+
 # Image tables carry uploaded files (detected by the file_path column).
 IMAGE_TABLES = {m for m in TABLES_IN_ORDER if "file_path" in m.__table__.columns}
 
@@ -70,7 +76,7 @@ def export_backup(session: Session = Depends(get_session)):
     tables: dict[str, list] = {}
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for model in TABLES_IN_ORDER:
-            rows = session.exec(select(model).order_by(model.id)).all()
+            rows = session.exec(select(model).order_by(*_order_columns(model))).all()
             dumped = [r.model_dump(mode="json") for r in rows]
             tables[model.__tablename__] = dumped
             if model in IMAGE_TABLES:

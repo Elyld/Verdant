@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.database import UPLOAD_DIR, init_db
-from app.routers import albums, backup, digest, expenses, fertilizations, immich, import_csv, observations, pests, posts, stats
+from app.routers import albums, backup, digest, expenses, fertilizations, immich, import_csv, observations, pests, posts, settings as settings_router, stats
 from app.version import __version__
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -30,14 +30,27 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    scheduler = _maybe_start_digest_scheduler()
+    app.state.digest_scheduler = _maybe_start_digest_scheduler()
+    settings_router.register_digest_rescheduler(_reschedule_digest_scheduler)
     yield
-    if scheduler is not None:
-        scheduler.shutdown(wait=False)
+    sched = app.state.digest_scheduler
+    if sched is not None:
+        sched.shutdown(wait=False)
+
+
+def _reschedule_digest_scheduler():
+    """Re-arm the morning digest after settings change (called from /api/settings)."""
+    old = app.state.digest_scheduler
+    if old is not None:
+        old.shutdown(wait=False)
+    app.state.digest_scheduler = _maybe_start_digest_scheduler()
 
 
 def _maybe_start_digest_scheduler():
-    """Start the daily Discord digest if DIGEST_ENABLED=true and a webhook is set."""
+    """Start the daily Discord digest if enabled and a webhook is set.
+
+    Reads the effective config (settings page wins over env vars).
+    """
     import logging
 
     from apscheduler.schedulers.background import BackgroundScheduler
@@ -45,25 +58,30 @@ def _maybe_start_digest_scheduler():
     from sqlmodel import Session
 
     from app.database import engine
-    from app.routers.digest import get_config, run_digest
+    from app.routers.digest import effective_digest_config, run_digest
 
     log = logging.getLogger("verdant.digest")
-    cfg = get_config()
+    with Session(engine) as session:
+        cfg = effective_digest_config(session)
     if not cfg.enabled:
         return None
     if not cfg.webhook_url:
-        log.warning("DIGEST_ENABLED=true but DISCORD_WEBHOOK_URL is not set; digest not scheduled.")
+        log.warning("Digest enabled but no webhook URL is set; digest not scheduled.")
         return None
     try:
         hour, minute = (int(x) for x in cfg.time.split(":"))
     except ValueError:
-        log.warning("Bad DIGEST_TIME %r (want HH:MM); digest not scheduled.", cfg.time)
+        log.warning("Bad digest time %r (want HH:MM); digest not scheduled.", cfg.time)
         return None
 
     def _job():
         try:
             with Session(engine) as session:
-                run_digest(session, cfg.webhook_url)
+                # Read fresh each run so settings-page edits apply immediately.
+                live = effective_digest_config(session)
+                if not live.enabled or not live.webhook_url:
+                    return
+                run_digest(session, live.webhook_url)
         except Exception:
             log.exception("Scheduled digest failed.")
 
@@ -107,6 +125,7 @@ app.include_router(digest.router)
 app.include_router(import_csv.router)
 app.include_router(expenses.router)
 app.include_router(pests.router)
+app.include_router(settings_router.router)
 
 @app.get("/api/health", tags=["meta"])
 def health() -> dict:
@@ -200,3 +219,9 @@ def costs_page(request: Request) -> HTMLResponse:
 def pests_page(request: Request) -> HTMLResponse:
     """Pest sightings and treatments."""
     return templates.TemplateResponse(request, "pests.html", {"__version__": __version__})
+
+
+@app.get("/settings", include_in_schema=False)
+def settings_page(request: Request) -> HTMLResponse:
+    """Garden location, frost dates, and digest preferences."""
+    return templates.TemplateResponse(request, "settings.html", {"__version__": __version__})

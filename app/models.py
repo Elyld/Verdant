@@ -244,3 +244,13 @@ class PestLog(SQLModel, table=True):
     resolved: bool = Field(default=False)
 
     plant: Optional[Plant] = Relationship()
+
+
+# --------------------------------------------------------------------------- #
+# App settings (key/value store backing the /settings page)
+# --------------------------------------------------------------------------- #
+class Setting(SQLModel, table=True):
+    __tablename__ = "settings"
+
+    key: str = Field(primary_key=True, max_length=64)
+    value: str = Field(default="", max_length=2000)

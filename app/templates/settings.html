@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Verdant · Settings{% endblock %}
+{% block content %}
+<section id="panel-settings" class="space-y-6">
+  <header>
+    <h2 class="font-display text-2xl font-semibold text-navy-800">Settings</h2>
+    <p class="text-sm text-navy-500">Your garden location, frost dates, and the morning digest.</p>
+  </header>
+
+  <form id="settings-form" class="space-y-6">
+    <div class="card space-y-4">
+      <h3 class="font-display text-lg font-semibold text-navy-800">📍 Garden location</h3>
+      <div class="grid gap-4 sm:grid-cols-3">
+        <label class="block">
+          <span class="lbl">USDA hardiness zone</span>
+          <select id="set-zone" class="inp">
+            <option value="">Not set</option>
+            <option value="3">Zone 3</option>
+            <option value="4">Zone 4</option>
+            <option value="5">Zone 5</option>
+            <option value="6">Zone 6</option>
+            <option value="7">Zone 7</option>
+            <option value="8">Zone 8</option>
+            <option value="9">Zone 9</option>
+            <option value="10">Zone 10</option>
+          </select>
+        </label>
+        <label class="block">
+          <span class="lbl">Last spring frost <span class="font-normal text-navy-400">(optional exact date)</span></span>
+          <input id="set-last-frost" type="date" class="inp" />
+        </label>
+        <label class="block">
+          <span class="lbl">First fall frost <span class="font-normal text-navy-400">(optional exact date)</span></span>
+          <input id="set-first-frost" type="date" class="inp" />
+        </label>
+      </div>
+      <p class="text-xs text-navy-400">
+        Don't know your zone? Look it up at
+        <a class="underline decoration-sage-400 hover:text-navy-700" href="https://planthardiness.ars.usda.gov/" target="_blank" rel="noopener">planthardiness.ars.usda.gov</a>.
+        Zone dates are approximate averages — good enough for countdowns and sowing calendars.
+        An exact date always wins over the zone.
+      </p>
+      <div id="frost-preview" class="rounded-xl bg-beige-100 px-4 py-3 text-sm text-navy-700 ring-1 ring-beige-300">
+        <span class="text-navy-400">Frost preview will appear here once you save.</span>
+      </div>
+    </div>
+
+    <div class="card space-y-4">
+      <h3 class="font-display text-lg font-semibold text-navy-800">🌅 Morning digest</h3>
+      <label class="flex items-center gap-2 text-sm text-navy-700">
+        <input id="set-digest-enabled" type="checkbox" class="h-4 w-4 accent-sage-600" />
+        Send a morning garden check to Discord
+      </label>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <label class="block">
+          <span class="lbl">Discord webhook URL</span>
+          <input id="set-webhook" type="url" class="inp" placeholder="https://discord.com/api/webhooks/…" maxlength="500" />
+        </label>
+        <label class="block">
+          <span class="lbl">Send time <span class="font-normal text-navy-400">(server local time)</span></span>
+          <input id="set-digest-time" type="time" class="inp" value="08:00" />
+        </label>
+      </div>
+      <p class="text-xs text-navy-400">
+        In Discord: Server Settings → Integrations → Webhooks → New Webhook, pick a channel, then “Copy Webhook URL”.
+        Changes apply immediately — no restart needed.
+      </p>
+      <div>
+        <button type="button" id="digest-test" class="btn-ghost">Send test message</button>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <button type="submit" class="btn-primary">Save settings</button>
+      <span id="settings-status" class="text-sm text-navy-400"></span>
+    </div>
+  </form>
+</section>
+{% endblock %}

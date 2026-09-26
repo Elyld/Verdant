@@ -22,9 +22,10 @@ from typing import List, Optional
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.database import get_session
+from app.models import Setting
 from app.routers.plants import ReminderRead, plant_reminders
 from app.routers.stats import seed_calendar_rows
 from app.schemas import SowRow
@@ -47,6 +48,29 @@ def get_config() -> DigestConfig:
         enabled=enabled,
         webhook_url=os.getenv("DISCORD_WEBHOOK_URL", "").strip(),
         time=os.getenv("DIGEST_TIME", "08:00").strip() or "08:00",
+    )
+
+
+def effective_digest_config(session: Session) -> DigestConfig:
+    """Digest config with /settings-page values winning over env vars.
+
+    A key stored in the settings table always wins; keys never saved fall
+    back to the env-var config, so existing .env setups keep working.
+    """
+    stored = {s.key: s.value for s in session.exec(select(Setting)).all()}
+    env = get_config()
+
+    def pick(key: str, env_val: str) -> str:
+        return stored[key].strip() if key in stored else env_val
+
+    if "digest_enabled" in stored:
+        enabled = stored["digest_enabled"].strip().lower() in ("1", "true", "yes", "on")
+    else:
+        enabled = env.enabled
+    return DigestConfig(
+        enabled=enabled,
+        webhook_url=pick("discord_webhook_url", env.webhook_url),
+        time=pick("digest_time", env.time) or "08:00",
     )
 
 
@@ -142,11 +166,11 @@ def preview_digest(session: Session = Depends(get_session)):
 @router.post("/send")
 def send_digest_now(session: Session = Depends(get_session)):
     """Build and send the digest immediately via the configured webhook."""
-    cfg = get_config()
+    cfg = effective_digest_config(session)
     if not cfg.enabled:
-        raise HTTPException(status_code=400, detail="Digest is disabled (set DIGEST_ENABLED=true).")
+        raise HTTPException(status_code=400, detail="Digest is disabled (turn it on in Settings).")
     if not cfg.webhook_url:
-        raise HTTPException(status_code=400, detail="DISCORD_WEBHOOK_URL is not set.")
+        raise HTTPException(status_code=400, detail="No Discord webhook URL set (add one in Settings).")
     try:
         message = run_digest(session, cfg.webhook_url)
     except Exception as exc:

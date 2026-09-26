@@ -232,14 +232,16 @@ def test_frost_countdown_unset(client, monkeypatch):
     monkeypatch.delenv("FIRST_FROST_DATE", raising=False)
     res = client.get("/api/stats/frost")
     assert res.status_code == 200
-    assert res.json() == {"first_frost_date": None, "days_until": None}
+    assert res.json() == {
+        "first_frost_date": None, "days_until": None, "source": None, "label": "",
+    }
 
 
 def test_all_pages_render_with_base_template(client):
     """Every page returns 200 and carries the shared header/footer markers."""
     paths = ["/", "/observations", "/calendar", "/photos", "/plants", "/seeds",
              "/review", "/import", "/backup", "/slideshow", "/quick", "/costs",
-             "/pests"]
+             "/pests", "/settings"]
     for path in paths:
         res = client.get(path)
         assert res.status_code == 200, path
