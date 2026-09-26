@@ -288,7 +288,8 @@ class SeedPacket(SQLModel, table=True):
     vendor_url: str = Field(default="")  # direct link to the vendor / product page
     year_acquired: Optional[int] = Field(default=None, index=True)
     quantity: str = Field(default="")  # "~40 seeds", "1 packet", ...
-    photo_path: str = Field(default="")  # /uploads/... packet photo
+    photo_path: str = Field(default="")  # /uploads/... packet photo (front)
+    photo_back_path: str = Field(default="")  # /uploads/... packet photo (back, growing info)
     notes: Optional[str] = None
     date_added: str = Field(default="", index=True)  # ISO YYYY-MM-DD
 
