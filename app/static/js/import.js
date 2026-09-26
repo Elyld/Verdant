@@ -107,6 +107,7 @@
         const res = await api.upload('/api/import/run', form);
         resultCard.classList.remove('hidden');
         const bits = [`<b>${res.imported}</b> imported`, `${res.skipped} skipped`];
+        if (res.updated) bits.push(`<b>${res.updated}</b> updated (weight backfill)`);
         let html = `<p>${bits.join(' · ')}.</p>`;
         if (res.errors.length) {
           html += `<div class="mt-2 rounded-xl border border-red-300 bg-red-50 p-3 text-red-800 text-xs"><ul class="list-disc pl-5 space-y-1">`
@@ -117,7 +118,7 @@
             + res.warnings.map((w) => `<li>${esc(w)}</li>`).join('') + `</ul></div>`;
         }
         resultBody.innerHTML = html;
-        toast(`Import done: ${res.imported} new, ${res.skipped} skipped.`, 'ok');
+        toast(`Import done: ${res.imported} new${res.updated ? `, ${res.updated} updated` : ''}, ${res.skipped} skipped.`, 'ok');
         previewCard.classList.add('hidden');
       } catch (error) {
         toast(error.message, 'err');

@@ -30,6 +30,7 @@
       $('#set-zone').value = s.zone || '';
       $('#set-first-frost').value = (s.frost_date || '').slice(0, 10);
       $('#set-last-frost').value = (s.last_frost_date || '').slice(0, 10);
+      $('#set-temp-unit').value = s.temperature_unit || 'F';
       $('#set-digest-enabled').checked = !!s.digest_enabled;
       $('#set-webhook').value = s.discord_webhook_url || '';
       $('#set-digest-time').value = s.digest_time || '08:00';
@@ -47,6 +48,7 @@
           digest_enabled: $('#set-digest-enabled').checked,
           discord_webhook_url: $('#set-webhook').value.trim(),
           digest_time: $('#set-digest-time').value || '08:00',
+          temperature_unit: $('#set-temp-unit').value,
         });
         renderPreview(saved.frost_preview);
         status.textContent = '';

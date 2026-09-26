@@ -133,12 +133,67 @@ def test_yield_leaderboard(client):
 
     res = client.get("/api/stats/yield", params={"year": YEAR})
     assert res.status_code == 200
-    rows = {r["variety_name"]: r for r in res.json()}
+    board = res.json()
+    # count leaderboard: same-unit sums only
+    rows = {r["variety_name"]: r for r in board["by_count"]}
     assert rows["Yield Winner"]["total_quantity"] == 50
     assert rows["Yield Winner"]["harvest_count"] == 5
     assert rows["Yield Runner Up"]["total_quantity"] == 3
-    # ranked: winner first
-    assert res.json()[0]["variety_name"] == "Yield Winner"
+    # ranked: winner ahead of runner-up (other tests share this DB)
+    order = [r["variety_name"] for r in board["by_count"]]
+    assert order.index("Yield Winner") < order.index("Yield Runner Up")
+    # no weighed harvests in this fixture
+    assert "Yield Winner" not in {r["variety_name"] for r in board["by_weight"]}
+
+
+def test_yield_leaderboard_splits_weight_and_count(client):
+    p1 = make_plant(client, "Weigh Station")
+    p2 = make_plant(client, "Counter Top")
+    # 16 oz weighed harvest
+    res = client.post("/api/harvests/", json={
+        "plant_id": p1["id"], "date": date(YEAR, 7, 1).isoformat(),
+        "quantity": 4, "unit": "fruit", "weight": 16, "weight_unit": "oz", "notes": "",
+    })
+    assert res.status_code == 201, res.text
+    # 1 lb logged as quantity+unit (auto-derives weight)
+    res = client.post("/api/harvests/", json={
+        "plant_id": p1["id"], "date": date(YEAR, 7, 2).isoformat(),
+        "quantity": 1, "unit": "lb", "notes": "",
+    })
+    assert res.status_code == 201, res.text
+    assert res.json()["weight"] == 1.0
+    assert res.json()["weight_unit"] == "lb"
+    # pure count harvest
+    res = client.post("/api/harvests/", json={
+        "plant_id": p2["id"], "date": date(YEAR, 7, 3).isoformat(),
+        "quantity": 7, "unit": "fruit", "notes": "",
+    })
+    assert res.status_code == 201, res.text
+
+    res = client.get("/api/stats/yield", params={"year": YEAR})
+    assert res.status_code == 200
+    board = res.json()
+    # by_weight: 16 oz + 1 lb (=16 oz) = 32 oz, never mixed with the fruit count
+    wrows = {r["variety_name"]: r for r in board["by_weight"]}
+    assert wrows["Weigh Station"]["total_oz"] == 32.0
+    # by_count: only the piece-count harvest for this plant
+    crows = {r["variety_name"]: r for r in board["by_count"]}
+    assert crows["Counter Top"]["total_quantity"] == 7
+    assert "Counter Top" not in wrows
+
+
+def test_scorecard_converts_weight_units(client):
+    p = make_plant(client, "Metric Pepper")
+    res = client.post("/api/harvests/", json={
+        "plant_id": p["id"], "date": date(YEAR, 8, 1).isoformat(),
+        "quantity": 10, "unit": "fruit", "weight": 500, "weight_unit": "g", "notes": "",
+    })
+    assert res.status_code == 201, res.text
+    res = client.get("/api/stats/scorecard", params={"year": YEAR})
+    assert res.status_code == 200
+    rows = {r["variety"]: r for r in res.json()["varieties"]}
+    # 500 g = 17.6 oz
+    assert rows["Metric Pepper"]["total_oz"] == round(500 * 0.035274, 1)
 
 
 # --------------------------------------------------------------------------- #

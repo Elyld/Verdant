@@ -13,6 +13,33 @@
   const fmtDateTime = (iso) => iso
     ? new Date(/[zZ]|[+-]\d\d:\d\d$/.test(iso) ? iso : `${iso}Z`).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
     : '—';
+  // Structured amount display: prefers the numeric value+unit, falls back to
+  // the legacy free-text column. item: {amount_value, amount_unit, amount}
+  // or {amount_used, ...} for fertilization rows.
+  const fmtAmount = (item) => {
+    const value = item.amount_value;
+    const unit = (item.amount_unit || '').trim();
+    if (value != null && unit) return `${Number(value)} ${unit}`;
+    if (value != null) return `${Number(value)}`;
+    return item.amount_used || item.amount || '';
+  };
+  // Temperature display honoring the user's °F/°C setting (stored Celsius).
+  // The setting is cached on first use; pass the resolved unit for tests.
+  let _tempUnit = null;
+  const tempUnit = async () => {
+    if (_tempUnit) return _tempUnit;
+    try {
+      const s = await api.get('/api/settings');
+      _tempUnit = s && s.temperature_unit === 'C' ? 'C' : 'F';
+    } catch { _tempUnit = 'F'; }
+    return _tempUnit;
+  };
+  const fmtTemp = (celsius, unit) => {
+    if (celsius == null) return '';
+    const u = unit || _tempUnit || 'F';
+    const v = u === 'C' ? celsius : celsius * 9 / 5 + 32;
+    return `${Math.round(v * 10) / 10}°${u}`;
+  };
 
   const api = {
     async request(method, path, { json, form } = {}) {
@@ -173,7 +200,7 @@
   }
 
   globalThis.Verdant = {
-    $, $$, esc, fmtDate, fmtDateTime, api, toast, markdown,
+    $, $$, esc, fmtDate, fmtDateTime, fmtAmount, tempUnit, fmtTemp, api, toast, markdown,
     uploadFiles, wireDraft, renderStats, healthBar, plantCard, onBoot, onBootLate,
   };
 

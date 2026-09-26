@@ -2,7 +2,7 @@
 (() => {
   'use strict';
 
-  const { $, $$, esc, fmtDate, fmtDateTime, api, toast, markdown,
+  const { $, $$, esc, fmtDate, fmtDateTime, fmtAmount, tempUnit, fmtTemp, api, toast, markdown,
             uploadFiles, wireDraft, renderStats, healthBar, plantCard } = globalThis.Verdant;
 
   function initLogs() {
@@ -20,20 +20,21 @@
     async function loadFerts() {
       ferts = await api.get('/api/fertilizations?limit=500');
       $('#fert-count').textContent = ferts.length;
-      $('#fert-rows').innerHTML = ferts.length ? ferts.map((item) => `<tr><td class="td">${fmtDate(item.date)}</td><td class="td">${esc(item.fertilizer_name)}</td><td class="td">${esc(item.npk_ratio) || '—'}</td><td class="td">${esc(item.amount_used) || '—'}</td><td class="td">${esc(item.notes) || '—'}</td><td class="td text-right"><button class="text-sage-700" data-edit-fert="${item.id}">Edit</button> <button data-delete-fert="${item.id}" aria-label="Delete fertilization">🗑</button></td></tr>`).join('') : '<tr><td class="td text-center" colspan="6">No fertilization entries yet.</td></tr>';
+      $('#fert-rows').innerHTML = ferts.length ? ferts.map((item) => `<tr><td class="td">${fmtDate(item.date)}</td><td class="td">${esc(item.fertilizer_name)}</td><td class="td">${esc(item.npk_ratio) || '—'}</td><td class="td">${esc(fmtAmount(item)) || '—'}</td><td class="td">${esc(item.notes) || '—'}</td><td class="td text-right"><button class="text-sage-700" data-edit-fert="${item.id}">Edit</button> <button data-delete-fert="${item.id}" aria-label="Delete fertilization">🗑</button></td></tr>`).join('') : '<tr><td class="td text-center" colspan="6">No fertilization entries yet.</td></tr>';
     }
     async function loadObs() {
       const plant = $('#obs-filter').value.trim();
       const date = new URLSearchParams(location.search).get('date');
       observations = await api.get(`/api/observations?limit=500${plant ? `&plant=${encodeURIComponent(plant)}` : ''}${date ? `&date_from=${date}&date_to=${date}` : ''}`);
       $('#obs-count').textContent = observations.length;
+      const tunit = await tempUnit();
       const weatherChip = (item) => item.temp_c != null
-        ? `<div class="mt-0.5 text-xs text-navy-400">🌡️ ${esc(String(item.temp_c))}°C${item.weather_summary ? ` · ${esc(item.weather_summary)}` : ''}</div>`
+        ? `<div class="mt-0.5 text-xs text-navy-400">🌡️ ${esc(fmtTemp(item.temp_c, tunit))}${item.weather_summary ? ` · ${esc(item.weather_summary)}` : ''}</div>`
         : '';
       $('#obs-rows').innerHTML = observations.length ? observations.map((item) => `<tr><td class="td">${fmtDate(item.date)}</td><td class="td">${esc(item.plant_name)}</td><td class="td">${healthBar(item.health_scale)}</td><td class="td">${item.watering_status ? '💧 Watered' : '—'}</td><td class="td">${esc(item.pest_sightings) || 'None'}</td><td class="td">${esc(item.notes) || ''}${weatherChip(item)}${!item.notes && !weatherChip(item) ? '—' : ''}</td><td class="td">${(item.images || []).map((image) => `<button data-lightbox="${esc(image.file_path)}"><img src="${esc(image.file_path)}" class="h-10 w-10 rounded object-cover" alt="${esc(item.plant_name)}"></button>`).join('') || '—'}</td><td class="td text-right"><button class="text-sage-700" data-edit-obs="${item.id}">Edit</button> <button data-delete-obs="${item.id}" aria-label="Delete observation">🗑</button></td></tr>`).join('') : '<tr><td class="td text-center" colspan="8">No observations yet.</td></tr>';
     }
 
-    wireDraft(fertForm, 'verdant.draft.fert', ['#fert-date', '#fert-name', '#fert-npk', '#fert-amount', '#fert-notes', '#fert-plant-link']);
+    wireDraft(fertForm, 'verdant.draft.fert', ['#fert-date', '#fert-name', '#fert-npk', '#fert-amount', '#fert-amount-value', '#fert-amount-unit', '#fert-notes', '#fert-plant-link']);
     wireDraft(obsForm, 'verdant.draft.obs', ['#obs-date', '#obs-plant', '#obs-plant-link', '#obs-health', '#obs-water', '#obs-pests', '#obs-notes']);
     $('#obs-health').addEventListener('input', () => { $('#obs-health-out').textContent = $('#obs-health').value; });
 
@@ -84,7 +85,7 @@
     fertForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       try {
-        const payload = { date: $('#fert-date').value, fertilizer_name: $('#fert-name').value.trim(), npk_ratio: $('#fert-npk').value.trim(), amount_used: $('#fert-amount').value.trim(), notes: $('#fert-notes').value, plant_id: $('#fert-plant-link')?.value ? Number($('#fert-plant-link').value) : null };
+        const payload = { date: $('#fert-date').value, fertilizer_name: $('#fert-name').value.trim(), npk_ratio: $('#fert-npk').value.trim(), amount_used: $('#fert-amount').value.trim(), amount_value: $('#fert-amount-value').value ? Number($('#fert-amount-value').value) : null, amount_unit: $('#fert-amount-unit').value, notes: $('#fert-notes').value, plant_id: $('#fert-plant-link')?.value ? Number($('#fert-plant-link').value) : null };
         editingFert ? await api.patch(`/api/fertilizations/${editingFert}`, payload) : await api.post('/api/fertilizations', payload);
         editingFert = null; fertForm.reset(); localStorage.removeItem('verdant.draft.fert'); $('#fert-date').value = today;
         $('button[type="submit"]', fertForm).textContent = 'Add fertilization';
@@ -107,7 +108,7 @@
       const obsButton = event.target.closest('[data-edit-obs]');
       if (fertButton) {
         const item = ferts.find((entry) => entry.id === Number(fertButton.dataset.editFert));
-        editingFert = item.id; $('#fert-date').value = item.date; $('#fert-name').value = item.fertilizer_name; $('#fert-npk').value = item.npk_ratio; $('#fert-amount').value = item.amount_used; $('#fert-notes').value = item.notes;
+        editingFert = item.id; $('#fert-date').value = item.date; $('#fert-name').value = item.fertilizer_name; $('#fert-npk').value = item.npk_ratio; $('#fert-amount').value = item.amount_used; $('#fert-amount-value').value = item.amount_value ?? ''; $('#fert-amount-unit').value = item.amount_unit || ''; $('#fert-notes').value = item.notes;
         $('button[type="submit"]', fertForm).textContent = 'Save changes'; fertForm.scrollIntoView({ behavior: 'smooth' });
       }
       if (obsButton) {

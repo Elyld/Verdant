@@ -14,6 +14,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import re
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
@@ -21,6 +22,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 from sqlmodel import Session, select
 
 from app.database import get_session
+from app import units as units_mod
 from app.models import (
     FertilizationLog,
     Fertilizer,
@@ -80,6 +82,34 @@ def _parse_int(value: Any) -> Optional[int]:
         return None
     try:
         return int(float(text))
+    except ValueError:
+        return None
+
+
+_AMOUNT_RE = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*([a-zA-Z]+)\s*$")
+
+
+def _parse_amount(text: Any) -> tuple[Optional[float], str]:
+    """Split a free-text amount like '2 gal' or '1.5tbsp' into (value, unit).
+
+    Returns (None, "") when the text doesn't match — the raw string is always
+    kept in the legacy text column regardless.
+    """
+    m = _AMOUNT_RE.match(str(text or ""))
+    if not m:
+        return None, ""
+    unit = m.group(2).strip().lower()
+    if unit not in units_mod.VOLUME_UNITS:
+        return None, ""
+    return float(m.group(1)), unit
+
+
+def _parse_float(value: Any) -> Optional[float]:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return float(text)
     except ValueError:
         return None
 
@@ -273,12 +303,16 @@ def _build_watering(row: Dict[str, str], ctx: _Ctx) -> Dict[str, Any]:
         kwargs: dict = {}
         if code:
             kwargs["watering_id"] = code
+        amount_text = row.get("Amount", "") or ""
+        amount_value, amount_unit = _parse_amount(amount_text)
         return WateringLog(
             location_id=loc.id if loc else None,
             plant_id=plants[0].id if plants else None,
             date=when.isoformat(),
             method=row.get("Method", "") or None,
-            amount=row.get("Amount", "") or None,
+            amount=amount_text or None,
+            amount_value=amount_value,
+            amount_unit=amount_unit,
             notes=row.get("Notes", "") or None,
             **kwargs,
         )
@@ -299,6 +333,7 @@ def _build_fertilization(row: Dict[str, str], ctx: _Ctx) -> Dict[str, Any]:
     # Coerce to "" (not None): databases created by early releases still carry
     # NOT NULL constraints on fertilization_logs string columns.
     amount = row.get("Amount / Concentration", "") or ""
+    amount_value, amount_unit = _parse_amount(amount)
     plant_id = plants[0].id if len(plants) == 1 else None
     notes_parts = []
     if len(plants) > 1:
@@ -326,6 +361,8 @@ def _build_fertilization(row: Dict[str, str], ctx: _Ctx) -> Dict[str, Any]:
             fertilizer_id=fertilizer.id if fertilizer else None,
             npk_ratio=(fertilizer.npk_ratio if fertilizer else "") or "",
             amount_used=amount,
+            amount_value=amount_value,
+            amount_unit=amount_unit,
             plant_id=plant_id,
             notes=notes,
         )
@@ -333,12 +370,39 @@ def _build_fertilization(row: Dict[str, str], ctx: _Ctx) -> Dict[str, Any]:
     return {"status": "new", "label": label, "key": code, "make": make}
 
 
+def _harvest_weight_from_row(row: Dict[str, str], unit: str) -> tuple[Optional[float], str]:
+    """Weight from the CSV row, mirroring the API's single-source-of-truth rule."""
+    weight = _parse_float(row.get("Weight", ""))
+    weight_unit = units_mod.normalize_weight_unit(row.get("Weight Unit", "") or "oz")
+    quantity = _parse_int(row.get("Quantity", ""))
+    if weight is None and quantity is not None and units_mod.is_weight_unit(unit):
+        weight = float(quantity)
+        weight_unit = units_mod.normalize_weight_unit(unit)
+    return weight, weight_unit
+
+
 def _build_harvest(row: Dict[str, str], ctx: _Ctx, assignments: Dict[str, Any]) -> Dict[str, Any]:
     code = row.get("Log ID", "")
+    unit = row.get("Unit", "") or "fruit"
+    weight, weight_unit = _harvest_weight_from_row(row, unit)
+
+    def _backfill(existing: Harvest) -> Optional[Dict[str, Any]]:
+        # Re-running the harvest import backfills weights the first import
+        # didn't know about — the row already exists, only the weight is new.
+        if weight is not None and existing.weight is None:
+            existing.weight = weight
+            existing.weight_unit = weight_unit
+            return {
+                "status": "update",
+                "label": f"{code or '?'}: backfilled weight {weight:g} {weight_unit}",
+                "key": code,
+            }
+        return None
+
     if code:
         existing = ctx.session.exec(select(Harvest).where(Harvest.harvest_id == code)).first()
         if existing:
-            return {"status": "skip", "label": f"{code}: already imported", "key": code}
+            return _backfill(existing) or {"status": "skip", "label": f"{code}: already imported", "key": code}
     when = _parse_date(row.get("Date", ""))
     quantity = _parse_int(row.get("Quantity", ""))
     problems = []
@@ -370,7 +434,7 @@ def _build_harvest(row: Dict[str, str], ctx: _Ctx, assignments: Dict[str, Any]) 
         )
     ).first()
     if dup:
-        return {"status": "skip", "label": f"{code} {when.isoformat()}: already imported", "key": code}
+        return _backfill(dup) or {"status": "skip", "label": f"{code} {when.isoformat()}: already imported", "key": code}
     def make() -> Harvest:
         kwargs: dict = {}
         if code:
@@ -379,7 +443,9 @@ def _build_harvest(row: Dict[str, str], ctx: _Ctx, assignments: Dict[str, Any]) 
             plant_id=plant.id,
             date=when.isoformat(),
             quantity=quantity,
-            unit=row.get("Unit", "") or "fruit",
+            unit=unit,
+            weight=weight,
+            weight_unit=weight_unit,
             notes=row.get("Notes", "") or None,
             **kwargs,
         )
@@ -477,7 +543,7 @@ async def run_import(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="No data rows found in the CSV.")
     ctx = _Ctx(session)
     results = _process(entity, rows, ctx, assignments=assignment_map if isinstance(assignment_map, dict) else {})
-    imported, skipped, errors = 0, 0, []
+    imported, skipped, updated, errors = 0, 0, 0, []
     for r in results:
         if r["status"] == "new":
             try:
@@ -485,6 +551,9 @@ async def run_import(
                 imported += 1
             except Exception as exc:  # noqa: BLE001 - report per-row, keep going
                 errors.append(f"{r.get('key') or '?'}: {exc}")
+        elif r["status"] == "update":
+            # The builder already mutated the existing row on this session.
+            updated += 1
         elif r["status"] == "skip":
             skipped += 1
         else:
@@ -495,6 +564,7 @@ async def run_import(
         "entity": entity,
         "entity_label": ENTITIES[entity],
         "imported": imported,
+        "updated": updated,
         "skipped": skipped,
         "errors": errors[:20],
         "warnings": ctx.warnings[:20],

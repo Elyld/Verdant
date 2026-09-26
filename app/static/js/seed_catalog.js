@@ -43,7 +43,7 @@
           <div class="text-sm text-navy-600">
             ${vendorName ? `<p>🏪 ${p.vendor_url ? `<a href="${esc(p.vendor_url)}" target="_blank" rel="noopener" class="underline decoration-sage-400 hover:text-navy-800">${esc(vendorName)}</a>` : esc(vendorName)}</p>` : ''}
             ${p.year_acquired ? `<p>📅 Bought ${p.year_acquired}</p>` : ''}
-            ${p.quantity ? `<p>⚖️ ${esc(p.quantity)}</p>` : ''}
+            ${p.quantity ? `<p>⚖️ ${esc(p.quantity)}${p.seed_count != null ? ` (${p.seed_count} seeds)` : ''}</p>` : (p.seed_count != null ? `<p>⚖️ ${p.seed_count} seeds</p>` : '')}
           </div>
           ${p.notes ? `<p class="text-sm text-navy-500">${esc(p.notes)}</p>` : ''}
           <div class="flex gap-3 pt-1 text-xs">
@@ -91,6 +91,7 @@
       $('#packet-vendor').value = packet ? (packet.vendor_name || '') : '';
       $('#packet-vendor-url').value = packet ? packet.vendor_url : '';
       $('#packet-qty').value = packet ? packet.quantity : '';
+      $('#packet-seed-count').value = packet && packet.seed_count != null ? packet.seed_count : '';
       $('#packet-notes').value = packet ? (packet.notes || '') : '';
       $('#packet-photo').value = '';
       $('#packet-photo-back').value = '';
@@ -133,6 +134,7 @@
         vendor_name: $('#packet-vendor').value.trim(),
         vendor_url: $('#packet-vendor-url').value.trim(),
         quantity: $('#packet-qty').value.trim(),
+        seed_count: $('#packet-seed-count').value ? Number($('#packet-seed-count').value) : null,
         notes: $('#packet-notes').value.trim(),
       };
       try {

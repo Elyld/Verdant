@@ -27,7 +27,21 @@
           </div>
           <div>
             <label class="lbl" for="fert-amount">Amount used</label>
-            <input id="fert-amount" name="amount_used" class="inp" placeholder="2 tbsp / gal" maxlength="80" />
+            <div class="flex gap-2">
+              <input id="fert-amount" name="amount_used" class="inp" placeholder="2 tbsp / gal" maxlength="80" />
+              <input id="fert-amount-value" type="number" min="0" step="any" class="inp w-24 shrink-0" placeholder="#" title="Measured amount (optional)" />
+              <select id="fert-amount-unit" class="inp w-24 shrink-0" title="Amount unit">
+                <option value="">unit</option>
+                <option>tsp</option>
+                <option>tbsp</option>
+                <option>oz</option>
+                <option>cup</option>
+                <option>ml</option>
+                <option>L</option>
+                <option>gal</option>
+              </select>
+            </div>
+            <p class="mt-1 text-xs text-navy-400">Free text still works — the number + unit just makes it measurable later.</p>
           </div>
           <div>
             <label class="lbl" for="fert-notes">Notes</label>

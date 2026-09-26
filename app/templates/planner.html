@@ -38,7 +38,13 @@
             <option value="pot">🪴 Pot</option>
             <option value="planter">🗄️ Planter</option>
           </select></label>
-          <label class="block"><span class="lbl">Size</span><input id="container-size" class="inp" maxlength="40" placeholder="10 gal" /></label>
+          <label class="block"><span class="lbl">Size</span><input id="container-size" class="inp" maxlength="40" placeholder="4x8 ft (beds)" /></label>
+          <label class="block"><span class="lbl">Volume <span class="font-normal text-navy-400">(pots / bags)</span></span>
+            <span class="flex gap-1">
+              <input id="container-volume-value" type="number" min="0" step="any" class="inp" placeholder="10" />
+              <select id="container-volume-unit" class="inp w-20 shrink-0"><option value="">—</option><option>gal</option><option>qt</option><option>L</option></select>
+            </span>
+          </label>
           <label class="block"><span class="lbl">Location</span><select id="container-location" class="inp"><option value="">— none —</option></select></label>
           <label class="block sm:col-span-2"><span class="lbl">Plant growing in it</span><select id="container-plant" class="inp"><option value="">— empty —</option></select></label>
           <label class="block sm:col-span-2"><span class="lbl">Soil notes</span><input id="container-soil" class="inp" maxlength="200" placeholder="Fresh mix + compost, spring 2026" /></label>

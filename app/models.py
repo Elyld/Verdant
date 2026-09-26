@@ -53,7 +53,10 @@ class FertilizationLog(SQLModel, table=True):
     fertilizer_name: str = Field(index=True)  # keep for backward compat
     fertilizer_id: Optional[int] = Field(default=None, foreign_key="fertilizers.id", index=True)
     npk_ratio: Optional[str] = None
-    amount_used: Optional[str] = None
+    amount_used: Optional[str] = None  # legacy free text ("2 tbsp / gal"), kept for display
+    # Structured amount going forward: numeric value + unit (tsp, tbsp, oz, cup, ml, L, gal).
+    amount_value: Optional[float] = None
+    amount_unit: Optional[str] = Field(default="")
     plant_id: Optional[int] = Field(default=None, foreign_key="plants.id", index=True)
     location_id: Optional[int] = Field(default=None, foreign_key="locations.id", index=True)
     notes: Optional[str] = None
@@ -149,7 +152,6 @@ class Location(SQLModel, table=True):
     name: str = Field(index=True)
     type: str = Field(default="Container")
     light: str = Field(default="Full Sun")
-    pot_size: Optional[str] = None
     notes: Optional[str] = None
     plants: List["Plant"] = Relationship(back_populates="location", cascade_delete=True)
 
@@ -167,7 +169,6 @@ class Plant(SQLModel, table=True):
     date_planted: Optional[Date] = None
     days_to_maturity: Optional[int] = None
     light: str = Field(default="Full Sun")
-    pot_size: Optional[str] = None
     notes: Optional[str] = None
     # Care cadence (days) — drives watering/feeding reminders. Null = no reminder.
     water_every_days: Optional[int] = Field(default=None, ge=1, le=365)
@@ -208,6 +209,10 @@ class Harvest(SQLModel, table=True):
     quantity: int
     unit: str = Field(default="fruit")
     weight: Optional[float] = None
+    # Unit the weight was recorded in. Always set on write (form default "oz",
+    # auto-derived when unit itself is a weight unit); blank/legacy rows read as oz.
+    # Nullable per the codebase convention (see _relax_not_null_constraints).
+    weight_unit: Optional[str] = Field(default="oz")
     notes: Optional[str] = None
     plant: Optional[Plant] = Relationship(back_populates="harvests")
 
@@ -219,7 +224,10 @@ class WateringLog(SQLModel, table=True):
     plant_id: Optional[int] = Field(default=None, foreign_key="plants.id", index=True)
     date: str = Field(index=True, default="")
     method: Optional[str] = None
-    amount: Optional[str] = None
+    amount: Optional[str] = None  # legacy free text, kept for display
+    # Structured amount going forward: numeric value + unit (gal, L, qt, ml...).
+    amount_value: Optional[float] = None
+    amount_unit: Optional[str] = Field(default="")
     notes: Optional[str] = None
     location: Optional[Location] = Relationship()
 
@@ -288,6 +296,8 @@ class SeedPacket(SQLModel, table=True):
     vendor_url: str = Field(default="")  # direct link to the vendor / product page
     year_acquired: Optional[int] = Field(default=None, index=True)
     quantity: str = Field(default="")  # "~40 seeds", "1 packet", ...
+    # Structured seed count going forward (enables inventory math, e.g. decrement on sow).
+    seed_count: Optional[int] = Field(default=None, ge=0)
     photo_path: str = Field(default="")  # /uploads/... packet photo (front)
     photo_back_path: str = Field(default="")  # /uploads/... packet photo (back, growing info)
     notes: Optional[str] = None
@@ -330,7 +340,10 @@ class Container(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True)  # "Grow bag 3"
     kind: str = Field(default="grow bag", index=True)  # grow bag, raised bed, pot, planter
-    size: str = Field(default="")  # "10 gal", "4x8 ft"
+    size: str = Field(default="")  # free text, e.g. "4x8 ft" for beds
+    # Structured volume for pots/bags/planters (number + unit: gal, qt, L).
+    volume_value: Optional[float] = None
+    volume_unit: Optional[str] = Field(default="")
     location_id: Optional[int] = Field(default=None, foreign_key="locations.id", index=True)
     season_year: int = Field(index=True)
     x: float = Field(default=10.0)  # canvas position, 0-100

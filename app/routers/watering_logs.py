@@ -61,6 +61,8 @@ def create_watering_log(
         date=payload.date.isoformat(),
         method=payload.method or None,
         amount=payload.amount or None,
+        amount_value=payload.amount_value,
+        amount_unit=(payload.amount_unit or "").strip().lower() or None,
         notes=payload.notes or None,
     )
     session.add(log)

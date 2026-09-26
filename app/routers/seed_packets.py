@@ -81,6 +81,7 @@ def create_packet(payload: dict, session: Session = Depends(get_session)) -> See
         vendor_url=_normalize_url(payload.get("vendor_url") or ""),
         year_acquired=payload.get("year_acquired"),
         quantity=(payload.get("quantity") or "").strip(),
+        seed_count=payload.get("seed_count"),
         notes=(payload.get("notes") or "").strip() or None,
         date_added=payload.get("date_added") or "",
     )
