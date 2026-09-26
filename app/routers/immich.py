@@ -50,6 +50,29 @@ def _as_float(value) -> Optional[float]:
         return None
 
 
+def _tag_names(value) -> str:
+    """Immich asset ``tags`` -> comma-separated names.
+
+    Immich ingests XMP sidecar keywords as tags, so sideloaded XMP data
+    arrives here. Handles both ``[{"name": ...}]`` and plain strings.
+    """
+    names: List[str] = []
+    for tag in value or []:
+        if isinstance(tag, dict):
+            name = tag.get("name") or tag.get("value")
+        else:
+            name = tag
+        name = str(name).strip() if name is not None else ""
+        if name:
+            names.append(name)
+    seen, out = set(), []
+    for name in names:
+        if name.lower() not in seen:
+            seen.add(name.lower())
+            out.append(name)
+    return ", ".join(out)[:500]
+
+
 def _asset_metadata(asset: dict) -> dict:
     """Pull the photo metadata we keep out of an Immich asset dict."""
     exif = asset.get("exifInfo") or {}
@@ -59,6 +82,7 @@ def _asset_metadata(asset: dict) -> dict:
         "camera_model": (exif.get("model") or "").strip()[:100],
         "latitude": _as_float(exif.get("latitude")),
         "longitude": _as_float(exif.get("longitude")),
+        "tags": _tag_names(asset.get("tags")),
     }
 
 
@@ -127,13 +151,25 @@ def import_immich_album(
                 status.HTTP_400_BAD_REQUEST,
                 detail="album_id is required when offset > 0",
             )
-        album = Album(
-            name=remote.get("albumName") or "Immich import",
-            source_url=f"immich:{immich_album_id}",
-        )
-        session.add(album)
-        session.commit()
-        session.refresh(album)
+        # Re-importing the same Immich album must land in the existing local
+        # album, not create a duplicate (Plants 2025 x3). The per-asset skip
+        # below keeps it idempotent.
+        source = f"immich:{immich_album_id}"
+        album = session.exec(select(Album).where(Album.source_url == source)).first()
+        if album is not None:
+            remote_name = remote.get("albumName") or "Immich import"
+            if album.name != remote_name:
+                album.name = remote_name
+                session.add(album)
+                session.commit()
+        else:
+            album = Album(
+                name=remote.get("albumName") or "Immich import",
+                source_url=source,
+            )
+            session.add(album)
+            session.commit()
+            session.refresh(album)
     else:
         album = session.get(Album, album_id)
         if album is None:
@@ -182,6 +218,7 @@ def import_immich_album(
                 camera_model=meta["camera_model"],
                 latitude=meta["latitude"],
                 longitude=meta["longitude"],
+                tags=meta["tags"],
             )
         )
         already.add(source)

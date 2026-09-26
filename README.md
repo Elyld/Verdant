@@ -39,7 +39,11 @@ current weather at your garden (free Open-Meteo data, no API key needed).
 ### 📸 Photos — albums & slideshows
 Albums with fullscreen slideshows. Upload directly, import from a URL, pull
 images into blog posts, or import whole albums from your Immich server
-(batched, so even 600+ photo albums import without timing out).
+(batched, so even 600+ photo albums import without timing out). Re-importing
+an album reuses its existing Verdant album instead of duplicating it, and
+**🧹 Merge duplicates** folds any older double-imports into one. On the
+**🎯 Match photos** page you can flip through imported photos and assign each
+one to a plant — assigned photos show up in a gallery on the plant's profile.
 
 ![Photo albums](docs/screenshots/photos.png)
 
@@ -169,6 +173,9 @@ to `.env` (or set them in your Dockge stack) for the ones you want.
 - The API key needs **`asset.download`** in addition to `album.read` /
   `asset.view` — without it, imports list albums fine but every photo fails
   with a 403. Verdant tells you exactly this in the UI if it happens.
+- Import captures each photo's **XMP keyword tags** (Immich reads XMP
+  sidecars into tags) plus date taken, camera, and GPS, so the Match page can
+  show you what each photo is while you assign it.
 
 ### Weather stamping
 

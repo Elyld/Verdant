@@ -234,9 +234,13 @@ class AlbumImageRead(BaseModel):
     camera_model: str = ""
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    tags: str = ""
+    plant_id: Optional[int] = None
+    # Filled in by endpoints that join plants; not a model column.
+    plant_variety: Optional[str] = None
 
     _null_str = field_validator(
-        "source_url", "camera_make", "camera_model", mode="before"
+        "source_url", "camera_make", "camera_model", "tags", mode="before"
     )(_none_to_str)
 
 
@@ -263,6 +267,29 @@ class AlbumMetadataSyncResult(BaseModel):
     album_id: int
     total: int
     updated: int
+
+
+class AlbumMergeResult(BaseModel):
+    """Outcome of merging local albums that point at the same Immich album."""
+
+    groups_merged: int
+    albums_removed: int
+    images_moved: int
+    files_removed: int
+    detail: List[str] = []
+
+
+class ImageAssignRequest(BaseModel):
+    """Assign a photo to a plant (or unassign with null)."""
+
+    plant_id: Optional[int] = None
+
+
+class ImageBulkAssignRequest(BaseModel):
+    """Assign many photos to one plant at once (null unassigns)."""
+
+    image_ids: List[int] = Field(min_length=1, max_length=2000)
+    plant_id: Optional[int] = None
 
 
 class AlbumCreateResult(BaseModel):

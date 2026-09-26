@@ -73,5 +73,32 @@
     });
   }
 
+  function initMergeButton() {
+    $$('#immich-merge').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const label = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Merging…';
+        try {
+          const result = await api.post('/api/albums/merge-duplicates');
+          if (!result || !result.groups_merged) {
+            toast('No duplicate albums found.');
+          } else {
+            toast(`Merged ${result.albums_removed} duplicate album${result.albums_removed === 1 ? '' : 's'}`
+              + (result.files_removed ? `, freed ${result.files_removed} duplicate file${result.files_removed === 1 ? '' : 's'}` : '')
+              + '.');
+            document.dispatchEvent(new CustomEvent('verdant:albums-changed', {}));
+          }
+        } catch (error) {
+          toast(`Merge failed: ${error.message}`, 'err');
+        } finally {
+          btn.disabled = false;
+          btn.textContent = label;
+        }
+      });
+    });
+  }
+
   globalThis.Verdant.onBoot(initImmich);
+  globalThis.Verdant.onBoot(initMergeButton);
 })();
