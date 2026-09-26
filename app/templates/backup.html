@@ -11,7 +11,11 @@
 
       <div class="card">
         <h3 class="font-display text-lg font-semibold">Download a backup</h3>
-        <p class="mt-1 text-sm text-navy-500">Saves a <span class="font-mono text-xs">verdant-backup-….zip</span> with the full database plus all uploaded photos. Keep it somewhere safe; it's all you need to rebuild.</p>
+        <p class="mt-1 text-sm text-navy-500">Saves a <span class="font-mono text-xs">verdant-backup-….zip</span> with the full database. Include photos for the complete archive, or skip them for a small, fast database-only backup.</p>
+        <label class="mt-3 flex items-start gap-2 text-sm text-navy-600">
+          <input id="backup-include-photos" type="checkbox" checked class="mt-1" />
+          <span>Include uploaded photos <span class="text-navy-400">(recommended — uncheck for a tiny database-only backup)</span></span>
+        </label>
         <button id="backup-download" type="button" class="btn-primary mt-4 text-sm">⬇ Download backup</button>
       </div>
 
