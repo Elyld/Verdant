@@ -73,9 +73,13 @@ const named = {};
  'tag-target-wrap', 'tag-target', 'tag-target-lbl', 'tag-text-wrap', 'tag-text',
  'tag-text-lbl', 'tag-action-hint',
  'panel-planner', 'planner-canvas', 'planner-empty', 'planner-year', 'planner-copy',
- 'planner-add', 'container-modal', 'container-modal-title', 'container-submit',
+ 'planner-add', 'grid-cols', 'grid-rows', 'grid-apply',
+ 'rotation-banner', 'rotation-list', 'rotation-dismiss',
+ 'container-modal', 'container-modal-title', 'container-submit',
  'container-delete', 'container-id', 'container-name', 'container-kind',
- 'container-size', 'container-location', 'container-plant', 'container-soil',
+ 'container-grid-w', 'container-grid-h',
+ 'container-size', 'container-location', 'container-plantings',
+ 'container-plant-add', 'container-plant-add-btn', 'container-soil',
  'container-close', 'container-cancel', 'container-form',
  'copy-modal', 'copy-from', 'copy-to-label', 'copy-go', 'copy-cancel',
  'toasts', 'app-version',
@@ -115,8 +119,15 @@ global.fetch = async (url, options) => {
   else if (url === '/api/plants/') resp = [{ id: 5, variety_name: 'Habanero', status: 'Growing' }];
   else if (url === '/api/locations/') resp = [{ id: 3, name: 'Patio' }];
   else if (url === '/api/tags/') resp = [{ id: 9, code: 'abc123', label: 'Neem bottle', action: 'pest', target_text: 'Neem oil', tap_count: 2, last_tapped_at: '2026-09-25T10:00:00' }];
+  else if (url === '/api/containers/grid') resp = { cols: 24, rows: 16 };
+  else if (url.startsWith('/api/containers/plantings')) resp = [
+    { id: 21, container_id: 11, plant_id: 5, variety_name: 'Habanero', species_type: 'Capsicum chinense', family_genus: 'Solanaceae', season_year: 2026, slot: 0, notes: '' },
+  ];
+  else if (url.startsWith('/api/containers/rotation-warnings')) resp = [
+    { container_id: 11, container_name: 'Grow bag 1', variety_name: 'Habanero', prev_variety_name: 'Habanero', prev_year: 2025, reason: 'Capsicum chinense grew here in 2025 — consider rotating' },
+  ];
   else if (url.startsWith('/api/containers/') && url.includes('year=')) resp = [
-    { id: 11, name: 'Grow bag 1', kind: 'grow bag', size: '10 gal', x: 20, y: 30, plant_id: 5, season_year: 2026 },
+    { id: 11, name: 'Grow bag 1', kind: 'grow bag', size: '10 gal', grid_x: 4, grid_y: 4, grid_w: 2, grid_h: 2, season_year: 2026 },
   ];
   else if (url === '/api/containers/years') resp = [2026];
   else if (method !== 'GET') resp = { id: 99 };
@@ -204,15 +215,17 @@ const JS = (f) => path.join('/home/hatch/workspace/verdant/app/static/js', f);
   const canvas = named['#planner-canvas'];
   const card = canvas._children.find((c) => c.dataset && c.dataset.containerId === 11);
   check('container card rendered on canvas', !!card);
-  check('card positioned at x/y', card && card.style.left === '20%' && card.style.top === '30%');
+  check('card placed on grid cells', card && card.style.gridColumn === '5 / span 2' && card.style.gridRow === '5 / span 2');
   check('card shows plant name', card && card.innerHTML.includes('Habanero'));
-  // Simulate a drag: pointerdown at (160,150) -> move to (320,300) on an 800x500 canvas.
+  check('rotation banner shown', !named['#rotation-banner'].classList.contains('hidden'));
+  check('rotation warning listed', named['#rotation-list'].innerHTML.includes('Grow bag 1'));
+  // Simulate a drag: pointerdown at (160,150) -> move to (320,300) on an 800x500 canvas (24x16 grid).
   fire(card, 'pointerdown', { preventDefault: () => {}, clientX: 160, clientY: 150, pointerId: 1 });
   fire(card, 'pointermove', { clientX: 320, clientY: 300 });
   fire(card, 'pointerup', {});
   await tick(30);
   const dragPatch = calls.patch.find((c) => c.url === '/api/containers/11');
-  check('drag PATCHes new position', dragPatch && dragPatch.body.x === 40 && dragPatch.body.y === 60);
+  check('drag PATCHes grid position', dragPatch && dragPatch.body.grid_x === 9 && dragPatch.body.grid_y === 9);
   fire(named['#planner-add'], 'click');
   check('add button opens container modal', named['#container-modal'].classList.contains('hidden') === false);
 
