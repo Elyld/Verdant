@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+  <!-- VERDANT LOGO PLACEHOLDER: drop the real logo file here (same path + name) and it appears everywhere automatically. -->
+  <rect x="5" y="5" width="86" height="86" rx="20" fill="#e2ebdf" stroke="#688d61" stroke-width="3" stroke-dasharray="10 7"/>
+  <text x="48" y="57" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="21" letter-spacing="3" fill="#41593d">LOGO</text>
+</svg>

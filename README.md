@@ -1,4 +1,4 @@
-# 🌿 Verdant — Self-Hosted Garden Journal (v2.10.1)
+# 🌿 Verdant — Self-Hosted Garden Journal (v2.11.0)
 
 Your garden, logged. Plant profiles with care reminders, a daily observation log
 with a calendar heatmap, photo albums with slideshows, seed source tracking,
@@ -71,6 +71,8 @@ type, year bought, and how many seeds are left. Searchable and filterable —
 stick an NFC tag on the binder and tapping it opens the "add packet" form.
 
 ![Seed stash](docs/screenshots/seed-stash.png)
+
+![Packet front/back flip](docs/screenshots/packet-flip.png)
 
 ### ✍️ Blog — garden stories
 Markdown blog posts with photo galleries, for the season's stories — first
@@ -406,6 +408,11 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.11.0** — Seed stash: packets now hold a **back-of-packet photo** too, for
+  all the growing info printed on the reverse — a ⇄ flip button on the card
+  swaps front/back (lightbox follows along). Also, **logo placeholders** are in
+  place in the header, footer, and favicon: drop the real logo file into
+  `app/static/img/logo-placeholder.svg` and it appears everywhere.
 - **2.10.1** — Seed stash follow-up: the packet vendor is now a plain text
   field with autocomplete (each vendor listed once — no more repeats), and a
   **📦 Move sources to stash** button copies every seed source into the stash

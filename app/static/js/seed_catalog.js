@@ -29,7 +29,10 @@
       const vendorName = p.vendor_name || '';
       return `<div class="overflow-hidden rounded-xl bg-beige-50 ring-1 ring-beige-200">
         ${p.photo_path
-          ? `<button type="button" data-lightbox="${esc(p.photo_path)}" class="block w-full"><img src="${esc(p.photo_path)}" alt="${esc(p.variety_name)} packet" class="h-36 w-full object-cover" loading="lazy" /></button>`
+          ? `<div class="relative">
+               <button type="button" data-lightbox="${esc(p.photo_path)}" class="block w-full"><img src="${esc(p.photo_path)}" alt="${esc(p.variety_name)} packet" data-packet-img data-side="front" class="h-36 w-full object-cover" loading="lazy" /></button>
+               ${p.photo_back_path ? `<button type="button" data-flip data-front="${esc(p.photo_path)}" data-back="${esc(p.photo_back_path)}" title="Flip to back of packet" class="absolute bottom-2 right-2 rounded-full bg-navy-800/85 px-2.5 py-1 text-xs font-semibold text-beige-50 ring-1 ring-beige-200/50 hover:bg-navy-700">⇄ Back</button>` : ''}
+             </div>`
           : `<div class="flex h-36 w-full items-center justify-center bg-sage-100 text-4xl">🌱</div>`}
         <div class="space-y-1 p-4">
           <div class="flex items-start justify-between gap-2">
@@ -90,6 +93,7 @@
       $('#packet-qty').value = packet ? packet.quantity : '';
       $('#packet-notes').value = packet ? (packet.notes || '') : '';
       $('#packet-photo').value = '';
+      $('#packet-photo-back').value = '';
       $('#packet-modal').classList.remove('hidden');
       $('#packet-modal').classList.add('flex');
       $('#packet-variety').focus();
@@ -141,6 +145,12 @@
           form.append('file', file);
           await api.upload(`/api/seed-packets/${saved.id}/photo`, form);
         }
+        const backFile = $('#packet-photo-back').files[0];
+        if (backFile) {
+          const form = new FormData();
+          form.append('file', backFile);
+          await api.upload(`/api/seed-packets/${saved.id}/photo?side=back`, form);
+        }
         closeModal();
         toast(id ? 'Packet updated.' : 'Packet added.');
         load();
@@ -150,6 +160,19 @@
     });
 
     grid.addEventListener('click', async (e) => {
+      const flipBtn = e.target.closest('[data-flip]');
+      if (flipBtn) {
+        e.stopPropagation();
+        const wrap = flipBtn.closest('.relative');
+        const img = wrap.querySelector('[data-packet-img]');
+        const lightboxBtn = wrap.querySelector('[data-lightbox]');
+        const showingBack = img.dataset.side === 'back';
+        img.dataset.side = showingBack ? 'front' : 'back';
+        img.src = showingBack ? flipBtn.dataset.front : flipBtn.dataset.back;
+        lightboxBtn.dataset.lightbox = img.src;
+        flipBtn.textContent = showingBack ? '⇄ Back' : '⇄ Front';
+        return;
+      }
       const editBtn = e.target.closest('[data-edit-packet]');
       const delBtn = e.target.closest('[data-del-packet]');
       if (editBtn) {

@@ -157,6 +157,8 @@ def delete_packet(packet_id: int, session: Session = Depends(get_session)) -> No
     packet = _get_or_404(session, packet_id)
     if packet.photo_path:
         delete_stored(packet.photo_path)
+    if packet.photo_back_path:
+        delete_stored(packet.photo_back_path)
     session.delete(packet)
     session.commit()
 
@@ -165,12 +167,14 @@ def delete_packet(packet_id: int, session: Session = Depends(get_session)) -> No
 async def upload_packet_photo(
     packet_id: int,
     file: UploadFile = File(...),
+    side: str = Query(default="front", pattern="^(front|back)$"),
     session: Session = Depends(get_session),
 ) -> SeedPacket:
     packet = _get_or_404(session, packet_id)
-    if packet.photo_path:
-        delete_stored(packet.photo_path)
-    packet.photo_path = await save_upload(file, f"seed-packets/{packet.id}")
+    attr = "photo_path" if side == "front" else "photo_back_path"
+    if getattr(packet, attr):
+        delete_stored(getattr(packet, attr))
+    setattr(packet, attr, await save_upload(file, f"seed-packets/{packet.id}"))
     session.add(packet)
     session.commit()
     session.refresh(packet)
