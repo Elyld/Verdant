@@ -75,6 +75,84 @@
     });
 
     load().catch((error) => toast(`Could not load expenses: ${error.message}`, 'err'));
+    initInvoices();
+  }
+
+  function initInvoices() {
+    const form = $('#invoice-form');
+    if (!form) return;
+    const { $, esc, fmtDate, api, toast, todayLocal } = globalThis.Verdant;
+    const today = todayLocal();
+    $('#inv-date').value = today;
+    const money = (n) => `$${Number(n || 0).toFixed(2)}`;
+
+    async function load() {
+      const [invoices, expenses] = await Promise.all([
+        api.get('/api/invoices/'),
+        api.get('/api/expenses/').catch(() => []),
+      ]);
+      const list = Array.isArray(invoices) ? invoices : [];
+      const expList = Array.isArray(expenses) ? expenses : [];
+      const expNames = new Map(expList.map((e) => [e.id, `${fmtDate(e.date)} · ${e.description || e.category} · $${Number(e.amount || 0).toFixed(2)}`]));
+      const sel = $('#inv-expense');
+      if (sel && !sel.dataset.loaded) {
+        sel.innerHTML = '<option value="">— none —</option>' +
+          [...expNames.entries()].map(([id, name]) => `<option value="${id}">${esc(name)}</option>`).join('');
+        sel.dataset.loaded = '1';
+      }
+      $('#invoices-empty').classList.toggle('hidden', list.length > 0);
+      $('#invoices-rows').innerHTML = list.map((inv) => `
+        <tr class="border-t border-beige-200">
+          <td class="py-2 pr-3 whitespace-nowrap">${fmtDate(inv.order_date)}</td>
+          <td class="py-2 pr-3 font-semibold">${esc(inv.vendor || '—')}</td>
+          <td class="py-2 pr-3">${esc(inv.order_number || '—')}${inv.expense_id && expNames.get(inv.expense_id) ? `<span class="block text-xs text-sage-700">💸 ${esc(expNames.get(inv.expense_id))}</span>` : ''}</td>
+          <td class="py-2 pr-3">${esc(inv.items_summary || '—')}${inv.notes ? `<span class="block text-xs text-navy-400">${esc(inv.notes)}</span>` : ''}</td>
+          <td class="py-2 pr-3 text-right font-semibold">${money(inv.total)}</td>
+          <td class="py-2 text-right whitespace-nowrap">
+            ${inv.pdf_path ? `<a href="${esc(inv.pdf_path)}" target="_blank" rel="noopener" class="text-xs text-sage-700 underline">PDF</a> ` : ''}
+            <button type="button" data-del-inv="${inv.id}" class="text-xs text-red-700 underline">delete</button>
+          </td>
+        </tr>`).join('');
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      try {
+        const created = await api.post('/api/invoices/', {
+          vendor: $('#inv-vendor').value.trim(),
+          order_date: $('#inv-date').value || today,
+          order_number: $('#inv-order').value.trim(),
+          total: Number($('#inv-total').value) || 0,
+          items_summary: $('#inv-items').value.trim(),
+          notes: $('#inv-notes').value.trim(),
+          expense_id: $('#inv-expense').value ? Number($('#inv-expense').value) : null,
+        });
+        const pdfInput = $('#inv-pdf');
+        if (pdfInput.files.length) {
+          const data = new FormData();
+          data.append('file', pdfInput.files[0], pdfInput.files[0].name);
+          await api.upload(`/api/invoices/${created.id}/pdf`, data);
+        }
+        toast('Invoice saved 🧾', 'ok');
+        ['#inv-vendor', '#inv-order', '#inv-total', '#inv-items', '#inv-notes'].forEach((s) => { $(s).value = ''; });
+        $('#inv-expense').value = '';
+        pdfInput.value = '';
+        load();
+      } catch (error) { toast(`Could not save invoice: ${error.message}`, 'err'); }
+    });
+
+    $('#invoices-rows').addEventListener('click', async (event) => {
+      const btn = event.target.closest('[data-del-inv]');
+      if (!btn) return;
+      if (!window.confirm('Delete this invoice? Its PDF goes with it.')) return;
+      try {
+        await api.del(`/api/invoices/${btn.dataset.delInv}`);
+        toast('Invoice deleted.', 'ok');
+        load();
+      } catch (error) { toast(`Could not delete: ${error.message}`, 'err'); }
+    });
+
+    load().catch((error) => toast(`Could not load invoices: ${error.message}`, 'err'));
   }
 
   globalThis.Verdant.onBoot(initCosts);

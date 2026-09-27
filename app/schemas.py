@@ -359,6 +359,37 @@ class ExpenseRead(BaseModel):
     _null_str = field_validator("description", "notes", mode="before")(_none_to_str)
 
 
+# --------------------------------- Invoices -------------------------------- #
+class InvoiceCreate(BaseModel):
+    vendor: str = Field(default="", max_length=120)
+    order_date: Date
+    order_number: str = Field(default="", max_length=80)
+    total: float = Field(default=0.0, ge=0)
+    items_summary: str = ""
+    notes: str = ""
+    source: str = Field(default="manual", max_length=20)
+    expense_id: Optional[int] = None
+
+
+class InvoiceRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    vendor: str
+    order_date: Date
+    order_number: str = ""
+    total: float = 0.0
+    items_summary: str = ""
+    pdf_path: Optional[str] = None
+    notes: str = ""
+    source: str = "manual"
+    expense_id: Optional[int] = None
+
+    _null_str = field_validator(
+        "vendor", "order_number", "items_summary", "notes", "source", mode="before"
+    )(_none_to_str)
+
+
 # --------------------------------- Pest log -------------------------------- #
 class PestLogCreate(BaseModel):
     date: Date

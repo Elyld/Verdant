@@ -28,6 +28,7 @@ from app.models import (
     FertilizationLog,
     Fertilizer,
     Harvest,
+    Invoice,
     Location,
     Plant,
     SeedSource,
@@ -59,6 +60,7 @@ ENTITIES = {
     "watering": "Watering logs",
     "fertilization": "Fertilization logs",
     "harvests": "Harvest logs",
+    "invoices": "Invoices",
 }
 
 
@@ -371,6 +373,43 @@ def _build_fertilization(row: Dict[str, str], ctx: _Ctx) -> Dict[str, Any]:
     return {"status": "new", "label": label, "key": code, "make": make}
 
 
+def _build_invoice(row: Dict[str, str], ctx: _Ctx) -> Dict[str, Any]:
+    vendor = (row.get("Vendor", "") or "").strip()
+    order_number = (row.get("Order Number", "") or "").strip()
+    when = _parse_date(row.get("Order Date", ""))
+    if not vendor:
+        return {"status": "error", "label": f"{order_number or '?'}: vendor is required", "key": order_number}
+    if when is None:
+        return {"status": "error", "label": f"{order_number or vendor}: bad or missing order date", "key": order_number}
+    total = _parse_float(row.get("Total", "")) or 0.0
+    items_summary = (row.get("Items", "") or "").strip()
+    notes = (row.get("Notes", "") or "").strip()
+    # Idempotency: match on the natural key (vendor + order number + date).
+    # Rows without an order number fall back to vendor + date + total.
+    stmt = select(Invoice).where(
+        Invoice.vendor == vendor,
+        Invoice.order_date == when.isoformat(),
+    )
+    if order_number:
+        stmt = stmt.where(Invoice.order_number == order_number)
+    else:
+        stmt = stmt.where(Invoice.total == total)
+    if ctx.session.exec(stmt).first():
+        return {"status": "skip", "label": f"{vendor} {order_number or when.isoformat()}: already imported", "key": order_number}
+    def make() -> Invoice:
+        return Invoice(
+            vendor=vendor,
+            order_date=when.isoformat(),
+            order_number=order_number,
+            total=total,
+            items_summary=items_summary,
+            notes=notes,
+            source="csv",
+        )
+    label = f"{vendor} {order_number or when.isoformat()} — ${total:.2f}"
+    return {"status": "new", "label": label, "key": order_number, "make": make}
+
+
 def _harvest_weight_from_row(row: Dict[str, str], unit: str) -> tuple[Optional[float], str]:
     """Weight from the CSV row, mirroring the API's single-source-of-truth rule."""
     weight = _parse_float(row.get("Weight", ""))
@@ -463,6 +502,7 @@ BUILDERS = {
     "seed_sources": _build_seed_source,
     "watering": _build_watering,
     "fertilization": _build_fertilization,
+    "invoices": _build_invoice,
 }
 
 

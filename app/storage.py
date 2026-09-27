@@ -95,8 +95,51 @@ async def save_uploads(files: Iterable[UploadFile] | None, subdir: str) -> List[
     return saved
 
 
+async def save_pdf_upload(file: UploadFile, subdir: str) -> str:
+    """Stream one PDF upload to disk. Returns the public URL path (/uploads/...).
+
+    Sniffs the ``%PDF`` magic bytes (never trusts the client filename) and
+    rejects anything that isn't a PDF. Filenames are randomly generated, so a
+    hostile client filename cannot traverse directories or overwrite files.
+    """
+    target_dir = UPLOAD_DIR / subdir
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    head = await file.read(8)
+    if not head.startswith(b"%PDF"):
+        raise HTTPException(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=f"Unsupported file type for '{file.filename}' (PDF only).",
+        )
+
+    name = f"{secrets.token_hex(16)}.pdf"
+    path = target_dir / name
+    written = 0
+    try:
+        with path.open("wb") as out:
+            out.write(head)
+            written += len(head)
+            while chunk := await file.read(CHUNK):
+                written += len(chunk)
+                if written > MAX_BYTES:
+                    raise HTTPException(
+                        status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail=f"'{file.filename}' exceeds the {MAX_BYTES // (1024 * 1024)}MB limit.",
+                    )
+                out.write(chunk)
+    except HTTPException:
+        path.unlink(missing_ok=True)
+        raise
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
+    finally:
+        await file.close()
+    return f"/uploads/{subdir}/{name}"
+
+
 def delete_stored(url_path: str) -> None:
-    """Delete a file previously returned by save_upload; ignore anything else."""
+    """Delete a file previously returned by save_upload/save_pdf_upload; ignore anything else."""
     prefix = "/uploads/"
     if not url_path.startswith(prefix):
         return
