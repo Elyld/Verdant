@@ -81,11 +81,21 @@ def _parse_month_day(raw: str) -> Optional[Tuple[int, int]]:
     return None
 
 
+def _safe_date(year: int, month: int, day: int) -> date_cls:
+    """date() that clamps Feb 29 to Feb 28 in non-leap years (no 500s)."""
+    if month == 2 and day == 29:
+        import calendar
+
+        if not calendar.isleap(year):
+            day = 28
+    return date_cls(year, month, day)
+
+
 def annualize(month: int, day: int, today: Optional[date_cls] = None) -> date_cls:
     """Next upcoming occurrence of an annual month/day (this year, else next)."""
     today = today or date_cls.today()
-    this_year = date_cls(today.year, month, day)
-    return this_year if this_year >= today else date_cls(today.year + 1, month, day)
+    this_year = _safe_date(today.year, month, day)
+    return this_year if this_year >= today else _safe_date(today.year + 1, month, day)
 
 
 def resolve_frost(

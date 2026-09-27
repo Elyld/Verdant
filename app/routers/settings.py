@@ -59,7 +59,7 @@ def _validate(payload: SettingsUpdate) -> None:
         ("last_frost_date", payload.last_frost_date),
     ):
         if raw and frost_mod._parse_month_day(raw) is None:
-            raise HTTPException(400, f"Bad {label} {raw!r} (want YYYY-MM-DD).")
+            raise HTTPException(400, f"Bad {label} {raw!r} (want YYYY-MM-DD or MM-DD).")
     if not TIME_RE.match((payload.digest_time or "").strip()):
         raise HTTPException(400, f"Bad digest_time {payload.digest_time!r} (want HH:MM, 24h).")
     if payload.digest_enabled and not payload.discord_webhook_url.strip():

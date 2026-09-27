@@ -3,7 +3,7 @@
   'use strict';
 
   const { $, $$, esc, fmtDate, fmtDateTime, api, toast, markdown,
-            uploadFiles, wireDraft, renderStats, healthBar, plantCard } = globalThis.Verdant;
+            uploadFiles, wireDraft, renderStats, healthBar, plantCard, todayLocal } = globalThis.Verdant;
 
   /* ------------------------------ Plants ------------------------------ */
 
@@ -69,7 +69,7 @@
     const photos = timeline.photos || [];
     const harvests = events.filter((e) => e.kind === 'harvest');
     const matchedPhotos = Array.isArray(matched) ? matched : [];
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayLocal();
     return `
       <div class="mb-4 flex items-start justify-between gap-3">
         <div>
@@ -198,7 +198,7 @@
   function initPlants() {
     const grid = $('#plant-grid');
     if (!grid) return {};
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayLocal();
     let plants = [];
     let locations = [];
     let editingId = null;

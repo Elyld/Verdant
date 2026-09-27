@@ -3,12 +3,12 @@
   'use strict';
 
   const { $, $$, esc, fmtDate, fmtDateTime, api, toast, markdown,
-            uploadFiles, wireDraft, renderStats, healthBar, plantCard } = globalThis.Verdant;
+            uploadFiles, wireDraft, renderStats, healthBar, plantCard, todayLocal } = globalThis.Verdant;
 
   function initCosts() {
     const form = $('#cost-form');
     if (!form) return;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayLocal();
     $('#cost-date').value = today;
     const money = (n) => `$${Number(n || 0).toFixed(2)}`;
 
@@ -76,8 +76,6 @@
 
     load().catch((error) => toast(`Could not load expenses: ${error.message}`, 'err'));
   }
-
-  /* ------------------------------ Pests ------------------------------ */
 
   globalThis.Verdant.onBoot(initCosts);
 })();

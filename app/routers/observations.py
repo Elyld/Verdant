@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 from sqlmodel import Session, func, select
 
 from app.database import get_session
-from app.models import ObservationImage, ObservationLog
+from app.models import ObservationImage, ObservationLog, apply_patch
 from app.schemas import (
     ObservationCreate,
     ObservationRead,
@@ -56,7 +56,9 @@ def list_observations(
 def create_observation(
     payload: ObservationCreate, session: Session = Depends(get_session)
 ) -> ObservationLog:
-    obs = ObservationLog(**payload.model_dump())
+    data = payload.model_dump()
+    data["date"] = data["date"].isoformat()
+    obs = ObservationLog(**data)
     obs.plant_name = obs.plant_name.strip()
     # Stamp the current weather (Open-Meteo). Never fails the request.
     weather = fetch_current_weather()
@@ -79,8 +81,7 @@ def update_observation(
     obs_id: int, payload: ObservationUpdate, session: Session = Depends(get_session)
 ) -> ObservationLog:
     obs = _get_or_404(session, obs_id)
-    for key, value in payload.model_dump(exclude_unset=True).items():
-        setattr(obs, key, value)
+    apply_patch(obs, payload.model_dump(exclude_unset=True))
     session.add(obs)
     session.commit()
     session.refresh(obs)

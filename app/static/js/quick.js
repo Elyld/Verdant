@@ -3,12 +3,12 @@
   'use strict';
 
   const { $, $$, esc, fmtDate, fmtDateTime, api, toast, markdown,
-            uploadFiles, wireDraft, renderStats, healthBar, plantCard } = globalThis.Verdant;
+            uploadFiles, wireDraft, renderStats, healthBar, todayLocal } = globalThis.Verdant;
 
   function initQuick() {
     const host = $('#quick-groups');
     if (!host) return;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayLocal();
     $('#quick-today').textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
 
     function flash(btn, label) {
@@ -51,7 +51,7 @@
       } catch (error) { toast(`Could not log note: ${error.message}`, 'err'); }
     }
 
-    function plantCard(plant) {
+    function quickPlantCard(plant) {
       const card = document.createElement('div');
       card.className = 'card space-y-3';
       card.innerHTML = `
@@ -158,7 +158,7 @@
         section.appendChild(header);
         const grid = document.createElement('div');
         grid.className = 'grid gap-3 sm:grid-cols-2';
-        plist.forEach((p) => grid.appendChild(plantCard(p)));
+        plist.forEach((p) => grid.appendChild(quickPlantCard(p)));
         section.appendChild(grid);
         host.appendChild(section);
       });
@@ -176,8 +176,6 @@
 
     load().catch((error) => toast(`Could not load plants: ${error.message}`, 'err'));
   }
-
-  /* ------------------------------ Costs ------------------------------ */
 
   globalThis.Verdant.onBoot(initQuick);
 })();

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_session
-from app.models import SeedSource
+from app.models import SeedSource, apply_patch
 
 router = APIRouter(prefix="/api/seed-sources", tags=["seed-sources"])
 
@@ -31,7 +31,11 @@ def list_seed_sources(
 def _coerce_dates(src: SeedSource) -> SeedSource:
     """SQLModel table models skip validation, so coerce ISO date strings by hand."""
     if isinstance(src.acquired_date, str):
-        src.acquired_date = date.fromisoformat(src.acquired_date)
+        text = src.acquired_date.strip()
+        try:
+            src.acquired_date = date.fromisoformat(text)
+        except ValueError:
+            raise HTTPException(422, f"acquired_date {src.acquired_date!r} is not a valid YYYY-MM-DD date.")
     return src
 
 
@@ -67,10 +71,9 @@ def update_seed_source(
     session: Session = Depends(get_session)
 ) -> SeedSource:
     src = _get_or_404(session, src_id)
-    for key, value in payload.items():
-        if hasattr(src, key) and key != "id":
-            setattr(src, key, value)
-    _coerce_dates(src)
+    # source_id is the stable public ID (CSV re-import keys on it): never rewritable.
+    # acquired_date is a real Date column — apply_patch coerces it (422 on bad input).
+    apply_patch(src, payload, exclude=("source_id",))
     session.add(src)
     session.commit()
     session.refresh(src)

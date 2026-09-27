@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_session
-from app.models import AlbumImage, SeedPacket, SeedSource
+from app.models import AlbumImage, SeedPacket, SeedSource, apply_patch
 from app.storage import copy_stored, delete_stored, save_upload
 
 router = APIRouter(prefix="/api/seed-packets", tags=["seed-packets"])
@@ -70,19 +70,39 @@ def list_packets(
     return query.all()
 
 
+def _check_vendor_id(session, vendor_id):
+    if vendor_id is not None and not session.get(SeedSource, vendor_id):
+        raise HTTPException(404, f"Seed source {vendor_id} not found")
+
+
+def _coerce_optional_int(value, field_name: str, minimum: int = None):
+    """Coerce a raw JSON int field; "" counts as unset, garbage 422s."""
+    if value in (None, ""):
+        return None
+    try:
+        ivalue = int(value)
+    except (TypeError, ValueError):
+        raise HTTPException(422, f"{field_name} {value!r} is not a whole number.")
+    if minimum is not None and ivalue < minimum:
+        raise HTTPException(422, f"{field_name} cannot be less than {minimum}.")
+    return ivalue
+
+
 @router.post("/", response_model=SeedPacket, status_code=201)
 def create_packet(payload: dict, session: Session = Depends(get_session)) -> SeedPacket:
     if not (payload.get("variety_name") or "").strip():
         raise HTTPException(status_code=422, detail="variety_name is required")
+    _check_vendor_id(session, payload.get("vendor_id"))
     packet = SeedPacket(
         variety_name=payload["variety_name"].strip(),
         species_type=(payload.get("species_type") or "").strip(),
         category=(payload.get("category") or "").strip(),
+        vendor_id=payload.get("vendor_id"),
         vendor_name=(payload.get("vendor_name") or "").strip(),
         vendor_url=_normalize_url(payload.get("vendor_url") or ""),
-        year_acquired=payload.get("year_acquired"),
+        year_acquired=_coerce_optional_int(payload.get("year_acquired"), "year_acquired"),
         quantity=(payload.get("quantity") or "").strip(),
-        seed_count=payload.get("seed_count"),
+        seed_count=_coerce_optional_int(payload.get("seed_count"), "seed_count", minimum=0),
         notes=(payload.get("notes") or "").strip() or None,
         date_added=payload.get("date_added") or "",
     )
@@ -145,9 +165,17 @@ def update_packet(
     packet_id: int, payload: dict, session: Session = Depends(get_session)
 ) -> SeedPacket:
     packet = _get_or_404(session, packet_id)
-    for key, value in payload.items():
-        if hasattr(packet, key) and key not in ("id", "packet_id"):
-            setattr(packet, key, value)
+    payload = dict(payload)
+    for key in ("seed_count",):
+        if key in payload:
+            payload[key] = _coerce_optional_int(payload[key], key, minimum=0)
+    if "year_acquired" in payload:
+        payload["year_acquired"] = _coerce_optional_int(payload["year_acquired"], "year_acquired")
+    if "vendor_id" in payload:
+        _check_vendor_id(session, payload["vendor_id"])
+    # packet_id is the stable public ID; photo paths are managed exclusively
+    # by the /photo upload endpoints — none are rewritable here.
+    apply_patch(packet, payload, exclude=("packet_id", "photo_path", "photo_back_path"))
     session.add(packet)
     session.commit()
     session.refresh(packet)

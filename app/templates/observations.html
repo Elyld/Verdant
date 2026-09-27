@@ -2,6 +2,7 @@
 {% block title %}Verdant · Observation Log{% endblock %}
 {% block content %}
 <!-- Garden logs -->
+    <div id="stats" class="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"></div>
     <section id="panel-logs" class="space-y-10">
       <!-- Fertilization -->
       <div class="grid gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
@@ -24,6 +25,12 @@
             <label class="lbl" for="fert-name">Fertilizer</label>
             <input id="fert-name" name="fertilizer_name" required maxlength="120" class="inp" placeholder="Fish emulsion" list="fert-catalog" />
             <datalist id="fert-catalog"></datalist>
+          </div>
+          <div>
+            <label class="lbl" for="fert-plant-link">Plant profile <span class="text-navy-400">(optional)</span></label>
+            <select id="fert-plant-link" class="inp">
+              <option value="">— whole garden —</option>
+            </select>
           </div>
           <div>
             <label class="lbl" for="fert-amount">Amount used</label>
@@ -92,6 +99,12 @@
           <div>
             <label class="lbl" for="obs-plant">Plant</label>
             <input id="obs-plant" name="plant_name" required maxlength="120" class="inp" placeholder="Brandywine tomato" />
+          </div>
+          <div>
+            <label class="lbl" for="obs-plant-link">Link to plant profile <span class="text-navy-400">(optional)</span></label>
+            <select id="obs-plant-link" class="inp">
+              <option value="">— just a name, no profile —</option>
+            </select>
           </div>
           <div>
             <label class="lbl" for="obs-health">Health <span id="obs-health-out" class="pill ml-1">5</span> / 10</label>

@@ -14,8 +14,10 @@ from __future__ import annotations
 import io
 import json
 import shutil
+import tempfile
 import zipfile
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import List, Type
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -132,42 +134,57 @@ def import_backup(
     # A backup exported with include_photos=false carries no files/ entries.
     # Restoring one must not wipe the photos that are already here.
     photos_included = any(n.startswith("files/") and not n.endswith("/") for n in zf.namelist())
+    file_members = [n for n in zf.namelist() if n.startswith("files/") and not n.endswith("/")]
+    # Validate the whole zip and stage every file into a temp dir FIRST.
+    # Nothing local is wiped until the archive has proven fully readable —
+    # a corrupt zip or an unsafe path must 400 with the garden untouched.
+    stage_dir = Path(tempfile.mkdtemp(prefix="verdant-restore-"))
     try:
-        # Wipe children first.
-        for model in reversed(TABLES_IN_ORDER):
-            session.exec(delete(model))
         if photos_included:
-            # Clear the upload dir (it is fully app-managed).
-            if UPLOAD_DIR.exists():
-                for child in UPLOAD_DIR.iterdir():
-                    if child.is_dir():
-                        shutil.rmtree(child)
-                    else:
-                        child.unlink()
-            # Restore uploaded files (zip-slip guarded).
-            base = UPLOAD_DIR.resolve()
-            for name in zf.namelist():
-                if not name.startswith("files/") or name.endswith("/"):
-                    continue
-                target = (base / name[len("files/"):]).resolve()
-                if base not in target.parents and target != base:
+            stage_base = stage_dir.resolve()
+            for name in file_members:
+                target = (stage_base / name[len("files/"):]).resolve()
+                if stage_base not in target.parents and target != stage_base:
                     raise HTTPException(status_code=400, detail="Unsafe path in backup zip.")
+                try:
+                    data = zf.read(name)
+                except Exception:
+                    raise HTTPException(status_code=400, detail=f"Backup zip is damaged (cannot read {name}).")
                 target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes(zf.read(name))
-        # Insert parents first; ids are preserved so foreign keys line up.
-        # model_validate (not __init__) coerces ISO date strings back to dates.
-        counts: dict[str, int] = {}
-        for model in TABLES_IN_ORDER:
-            rows = tables.get(model.__tablename__, [])
-            for rd in rows:
-                session.add(model.model_validate(rd))
-            counts[model.__tablename__] = len(rows)
-        session.commit()
-    except HTTPException:
-        session.rollback()
-        raise
-    except Exception as exc:
-        session.rollback()
-        raise HTTPException(status_code=400, detail=f"Restore failed: {exc}")
+                target.write_bytes(data)
+        try:
+            if photos_included:
+                # Clear the upload dir (it is fully app-managed), then move the
+                # staged files into place.
+                if UPLOAD_DIR.exists():
+                    for child in UPLOAD_DIR.iterdir():
+                        if child.is_dir():
+                            shutil.rmtree(child)
+                        else:
+                            child.unlink()
+                else:
+                    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+                for child in stage_dir.iterdir():
+                    shutil.move(str(child), UPLOAD_DIR / child.name)
+            # Wipe children first.
+            for model in reversed(TABLES_IN_ORDER):
+                session.exec(delete(model))
+            # Insert parents first; ids are preserved so foreign keys line up.
+            # model_validate (not __init__) coerces ISO date strings back to dates.
+            counts: dict[str, int] = {}
+            for model in TABLES_IN_ORDER:
+                rows = tables.get(model.__tablename__, [])
+                for rd in rows:
+                    session.add(model.model_validate(rd))
+                counts[model.__tablename__] = len(rows)
+            session.commit()
+        except HTTPException:
+            session.rollback()
+            raise
+        except Exception as exc:
+            session.rollback()
+            raise HTTPException(status_code=400, detail=f"Restore failed: {exc}")
+    finally:
+        shutil.rmtree(stage_dir, ignore_errors=True)
     return {"restored": counts, "format_version": manifest.get("format_version"),
             "photos_included": photos_included}

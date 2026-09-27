@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_session
-from app.models import Harvest, Plant
+from app.models import Harvest, Plant, apply_patch
 from app.schemas import HarvestCreate
 from app import units as units_mod
 
@@ -76,11 +76,20 @@ def update_harvest(
     session: Session = Depends(get_session)
 ) -> Harvest:
     harvest = _get_or_404(session, harvest_id)
-    for key, value in payload.items():
-        if hasattr(harvest, key) and key != "id":
-            if key == "weight_unit":
-                value = units_mod.normalize_weight_unit(value)
-            setattr(harvest, key, value)
+    payload = dict(payload)
+    if payload.get("weight_unit") is not None:
+        payload["weight_unit"] = units_mod.normalize_weight_unit(payload["weight_unit"])
+    if "quantity" in payload and payload["quantity"] is not None:
+        try:
+            qty = int(payload["quantity"])
+        except (TypeError, ValueError):
+            qty = 0
+        if qty < 1:
+            raise HTTPException(422, "quantity must be at least 1.")
+    if payload.get("plant_id") is not None and not session.get(Plant, payload["plant_id"]):
+        raise HTTPException(404, f"Plant {payload['plant_id']} not found")
+    # harvest_id is the stable public ID (CSV re-import keys on it): never rewritable.
+    apply_patch(harvest, payload, exclude=("harvest_id",))
     session.add(harvest)
     session.commit()
     session.refresh(harvest)

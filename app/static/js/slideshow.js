@@ -111,7 +111,5 @@
     loadAlbums().catch((error) => toast(`Could not load albums: ${error.message}`, 'err'));
   }
 
-  /* ------------------------------ Quick log ------------------------------ */
-
   globalThis.Verdant.onBoot(initSlideshow);
 })();

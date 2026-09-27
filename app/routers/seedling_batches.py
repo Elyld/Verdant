@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_session
-from app.models import SeedlingBatch
+from app.models import SeedlingBatch, SeedPacket, apply_patch
 
 router = APIRouter(prefix="/api/seedling-batches", tags=["seedling-batches"])
 
@@ -64,15 +64,36 @@ def create_batch(payload: dict, session: Session = Depends(get_session)) -> Seed
     variety = (payload.get("variety_name") or "").strip()
     if not variety:
         raise HTTPException(status_code=422, detail="variety_name is required")
+    packet_id = payload.get("packet_id")
+    if packet_id is not None and not session.get(SeedPacket, packet_id):
+        raise HTTPException(status_code=404, detail=f"Seed packet {packet_id} not found")
+    cells_sown = payload.get("cells_sown")
+    if cells_sown in (None, ""):
+        cells_sown = None
+    else:
+        try:
+            cells_sown = int(cells_sown)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail=f"cells_sown {payload.get('cells_sown')!r} is not a whole number.")
+        if cells_sown < 0:
+            raise HTTPException(status_code=422, detail="cells_sown cannot be negative.")
+    sow_date = (payload.get("sow_date") or "").strip()
+    if sow_date:
+        try:
+            Date.fromisoformat(sow_date)
+        except ValueError:
+            raise HTTPException(status_code=422, detail=f"sow_date {sow_date!r} is not a valid YYYY-MM-DD date.")
+    else:
+        sow_date = Date.today().isoformat()
     batch = SeedlingBatch(
         variety_name=variety,
-        packet_id=payload.get("packet_id"),
-        sow_date=(payload.get("sow_date") or "").strip() or Date.today().isoformat(),
+        packet_id=packet_id,
+        sow_date=sow_date,
         tray=(payload.get("tray") or "").strip(),
         location=(payload.get("location") or "").strip(),
         heat_mat=bool(payload.get("heat_mat")),
         grow_light=(payload.get("grow_light") or "").strip(),
-        cells_sown=payload.get("cells_sown"),
+        cells_sown=cells_sown,
         status=_check_status(payload.get("status") or "sowing"),
         notes=(payload.get("notes") or "").strip(),
     )
@@ -90,13 +111,22 @@ def get_batch(batch_id: int, session: Session = Depends(get_session)) -> Seedlin
 @router.patch("/{batch_id}", response_model=SeedlingBatch)
 def update_batch(batch_id: int, payload: dict, session: Session = Depends(get_session)) -> SeedlingBatch:
     batch = _get_or_404(session, batch_id)
-    for key, value in payload.items():
-        if key in ("id", "batch_id"):
-            continue
-        if hasattr(batch, key):
-            if key == "status":
-                value = _check_status(value)
-            setattr(batch, key, value)
+    payload = dict(payload)
+    if "status" in payload:
+        payload["status"] = _check_status(payload["status"])
+    for key in ("cells_sown", "germinated"):
+        if payload.get(key) is not None:
+            try:
+                value = int(payload[key])
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=422, detail=f"{key} {payload[key]!r} is not a whole number.")
+            if value < 0:
+                raise HTTPException(status_code=422, detail=f"{key} cannot be negative.")
+            payload[key] = value
+    if payload.get("packet_id") is not None and not session.get(SeedPacket, payload["packet_id"]):
+        raise HTTPException(status_code=404, detail=f"Seed packet {payload['packet_id']} not found")
+    # batch_id is the stable public ID: never rewritable.
+    apply_patch(batch, payload, exclude=("batch_id",))
     session.add(batch)
     session.commit()
     session.refresh(batch)

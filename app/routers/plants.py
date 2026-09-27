@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from sqlmodel import or_
 
 from app.database import get_session
-from app.models import Plant, Location
+from app.models import Plant, Location, apply_patch
 from app.schemas import (
     ImageRead,
     PlantTimelineRead,
@@ -81,9 +81,8 @@ def update_plant(
     session: Session = Depends(get_session)
 ) -> Plant:
     plant = _get_or_404(session, plant_id)
-    for key, value in payload.items():
-        if hasattr(plant, key) and key != "id":
-            setattr(plant, key, value)
+    # plant_id is the stable public ID (CSV re-import keys on it): never rewritable.
+    apply_patch(plant, payload, exclude=("plant_id",))
     session.add(plant)
     session.commit()
     session.refresh(plant)

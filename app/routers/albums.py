@@ -81,6 +81,8 @@ async def create_album(
     A request with no files is fine: it creates an empty album that can be
     filled later with "Import from URL" or "Add photos" buttons.
     """
+    if not name.strip():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Album name is required.")
     album = Album(name=name.strip())
     session.add(album)
     session.commit()
@@ -274,6 +276,12 @@ async def _import_urls(
     if len(urls) > MAX_URLS:
         raise HTTPException(status.HTTP_414_URI_TOO_LONG, detail=f"Max {MAX_URLS} URLs per import")
 
+    # Re-running an import must not duplicate photos (the Immich importer
+    # already skips on source_url; do the same here).
+    already = set(
+        session.exec(select(AlbumImage.source_url).where(AlbumImage.album_id == album.id)).all()
+    )
+
     errors: List[str] = []
     created = 0
     base = _base_url(os.getenv("GARDEN_PUBLIC_URL", ""))
@@ -286,6 +294,8 @@ async def _import_urls(
         base_url=base,
     ) as client:
         for url in urls:
+            if url[:500] in already:
+                continue  # already imported: skip, no dupes
             scheme = url.split("://", 1)[0].lower() if "://" in url else "http"
             if scheme not in ALLOWED_URL_SCHEMES:
                 errors.append(f"Unsupported scheme in '{url[:80]}' (http/https only)")

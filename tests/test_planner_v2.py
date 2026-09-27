@@ -106,12 +106,28 @@ def test_new_containers_do_not_overlap():
 
 
 def test_patch_grid_position_clamped():
-    c = _container("Clamp Bag", year=2035)
+    # Isolated year: other tests crowd 2035, and overlapping moves are now
+    # rejected — this test is about clamping, not overlap.
+    c = _container("Clamp Bag", year=2037)
     r = client.patch(f"/api/containers/{c['id']}", json={"grid_x": -5, "grid_y": 3})
     assert r.status_code == 200
     assert r.json()["grid_x"] == 0
     r = client.patch(f"/api/containers/{c['id']}", json={"grid_w": 0})
     assert r.json()["grid_w"] == 1
+
+
+def test_patch_overlapping_position_rejected():
+    a = _container("Overlap A", year=2038)
+    b = _container("Overlap B", year=2038)
+    r = client.patch(
+        f"/api/containers/{b['id']}",
+        json={"grid_x": a["grid_x"], "grid_y": a["grid_y"]},
+    )
+    assert r.status_code == 422
+    assert "overlap" in r.json()["detail"].lower()
+    # A non-overlapping move still works.
+    r = client.patch(f"/api/containers/{b['id']}", json={"grid_x": a["grid_x"] + 10})
+    assert r.status_code == 200
 
 
 def test_legacy_xy_backfilled_to_grid():

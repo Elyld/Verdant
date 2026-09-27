@@ -3,12 +3,12 @@
   'use strict';
 
   const { $, $$, esc, fmtDate, fmtDateTime, api, toast, markdown,
-            uploadFiles, wireDraft, renderStats, healthBar, plantCard } = globalThis.Verdant;
+            uploadFiles, wireDraft, renderStats, healthBar, plantCard, todayLocal } = globalThis.Verdant;
 
   function initPests() {
     const form = $('#pest-form');
     if (!form) return;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayLocal();
     $('#pest-date').value = today;
     let plantNames = new Map();
 

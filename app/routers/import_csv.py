@@ -19,6 +19,7 @@ from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.database import get_session
@@ -389,13 +390,16 @@ def _build_harvest(row: Dict[str, str], ctx: _Ctx, assignments: Dict[str, Any]) 
     def _backfill(existing: Harvest) -> Optional[Dict[str, Any]]:
         # Re-running the harvest import backfills weights the first import
         # didn't know about — the row already exists, only the weight is new.
+        # The mutation is applied by the run loop, never by preview: preview
+        # must not touch ORM state.
         if weight is not None and existing.weight is None:
-            existing.weight = weight
-            existing.weight_unit = weight_unit
             return {
                 "status": "update",
                 "label": f"{code or '?'}: backfilled weight {weight:g} {weight_unit}",
                 "key": code,
+                "target": existing,
+                "weight": weight,
+                "weight_unit": weight_unit,
             }
         return None
 
@@ -421,7 +425,7 @@ def _build_harvest(row: Dict[str, str], ctx: _Ctx, assignments: Dict[str, Any]) 
     if plant is None:
         return {
             "status": "needs_plant",
-            "label": f"{code} {when.isoformat()} — {quantity} fruit: pick a plant",
+            "label": f"{code} {when.isoformat()} — {quantity} {unit}: pick a plant",
             "key": code,
             "hint_variety": HARVEST_PLANT_HINTS.get(code),
         }
@@ -552,13 +556,28 @@ async def run_import(
             except Exception as exc:  # noqa: BLE001 - report per-row, keep going
                 errors.append(f"{r.get('key') or '?'}: {exc}")
         elif r["status"] == "update":
-            # The builder already mutated the existing row on this session.
+            # The builder only described the backfill; apply it here so
+            # preview (which shares the builders) never mutates ORM state.
+            target = r.get("target")
+            if target is not None:
+                target.weight = r["weight"]
+                target.weight_unit = r["weight_unit"]
             updated += 1
         elif r["status"] == "skip":
             skipped += 1
         else:
             errors.append(f"{r.get('key') or '?'}: {r['label']}")
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError as exc:
+        # Duplicate IDs inside one file pass the per-row checks (which only
+        # consult the DB) and die here — report it clearly instead of 500ing
+        # with zero rows imported.
+        session.rollback()
+        raise HTTPException(
+            status_code=422,
+            detail=f"Import failed: duplicate IDs in the file ({exc.orig}). No rows were imported.",
+        )
     # Refresh lookups so a second file in the same session sees new rows.
     return {
         "entity": entity,

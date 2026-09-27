@@ -9,7 +9,7 @@
     quick_plant: { label: '⚡ Quick-log for a plant', target: 'plant', hint: 'Tap → Quick Log opens for that plant (water, harvest, note).' },
     fertilize: { label: '🧪 Log a feeding', target: 'fertilizer', hint: 'Stick on the fertilizer bottle — tap → feeding form with that fertilizer pre-selected.' },
     pest: { label: '🐛 Log pest treatment', target: 'text', textLabel: 'Product name', hint: 'Stick on the spray bottle — tap → pest log with the product pre-filled.' },
-    harvest: { label: '🧺 Harvest log for a plant', target: 'plant', hint: 'Tap → Quick Log with the harvest stepper ready for that plant.' },
+    harvest: { label: '🧺 Harvest log for a plant', target: 'plant', hint: 'Tap → Quick Log opens on that plant with the harvest button spotlighted.' },
     harvest_any: { label: '🧺 Harvest log (any plant)', target: 'none', hint: 'Stick on the harvest basket — tap → Quick Log harvest mode.' },
     location: { label: '📍 Quick-log for a location', target: 'location', hint: 'Stick on a bed or bag cluster — tap → Quick Log filtered to that location.' },
     seed_add: { label: '🌱 Add seed packet', target: 'none', hint: 'Stick on the seed binder — tap → the seed catalog add form opens.' },
