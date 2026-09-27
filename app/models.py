@@ -302,6 +302,24 @@ class InvoiceSeedPacket(SQLModel, table=True):
 
 
 # --------------------------------------------------------------------------- #
+# Expense <-> seed packet links (which packets an expense bought)
+# --------------------------------------------------------------------------- #
+class ExpenseSeedPacket(SQLModel, table=True):
+    """Many-to-many link between an expense and the seed packets it bought.
+
+    Composite primary key keeps the pair unique; both sides cascade so
+    deleting an expense (or a packet) drops its links automatically.
+    Independent from invoice links: tagging an invoice never tags its
+    expense and vice versa.
+    """
+
+    __tablename__ = "expense_seed_packets"
+
+    expense_id: int = Field(foreign_key="expenses.id", primary_key=True, index=True, ondelete="CASCADE")
+    seed_packet_id: int = Field(foreign_key="seed_packets.id", primary_key=True, index=True, ondelete="CASCADE")
+
+
+# --------------------------------------------------------------------------- #
 # Pests
 # --------------------------------------------------------------------------- #
 class PestLog(SQLModel, table=True):

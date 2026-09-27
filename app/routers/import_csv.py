@@ -662,18 +662,20 @@ async def run_import(
     if new_invoices and isinstance(packet_map, dict):
         linked = 0
         for i, inst in new_invoices:
-            raw_pid = packet_map.get(f"inv:{i}")
-            if not raw_pid:
-                continue
-            try:
-                pid = int(raw_pid)
-            except (TypeError, ValueError):
-                continue
-            if not session.get(SeedPacket, pid):
-                continue
-            if session.get(InvoiceSeedPacket, (inst.id, pid)) is None:
-                session.add(InvoiceSeedPacket(invoice_id=inst.id, seed_packet_id=pid))
-                linked += 1
+            # Values may be a single packet id (older clients) or a list.
+            raw = packet_map.get(f"inv:{i}")
+            pids = []
+            for v in (raw if isinstance(raw, list) else [raw]):
+                try:
+                    pids.append(int(v))
+                except (TypeError, ValueError):
+                    continue
+            for pid in pids:
+                if not session.get(SeedPacket, pid):
+                    continue
+                if session.get(InvoiceSeedPacket, (inst.id, pid)) is None:
+                    session.add(InvoiceSeedPacket(invoice_id=inst.id, seed_packet_id=pid))
+                    linked += 1
         if linked:
             session.commit()
     # Refresh lookups so a second file in the same session sees new rows.

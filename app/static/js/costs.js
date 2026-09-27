@@ -5,6 +5,73 @@
   const { $, $$, esc, fmtDate, fmtDateTime, api, toast, markdown,
             uploadFiles, wireDraft, renderStats, healthBar, plantCard, todayLocal } = globalThis.Verdant;
 
+  // ---- Shared seed-packet tagging UI (invoice + expense rows) ----
+  // kind is "invoice" or "expense"; object ids follow. Tags are independent:
+  // linking a packet on an invoice never touches its expense and vice versa.
+  function pkApiBase(kind) { return kind === 'invoice' ? '/api/invoices' : '/api/expenses'; }
+
+  function packetBlockHTML(kind, id, linked, suggestions, packetList) {
+    const chips = linked.map((p) => `
+      <span class="pill ring-1 bg-sage-100 text-sage-800 ring-sage-300">🌱 ${esc(p.variety_name)}
+        <button type="button" data-pk-detach="${kind}:${id}:${p.id}" class="ml-1 font-bold" title="Unlink packet">×</button>
+      </span>`).join('');
+    const suggBtns = suggestions.slice(0, 3).map((s) => `
+      <button type="button" data-pk-attach="${kind}:${id}:${s.packet_id}" class="text-xs text-sage-700 underline" title="Matched “${esc(s.matched_item)}”">+ ${esc(s.variety)}</button>`).join(' ');
+    const linkedIds = new Set(linked.map((p) => p.id));
+    const checks = packetList.map((p) => `
+      <label class="flex items-center gap-1.5 text-xs py-0.5 cursor-pointer"><input type="checkbox" data-pk-check="${kind}:${id}:${p.id}"${linkedIds.has(p.id) ? ' checked' : ''} class="accent-sage-700"> <span>${esc(p.variety_name)}${p.vendor_name ? ` <span class="text-navy-400">(${esc(p.vendor_name)})</span>` : ''}</span></label>`).join('');
+    return `<div class="mt-1.5 flex flex-wrap items-center gap-1.5">${chips}
+        <details class="text-xs"><summary class="text-sage-700 underline cursor-pointer">＋ link packets</summary>
+          <div class="mt-1 max-h-40 overflow-y-auto rounded-lg border border-beige-200 bg-white p-2">${checks || '<span class="text-navy-400">No seed packets yet.</span>'}</div>
+        </details></div>`
+      + (suggBtns ? `<div class="mt-1 text-xs text-navy-400">suggested: ${suggBtns}</div>` : '');
+  }
+
+  // Returns true when the event was a packet action (caller should stop).
+  async function handlePkClick(event, kind, reload) {
+    const attachBtn = event.target.closest('[data-pk-attach]');
+    if (attachBtn) {
+      const [k, oid, pid] = attachBtn.dataset.pkAttach.split(':');
+      if (k !== kind) return false;
+      try {
+        await api.post(`${pkApiBase(k)}/${oid}/packets`, { seed_packet_id: Number(pid) });
+        toast('Packet linked 🌱', 'ok');
+        reload();
+      } catch (error) { toast(`Could not link packet: ${error.message}`, 'err'); }
+      return true;
+    }
+    const detachBtn = event.target.closest('[data-pk-detach]');
+    if (detachBtn) {
+      const [k, oid, pid] = detachBtn.dataset.pkDetach.split(':');
+      if (k !== kind) return false;
+      try {
+        await api.del(`${pkApiBase(k)}/${oid}/packets/${pid}`);
+        toast('Packet unlinked.', 'ok');
+        reload();
+      } catch (error) { toast(`Could not unlink packet: ${error.message}`, 'err'); }
+      return true;
+    }
+    return false;
+  }
+
+  async function handlePkChange(event, kind, reload) {
+    const check = event.target.closest('[data-pk-check]');
+    if (!check) return false;
+    const [k, oid, pid] = check.dataset.pkCheck.split(':');
+    if (k !== kind) return false;
+    try {
+      if (check.checked) {
+        await api.post(`${pkApiBase(k)}/${oid}/packets`, { seed_packet_id: Number(pid) });
+        toast('Packet linked 🌱', 'ok');
+      } else {
+        await api.del(`${pkApiBase(k)}/${oid}/packets/${pid}`);
+        toast('Packet unlinked.', 'ok');
+      }
+      reload();
+    } catch (error) { toast(`Could not update packet link: ${error.message}`, 'err'); }
+    return true;
+  }
+
   function initCosts() {
     const form = $('#cost-form');
     if (!form) return;
@@ -26,13 +93,24 @@
     }
 
     async function load() {
-      const [expenses, plants] = await Promise.all([
+      const [expenses, plants, packets] = await Promise.all([
         api.get('/api/expenses/'),
         api.get('/api/plants/').catch(() => []),
+        api.get('/api/seed-packets/').catch(() => []),
       ]);
       const list = Array.isArray(expenses) ? expenses : [];
       lastList = list;
+      const packetList = Array.isArray(packets) ? packets : [];
       const plantNames = new Map((Array.isArray(plants) ? plants : []).map((p) => [p.id, p.variety_name]));
+      const linkData = await Promise.all(list.map(async (e) => {
+        const [linked, suggestions] = await Promise.all([
+          api.get(`/api/expenses/${e.id}/packets`).catch(() => []),
+          api.get(`/api/expenses/${e.id}/packet-suggestions`).catch(() => []),
+        ]);
+        return { id: e.id, linked, suggestions };
+      }));
+      const linksByExp = new Map(linkData.map((d) => [d.id, Array.isArray(d.linked) ? d.linked : []]));
+      const suggByExp = new Map(linkData.map((d) => [d.id, Array.isArray(d.suggestions) ? d.suggestions : []]));
       const sel = $('#cost-plant');
       if (sel && !sel.dataset.loaded) {
         sel.innerHTML = '<option value="">— whole garden —</option>' +
@@ -51,7 +129,7 @@
         <tr class="border-t border-beige-200">
           <td class="py-2 pr-3 whitespace-nowrap">${fmtDate(e.date)}</td>
           <td class="py-2 pr-3"><span class="pill">${esc(e.category)}</span></td>
-          <td class="py-2 pr-3">${esc(e.description || '—')}${e.plant_id && plantNames.get(e.plant_id) ? `<span class="block text-xs text-sage-700">🌱 ${esc(plantNames.get(e.plant_id))}</span>` : ''}${e.notes ? `<span class="block text-xs text-navy-400">${esc(e.notes)}</span>` : ''}</td>
+          <td class="py-2 pr-3">${esc(e.description || '—')}${e.plant_id && plantNames.get(e.plant_id) ? `<span class="block text-xs text-sage-700">🌱 ${esc(plantNames.get(e.plant_id))}</span>` : ''}${e.notes ? `<span class="block text-xs text-navy-400">${esc(e.notes)}</span>` : ''}${packetBlockHTML('expense', e.id, linksByExp.get(e.id) || [], suggByExp.get(e.id) || [], packetList)}</td>
           <td class="py-2 pr-3 text-right font-semibold">${money(e.amount)}</td>
           <td class="py-2 text-right whitespace-nowrap"><button type="button" data-edit-cost="${e.id}" class="text-xs text-sage-700 underline mr-2">edit</button><button type="button" data-del-cost="${e.id}" class="text-xs text-red-700 underline">delete</button></td>
         </tr>`).join('');
@@ -82,7 +160,12 @@
 
     $('#cost-cancel').addEventListener('click', resetCostForm);
 
+    $('#costs-rows').addEventListener('change', async (event) => {
+      await handlePkChange(event, 'expense', load);
+    });
+
     $('#costs-rows').addEventListener('click', async (event) => {
+      if (await handlePkClick(event, 'expense', load)) return;
       const editBtn = event.target.closest('[data-edit-cost]');
       if (editBtn) {
         const e = lastList.find((x) => String(x.id) === editBtn.dataset.editCost);
@@ -139,8 +222,6 @@
           [...expNames.entries()].map(([id, name]) => `<option value="${id}">${esc(name)}</option>`).join('');
         sel.dataset.loaded = '1';
       }
-      const packetOpts = '<option value="">+ link a seed packet…</option>' + packetList.map((p) =>
-        `<option value="${p.id}">${esc(p.variety_name)}${p.vendor_name ? ` (${esc(p.vendor_name)})` : ''}</option>`).join('');
       const linkData = await Promise.all(list.map(async (inv) => {
         const [linked, suggestions] = await Promise.all([
           api.get(`/api/invoices/${inv.id}/packets`).catch(() => []),
@@ -150,20 +231,7 @@
       }));
       const linksByInv = new Map(linkData.map((d) => [d.id, Array.isArray(d.linked) ? d.linked : []]));
       const suggByInv = new Map(linkData.map((d) => [d.id, Array.isArray(d.suggestions) ? d.suggestions : []]));
-      const packetBlock = (inv) => {
-        const linked = linksByInv.get(inv.id) || [];
-        const suggestions = suggByInv.get(inv.id) || [];
-        const chips = linked.map((p) => `
-          <span class="pill ring-1 bg-sage-100 text-sage-800 ring-sage-300">🌱 ${esc(p.variety_name)}
-            <button type="button" data-detach-packet="${inv.id}:${p.id}" class="ml-1 font-bold" title="Unlink packet">×</button>
-          </span>`).join('');
-        const suggBtns = suggestions.slice(0, 3).map((s) => `
-          <button type="button" data-attach-packet="${inv.id}:${s.packet_id}" class="text-xs text-sage-700 underline" title="Matched “${esc(s.matched_item)}”">+ ${esc(s.variety)}</button>`).join(' ');
-        return `<div class="mt-1.5 flex flex-wrap items-center gap-1.5">${chips}
-            <select class="inp !w-auto !py-1 !px-2 text-xs" data-packet-picker="${inv.id}" title="Link a seed packet">${packetOpts}</select>
-          </div>`
-          + (suggBtns ? `<div class="mt-1 text-xs text-navy-400">suggested: ${suggBtns}</div>` : '');
-      };
+      const packetBlock = (inv) => packetBlockHTML('invoice', inv.id, linksByInv.get(inv.id) || [], suggByInv.get(inv.id) || [], packetList);
       $('#invoices-empty').classList.toggle('hidden', list.length > 0);
       $('#invoices-rows').innerHTML = list.map((inv) => `
         <tr class="border-t border-beige-200">
@@ -206,6 +274,7 @@
     });
 
     $('#invoices-rows').addEventListener('click', async (event) => {
+      if (await handlePkClick(event, 'invoice', load)) return;
       const createExpBtn = event.target.closest('[data-create-expense]');
       if (createExpBtn) {
         try {
@@ -213,26 +282,6 @@
           toast('Expense created 💸', 'ok');
           load();
         } catch (error) { toast(`Could not create expense: ${error.message}`, 'err'); }
-        return;
-      }
-      const attachBtn = event.target.closest('[data-attach-packet]');
-      if (attachBtn) {
-        const [invId, pid] = attachBtn.dataset.attachPacket.split(':').map(Number);
-        try {
-          await api.post(`/api/invoices/${invId}/packets`, { seed_packet_id: pid });
-          toast('Packet linked 🌱', 'ok');
-          load();
-        } catch (error) { toast(`Could not link packet: ${error.message}`, 'err'); }
-        return;
-      }
-      const detachBtn = event.target.closest('[data-detach-packet]');
-      if (detachBtn) {
-        const [invId, pid] = detachBtn.dataset.detachPacket.split(':').map(Number);
-        try {
-          await api.del(`/api/invoices/${invId}/packets/${pid}`);
-          toast('Packet unlinked.', 'ok');
-          load();
-        } catch (error) { toast(`Could not unlink packet: ${error.message}`, 'err'); }
         return;
       }
       const btn = event.target.closest('[data-del-inv]');
@@ -246,14 +295,7 @@
     });
 
     $('#invoices-rows').addEventListener('change', async (event) => {
-      const picker = event.target.closest('[data-packet-picker]');
-      if (!picker || !picker.value) return;
-      const invId = Number(picker.dataset.packetPicker);
-      try {
-        await api.post(`/api/invoices/${invId}/packets`, { seed_packet_id: Number(picker.value) });
-        toast('Packet linked 🌱', 'ok');
-        load();
-      } catch (error) { toast(`Could not link packet: ${error.message}`, 'err'); }
+      await handlePkChange(event, 'invoice', load);
     });
 
     load().catch((error) => toast(`Could not load invoices: ${error.message}`, 'err'));
