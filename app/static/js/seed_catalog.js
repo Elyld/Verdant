@@ -57,8 +57,10 @@
     function filtered() {
       const q = ($('#catalog-search').value || '').toLowerCase();
       const cat = $('#catalog-category').value;
+      const photo = $('#catalog-photo').value;
       return packets.filter((p) =>
         (!cat || p.category === cat) &&
+        (!photo || (photo === 'with' ? !!p.photo_path : !p.photo_path)) &&
         (!q || `${p.variety_name} ${p.species_type} ${p.category}`.toLowerCase().includes(q)));
     }
 
@@ -95,6 +97,11 @@
       $('#packet-notes').value = packet ? (packet.notes || '') : '';
       $('#packet-photo').value = '';
       $('#packet-photo-back').value = '';
+      // Library attach needs an existing packet id, so it only shows when editing.
+      const isEdit = !!packet;
+      $('#packet-library-row').classList.toggle('hidden', !isEdit);
+      $('#packet-library-row').classList.toggle('flex', isEdit);
+      $('#packet-library-hint').classList.toggle('hidden', !isEdit);
       $('#packet-modal').classList.remove('hidden');
       $('#packet-modal').classList.add('flex');
       $('#packet-variety').focus();
@@ -122,6 +129,70 @@
     $('#packet-cancel').addEventListener('click', closeModal);
     $('#catalog-search').addEventListener('input', load);
     $('#catalog-category').addEventListener('change', load);
+    $('#catalog-photo').addEventListener('change', load);
+
+    // ---- Photo library picker ----
+    let libSide = 'front';
+
+    function closeLibraryPicker() {
+      $('#library-modal').classList.add('hidden');
+      $('#library-modal').classList.remove('flex');
+    }
+
+    async function loadLibraryImages() {
+      const albumId = $('#library-album').value;
+      const qs = albumId ? `?album_id=${encodeURIComponent(albumId)}&limit=200` : '?limit=200';
+      let imgs = [];
+      try {
+        const res = await api.get(`/api/album-images/${qs}`);
+        imgs = Array.isArray(res) ? res : [];
+      } catch (err) {
+        toast(err.message || 'Could not load photos.', 'error');
+      }
+      $('#library-empty').classList.toggle('hidden', imgs.length > 0);
+      $('#library-grid').innerHTML = imgs.map((img) =>
+        `<button type="button" data-lib-img="${img.id}" title="${esc(img.title || img.original_name || 'photo')}" class="overflow-hidden rounded-lg ring-1 ring-beige-200 hover:ring-2 hover:ring-sage-500">
+           <img src="${esc(img.file_path)}" alt="" class="h-28 w-full object-cover" loading="lazy" />
+         </button>`).join('');
+    }
+
+    async function openLibraryPicker(side) {
+      libSide = side;
+      $('#library-side-label').textContent = side === 'front' ? '— as front of packet' : '— as back of packet';
+      let albums = [];
+      try {
+        const res = await api.get('/api/albums');
+        albums = Array.isArray(res) ? res : [];
+      } catch (err) {
+        toast(err.message || 'Could not load albums.', 'error');
+      }
+      $('#library-album').innerHTML = '<option value="">All albums</option>' +
+        albums.map((a) => `<option value="${a.id}">${esc(a.name)}</option>`).join('');
+      await loadLibraryImages();
+      $('#library-modal').classList.remove('hidden');
+      $('#library-modal').classList.add('flex');
+    }
+
+    $('#packet-library-front').addEventListener('click', () => openLibraryPicker('front'));
+    $('#packet-library-back').addEventListener('click', () => openLibraryPicker('back'));
+    $('#library-close').addEventListener('click', closeLibraryPicker);
+    $('#library-album').addEventListener('change', loadLibraryImages);
+    $('#library-grid').addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-lib-img]');
+      if (!btn) return;
+      const packetId = $('#packet-id').value;
+      if (!packetId) return;
+      try {
+        await api.post(`/api/seed-packets/${packetId}/photo-from-library`,
+          { image_id: Number(btn.dataset.libImg), side: libSide });
+        toast(`${libSide === 'front' ? 'Front' : 'Back'} photo set from the library.`);
+        closeLibraryPicker();
+        closeModal();
+        load();
+      } catch (err) {
+        toast(err.message || 'Could not attach photo.', 'error');
+      }
+    });
 
     $('#packet-form').addEventListener('submit', async (e) => {
       e.preventDefault();

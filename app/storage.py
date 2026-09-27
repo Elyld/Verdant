@@ -108,3 +108,39 @@ def delete_stored(url_path: str) -> None:
         Path(candidate).unlink(missing_ok=True)
     except OSError:
         pass
+
+
+def copy_stored(src_url_path: str, subdir: str) -> str:
+    """Copy a previously-stored file into ``subdir`` under a random name.
+
+    Used to attach an existing library photo (e.g. an Immich import) to
+    something that owns its image lifecycle, like a seed packet: the copy
+    means replacing/deleting the packet photo never touches the original.
+    Returns the new public URL path (/uploads/...). Raises HTTPException
+    404 when the source is missing and 415 for a non-image source.
+    """
+    prefix = "/uploads/"
+    if not src_url_path.startswith(prefix):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Source photo not found.")
+    src = (UPLOAD_DIR / src_url_path[len(prefix) :]).resolve()
+    root = UPLOAD_DIR.resolve()
+    if root == src or root not in src.parents or not src.is_file():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Source photo not found.")
+    if src.stat().st_size > MAX_BYTES:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Source photo exceeds the {MAX_BYTES // (1024 * 1024)}MB limit.",
+        )
+    with src.open("rb") as f:
+        head = f.read(32)
+    kind = _sniff(head)
+    if kind not in ALLOWED_TYPES:
+        raise HTTPException(
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Source photo is not a supported image type.",
+        )
+    target_dir = UPLOAD_DIR / subdir
+    target_dir.mkdir(parents=True, exist_ok=True)
+    name = f"{secrets.token_hex(16)}{ALLOWED_TYPES[kind]}"
+    (target_dir / name).write_bytes(src.read_bytes())
+    return f"/uploads/{subdir}/{name}"

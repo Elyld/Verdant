@@ -54,6 +54,11 @@
           <div class="flex flex-wrap items-center gap-2">
             <input id="catalog-search" type="search" class="inp text-sm" placeholder="Search varieties…" />
             <select id="catalog-category" class="inp text-sm"><option value="">All types</option></select>
+            <select id="catalog-photo" class="inp text-sm" title="Filter by packet photo">
+              <option value="">All packets</option>
+              <option value="with">📷 With photos</option>
+              <option value="without">Without photos</option>
+            </select>
             <button type="button" id="catalog-from-sources" class="btn-ghost text-sm" title="Copy your seed sources into the stash as packets">📦 Move sources to stash</button>
             <button type="button" id="catalog-add" class="btn-primary text-sm">+ Add packet</button>
           </div>
@@ -83,12 +88,32 @@
               <label class="block"><span class="lbl">Packet photo</span><input id="packet-photo" type="file" accept="image/*" class="inp text-sm" /></label>
               <label class="block"><span class="lbl">Back of packet <span class="text-navy-400">(growing info)</span></span><input id="packet-photo-back" type="file" accept="image/*" class="inp text-sm" /></label>
             </div>
+            <div id="packet-library-row" class="hidden flex flex-wrap gap-2">
+              <button type="button" id="packet-library-front" class="btn-ghost text-sm">🖼️ Front from photo library</button>
+              <button type="button" id="packet-library-back" class="btn-ghost text-sm">🖼️ Back from photo library</button>
+            </div>
+            <p id="packet-library-hint" class="hidden text-xs text-navy-400">Pick a photo you already imported (e.g. from an Immich album) — a copy is attached to the packet, the original stays put.</p>
             <label class="block"><span class="lbl">Notes</span><textarea id="packet-notes" rows="2" class="inp" placeholder="Germination notes, lot number…"></textarea></label>
             <div class="flex gap-2">
               <button type="submit" class="btn-primary text-sm" id="packet-submit">Add packet</button>
               <button type="button" class="btn-ghost text-sm" id="packet-cancel">Cancel</button>
             </div>
           </form>
+        </div>
+      </div>
+      <!-- Photo library picker modal -->
+      <div id="library-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-navy-900/70 p-4">
+        <div class="card max-h-[90vh] w-full max-w-3xl space-y-4 overflow-y-auto">
+          <div class="flex items-center justify-between">
+            <h3 class="font-display text-lg font-semibold text-navy-800">Choose a photo <span id="library-side-label" class="text-sm font-normal text-navy-400"></span></h3>
+            <button type="button" id="library-close" class="btn-ghost text-sm">✕</button>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <select id="library-album" class="inp text-sm"><option value="">All albums</option></select>
+            <p class="text-xs text-navy-400">Import your Immich album on the Photos page first if it isn't listed here.</p>
+          </div>
+          <div id="library-grid" class="grid grid-cols-3 gap-2 sm:grid-cols-4"></div>
+          <p id="library-empty" class="hidden text-center text-sm text-navy-500">No photos in this album yet.</p>
         </div>
       </div>
     </section>
