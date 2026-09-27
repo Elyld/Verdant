@@ -36,10 +36,12 @@ on the plant's profile, with a lightbox on click.
 
 ![Plant photo gallery](docs/screenshots/plant-photos.png)
 
-### 👀 Observations — the daily log
+### 📝 Garden Logs — the daily log
 Log health (1–10), watering, pest sightings, and freeform notes per plant, per
-day — with photos attached. New observations are automatically stamped with the
-current weather at your garden (free Open-Meteo data, no API key needed).
+day — with photos attached. Feedings live here too, with the feeding form
+suggesting from your 🧪 Fertilizer shelf. New observations are automatically
+stamped with the current weather at your garden (free Open-Meteo data, no API
+key needed).
 
 ![Observation log](docs/screenshots/observations.png)
 
@@ -60,6 +62,11 @@ date, camera, GPS, and tags, and assign it to a plant with a keystroke.
 Bulk-assign a whole day's photos at once when you already know what they are.
 
 ![Match photos to plants](docs/screenshots/match.png)
+
+There's also a dedicated full-screen slideshow page — pick an album, pick an
+interval, and let the garden scroll by on a TV or tablet.
+
+![Full-screen slideshow](docs/screenshots/slideshow.png)
 
 ### 🌰 Seeds — sources & vendors
 Track where every seed came from: vendors, trades, or saved seed. Grouped by
@@ -194,6 +201,15 @@ before upgrades.
 
 ![Backup & restore](docs/screenshots/backup.png)
 
+### ⚙️ Settings — your garden's particulars
+USDA zone, last/first frost dates (exact dates beat zone averages), temperature
+units, which day your calendar week starts on, default harvest weight unit,
+slideshow autoplay interval, and the morning digest schedule — all on one page.
+The frost dates drive the "days to first frost" countdown in the header and
+tune the seed-starting calendar on the Plants page.
+
+![Settings](docs/screenshots/settings.png)
+
 ### 🌅 Morning Digest — Discord
 An optional daily "morning garden check" sent to a Discord channel via webhook:
 what's overdue, what's due today, what's coming up. Off by default — set
@@ -203,6 +219,39 @@ what's overdue, what's due today, what's coming up. Off by default — set
 Browse albums on your own Immich server and import their photos straight into
 Verdant — no downloading and re-uploading. Needs `IMMICH_BASE_URL` and
 `IMMICH_API_KEY` (see [Configuration](#configuration)).
+
+## Tips & tricks
+
+A few workflows that aren't obvious until you've lived in the app a while:
+
+- **NFC-tag everything you touch.** A tag on the fertilizer bottle opens the
+  feeding form with that product pre-selected; one on the seed binder opens
+  "add packet"; one per grow bag opens that plant's profile. Write the tag's
+  URL once with any NFC writer app — no app needed to read them.
+- **Quick Log belongs on your phone's home screen.** It's built for dirty
+  hands: one-tap watering per location, a harvest stepper, and it works fine
+  as a home-screen bookmark over your LAN.
+- **Match photos with the keyboard.** On the 🎯 Match photos page, `←`/`→`
+  flip through photos and number keys pick the plant — a 600-photo album goes
+  fast. Bulk-assign a whole day when you know what it is.
+- **Merge duplicates after an Immich import.** If an old import ran twice,
+  🧹 Merge duplicates folds the copies into the fullest album instead of you
+  deleting things by hand.
+- **Tag costs to a plant.** The Season scorecard can only split spending per
+  variety if purchases are tagged — do it at entry time and the year-end
+  "was it worth growing?" math is free.
+- **Photograph the back of the packet too.** The growing info on the reverse
+  is the part you actually need in April; the ⇄ flip button keeps both sides
+  on the packet card.
+- **Copy the season in the planner.** January: copy last season's layout,
+  drag things to their new spots, and the rotation check tells you where you
+  planted the same family last year.
+- **CSV imports are re-runnable.** The importer skips rows it already has
+  (exported IDs are preserved), so re-importing a fixed file never creates
+  duplicates. Import in the suggested order: locations → plants → the rest.
+- **Database-only backups are fast.** Uncheck the photos box for a small zip
+  you can grab before every upgrade; keep a full one with photos somewhere
+  safe monthly.
 
 ## Quick start (Docker — recommended)
 
