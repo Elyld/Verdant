@@ -177,6 +177,8 @@ the expense it documents.
 
 ![Costs](docs/screenshots/costs.png)
 
+![Invoices](docs/screenshots/invoices.png)
+
 ### 🐛 Pests — the treatment log
 What showed up, what you sprayed or squashed, and whether it worked — a
 running log per pest so next year's battle plan writes itself.
@@ -186,7 +188,7 @@ running log per pest so next year's battle plan writes itself.
 ### 📥 CSV Import — bring your own data
 Moving from another garden tracker? The **Import** page (nav bar → Import)
 walks you through it: pick what you're importing (locations, plants,
-fertilizers, seed sources, watering logs, fertilization logs, harvests),
+fertilizers, seed sources, watering logs, fertilization logs, harvests, invoices),
 upload the CSV, review a preview with row counts and warnings, then import.
 Imports are idempotent — re-running the same file skips what's already there,
 so you'll never get duplicates.
@@ -552,6 +554,10 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **Unreleased** — Fixed: the 🧾 Invoices section on the Costs page never
+  rendered its table (a script variable was used before its declaration),
+  so invoices now list correctly with PDF links and linked-expense badges.
+  The README tour gains a dedicated Invoices screenshot.
 - **2.19.0** — **🧾 Invoices** on the Costs page. Keep the paper trail for
   seed and supply orders: vendor, order date, order number, total, items,
   and the PDF receipt, each optionally linked to the expense it documents.
