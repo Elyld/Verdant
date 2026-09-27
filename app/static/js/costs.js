@@ -79,9 +79,9 @@
   }
 
   function initInvoices() {
+    const { $, esc, fmtDate, api, toast, todayLocal } = globalThis.Verdant;
     const form = $('#invoice-form');
     if (!form) return;
-    const { $, esc, fmtDate, api, toast, todayLocal } = globalThis.Verdant;
     const today = todayLocal();
     $('#inv-date').value = today;
     const money = (n) => `$${Number(n || 0).toFixed(2)}`;
