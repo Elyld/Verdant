@@ -31,6 +31,10 @@
       $('#set-first-frost').value = (s.frost_date || '').slice(0, 10);
       $('#set-last-frost').value = (s.last_frost_date || '').slice(0, 10);
       $('#set-temp-unit').value = s.temperature_unit || 'F';
+      $('#set-week-start').value = s.week_start || '0';
+      $('#set-weight-unit').value = s.default_weight_unit || 'oz';
+      $('#set-slideshow-interval').value = String(s.slideshow_interval || 5);
+      $('#set-confirm-water-all').checked = s.confirm_water_all !== false;
       $('#set-digest-enabled').checked = !!s.digest_enabled;
       $('#set-webhook').value = s.discord_webhook_url || '';
       $('#set-digest-time').value = s.digest_time || '08:00';
@@ -49,6 +53,10 @@
           discord_webhook_url: $('#set-webhook').value.trim(),
           digest_time: $('#set-digest-time').value || '08:00',
           temperature_unit: $('#set-temp-unit').value,
+          week_start: $('#set-week-start').value,
+          default_weight_unit: $('#set-weight-unit').value,
+          slideshow_interval: Number($('#set-slideshow-interval').value) || 5,
+          confirm_water_all: $('#set-confirm-water-all').checked,
         });
         renderPreview(saved.frost_preview);
         status.textContent = '';

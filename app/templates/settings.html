@@ -53,6 +53,45 @@
     </div>
 
     <div class="card space-y-4">
+      <h3 class="font-display text-lg font-semibold text-navy-800">✨ Preferences</h3>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <label class="block">
+          <span class="lbl">Calendar week starts on</span>
+          <select id="set-week-start" class="inp">
+            <option value="0">Sunday</option>
+            <option value="1">Monday</option>
+          </select>
+        </label>
+        <label class="block">
+          <span class="lbl">Default harvest weight unit</span>
+          <select id="set-weight-unit" class="inp">
+            <option value="oz">oz</option>
+            <option value="g">g</option>
+            <option value="lb">lb</option>
+            <option value="kg">kg</option>
+          </select>
+        </label>
+        <label class="block">
+          <span class="lbl">Slideshow autoplay interval</span>
+          <select id="set-slideshow-interval" class="inp">
+            <option value="3">3 seconds</option>
+            <option value="5">5 seconds</option>
+            <option value="10">10 seconds</option>
+            <option value="30">30 seconds</option>
+          </select>
+        </label>
+        <label class="flex items-center gap-2 text-sm text-navy-700 sm:pt-6">
+          <input id="set-confirm-water-all" type="checkbox" class="h-4 w-4 accent-sage-600" />
+          Confirm before “Water all” on Quick Log
+        </label>
+      </div>
+      <p class="text-xs text-navy-400">
+        The week-start day rearranges the calendar columns; the weight unit prefills the harvest form;
+        the confirm toggle guards against accidental taps of “Water all”.
+      </p>
+    </div>
+
+    <div class="card space-y-4">
       <h3 class="font-display text-lg font-semibold text-navy-800">🌅 Morning digest</h3>
       <label class="flex items-center gap-2 text-sm text-navy-700">
         <input id="set-digest-enabled" type="checkbox" class="h-4 w-4 accent-sage-600" />

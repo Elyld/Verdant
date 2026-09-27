@@ -174,7 +174,7 @@
     render();
   }
 
-  function openPlantModal(plant, timeline, locationName, matched) {
+  async function openPlantModal(plant, timeline, locationName, matched) {
     const modal = $('#plant-modal');
     if (!modal) return;
     modal.innerHTML = `<div class="modal-backdrop" data-close></div><div class="modal-card modal-wide card" role="dialog" aria-modal="true" aria-label="${esc(plant.variety_name)}">${plantModalHtml(plant, timeline, locationName, matched)}</div>`;
@@ -183,6 +183,12 @@
     modal.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
     wireTimelapse(modal, timeline.photos || []);
+    // Prefill the harvest form's weight unit from Preferences.
+    try {
+      const unit = (await globalThis.Verdant.getSettings()).default_weight_unit;
+      const sel = modal.querySelector('[data-hv-weight-unit]');
+      if (unit && sel) sel.value = unit;
+    } catch { /* preference is supplementary */ }
   }
 
   function closePlantModal() {

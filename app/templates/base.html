@@ -8,6 +8,10 @@
 <link rel="icon" type="image/svg+xml" href="/static/img/logo-placeholder.svg" />
 <!-- LOGO: the favicon above points at the placeholder SVG. When the real logo arrives,
      either replace app/static/img/logo-placeholder.svg with it, or point href at the new file. -->
+<!-- Typography: Newsreader (display serif) + Source Sans 3 (body), mirroring the Verdant demo look. -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600;6..72,700&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
   tailwind.config = {
@@ -16,11 +20,11 @@
         colors: {
           sage: { 50: '#f2f6f1', 100: '#e2ebdf', 200: '#c6d8c1', 300: '#a4c09d', 400: '#82a87b', 500: '#688d61', 600: '#51704c', 700: '#41593d', 800: '#334631', 900: '#233022' },
           navy: { 50: '#eef2f7', 100: '#d6e0ec', 200: '#adc0d7', 300: '#7d97b9', 400: '#4f6d94', 500: '#2f4f75', 600: '#233d5c', 700: '#1b3049', 800: '#142337', 900: '#0d1725' },
-          beige: { 50: '#fdfbf6', 100: '#f8f2e6', 200: '#efe4cd', 300: '#e3d3b0', 400: '#d3bd8d', 500: '#c0a469', 600: '#a4884f', 700: '#816b3e', 800: '#5d4d2d', 900: '#3a301c' }
+          beige: { 50: '#fbfcf8', 100: '#f5f0e2', 200: '#efe4cd', 300: '#e3d3b0', 400: '#d3bd8d', 500: '#c0a469', 600: '#a4884f', 700: '#816b3e', 800: '#5d4d2d', 900: '#3a301c' }
         },
         fontFamily: {
-          display: ['Georgia', 'Cambria', 'Times New Roman', 'serif'],
-          body: ['ui-sans-serif', 'system-ui', 'Segoe UI', 'Helvetica', 'Arial', 'sans-serif']
+          display: ['Newsreader', 'Georgia', 'Cambria', 'Times New Roman', 'serif'],
+          body: ['"Source Sans 3"', 'ui-sans-serif', 'system-ui', 'Segoe UI', 'Helvetica', 'Arial', 'sans-serif']
         },
         boxShadow: { botanical: '0 10px 30px -12px rgba(20,35,55,0.35)' }
       }
@@ -36,7 +40,7 @@
 
   <!-- Header -->
   {% block header %}
-  <header class="bg-navy-800 text-beige-100 shadow-botanical">
+  <header class="site-header text-beige-100 shadow-botanical">
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
       <div class="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
         <div class="flex items-center gap-3">

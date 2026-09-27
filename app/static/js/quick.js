@@ -3,7 +3,7 @@
   'use strict';
 
   const { $, $$, esc, fmtDate, fmtDateTime, api, toast, markdown,
-            uploadFiles, wireDraft, renderStats, healthBar, todayLocal } = globalThis.Verdant;
+            uploadFiles, wireDraft, renderStats, healthBar, todayLocal, getSettings } = globalThis.Verdant;
 
   function initQuick() {
     const host = $('#quick-groups');
@@ -29,6 +29,9 @@
 
     async function waterLocation(plants, btn) {
       try {
+        const settings = await getSettings();
+        if (settings.confirm_water_all !== false
+            && !window.confirm(`Water all ${plants.length} plants in this location?`)) return;
         await Promise.all(plants.map((p) => api.post('/api/watering-logs/', { plant_id: p.id, location_id: p.location_id || null, date: today })));
         toast(`Watered ${plants.length} plants 💧`, 'ok');
         flash(btn);

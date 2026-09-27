@@ -198,6 +198,19 @@
   function onBoot(fn) { inits.push(fn); }
   function onBootLate(fn) { lateInits.push(fn); }
 
+  // Cached app settings (week_start, default_weight_unit, slideshow_interval,
+  // confirm_water_all, ...). Fetched once per page load; never rejects.
+  let _settings = null;
+  async function getSettings() {
+    if (_settings) return _settings;
+    try {
+      _settings = await api.get('/api/settings');
+    } catch (error) {
+      _settings = {};
+    }
+    return _settings;
+  }
+
   function boot() {
     setVersion();
     setActiveNavigation();
@@ -210,6 +223,7 @@
   globalThis.Verdant = {
     $, $$, esc, fmtDate, fmtDateTime, fmtAmount, tempUnit, fmtTemp, api, toast, markdown,
     uploadFiles, wireDraft, renderStats, healthBar, plantCard, onBoot, onBootLate, todayLocal,
+    getSettings,
   };
 
   document.addEventListener('DOMContentLoaded', boot);

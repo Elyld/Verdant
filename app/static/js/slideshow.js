@@ -3,7 +3,7 @@
   'use strict';
 
   const { $, $$, esc, fmtDate, fmtDateTime, api, toast, markdown,
-            uploadFiles, wireDraft, renderStats, healthBar, plantCard } = globalThis.Verdant;
+            uploadFiles, wireDraft, renderStats, healthBar, plantCard, getSettings } = globalThis.Verdant;
 
   /* ------------------------------ Slideshow ------------------------------ */
 
@@ -21,6 +21,12 @@
     let slides = [];
     let index = 0;
     let timer = null;
+
+    // Default the interval select from Preferences.
+    getSettings().then((s) => {
+      const v = Number(s.slideshow_interval);
+      if ([3, 5, 10, 30].includes(v)) intervalSel.value = String(v);
+    }).catch(() => {});
 
     function exifLine(slide) {
       const bits = [];
