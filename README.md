@@ -1,4 +1,4 @@
-# 🌿 Verdant — Self-Hosted Garden Journal (v2.16.0)
+# 🌿 Verdant — Self-Hosted Garden Journal (v2.16.1)
 
 Your garden, logged. Plant profiles with care reminders, a daily observation log
 with a calendar heatmap, photo albums with slideshows, a seed stash and seedling
@@ -499,6 +499,10 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.16.1** — The photo-library picker now works when *adding* a packet too:
+  pick a front/back photo on the add form and it's attached automatically when
+  the packet is saved (a ✓ marks your pick until then). Previously the picker
+  only appeared when editing an existing packet.
 - **2.16.0** — Seed packets meet the photo library. A packet's front/back
   photo can now be picked from photos already in Verdant — e.g. an Immich
   album of packet shots — instead of only uploading a file. New
