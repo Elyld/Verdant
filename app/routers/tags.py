@@ -26,7 +26,9 @@ TAG_DESTINATIONS = {
 
 def tag_destination(tag: GardenTag) -> str:
     template = TAG_DESTINATIONS.get(tag.action, "/quick")
-    return template.format(id=tag.target_id or "", text=tag.target_text or "")
+    # Chained replace (not str.format): a "{" or "}" in a product/plant name
+    # must not 500 the NFC tap redirect.
+    return template.replace("{id}", str(tag.target_id or "")).replace("{text}", tag.target_text or "")
 
 
 def _get_or_404(session: Session, tag_id: int) -> GardenTag:

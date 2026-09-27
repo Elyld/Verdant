@@ -62,11 +62,15 @@
     document.body.style.overflow = '';
   }
 
-  function initCalendar() {
+  async function initCalendar() {
     const grid = $('#calendar-grid');
     if (!grid) return;
-    const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    api.get('/api/stats/calendar').then((observations) => {
+    const { getSettings } = globalThis.Verdant;
+    const weekStart = Number((await getSettings()).week_start || 0);
+    const base = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const weekdays = base.slice(weekStart).concat(base.slice(0, weekStart));
+    try {
+      const observations = await api.get('/api/stats/calendar');
       const byDate = new Map();
       observations.forEach((item) => {
         const key = String(item.date).slice(0, 10);
@@ -81,7 +85,8 @@
       grid.innerHTML = months.map((monthDate) => {
         const year = monthDate.getFullYear();
         const month = monthDate.getMonth();
-        const cells = Array(monthDate.getDay()).fill('<div class="calendar-day calendar-empty"></div>');
+        const leadBlanks = (monthDate.getDay() - weekStart + 7) % 7;
+        const cells = Array(leadBlanks).fill('<div class="calendar-day calendar-empty"></div>');
         const days = new Date(year, month + 1, 0).getDate();
         for (let day = 1; day <= days; day += 1) {
           const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -110,7 +115,9 @@
         if (ev.key === 'Escape') closeDayModal();
       });
       if (!observations.length) $('#calendar-empty')?.classList.remove('hidden');
-    }).catch((error) => { grid.innerHTML = `<div class="card text-red-700">Could not load calendar: ${esc(error.message)}</div>`; });
+    } catch (error) {
+      grid.innerHTML = `<div class="card text-red-700">Could not load calendar: ${esc(error.message)}</div>`;
+    }
   }
 
   globalThis.Verdant.onBoot(initCalendar);

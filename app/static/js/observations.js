@@ -3,13 +3,13 @@
   'use strict';
 
   const { $, $$, esc, fmtDate, fmtDateTime, fmtAmount, tempUnit, fmtTemp, api, toast, markdown,
-            uploadFiles, wireDraft, renderStats, healthBar, plantCard } = globalThis.Verdant;
+            uploadFiles, wireDraft, renderStats, healthBar, plantCard, todayLocal } = globalThis.Verdant;
 
   function initLogs() {
     const fertForm = $('#fert-form');
     const obsForm = $('#obs-form');
     if (!fertForm || !obsForm) return {};
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayLocal();
     $('#fert-date').value ||= today;
     $('#obs-date').value ||= new URLSearchParams(location.search).get('date') || today;
     let ferts = [];

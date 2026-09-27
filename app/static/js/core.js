@@ -10,6 +10,13 @@
   const fmtDate = (iso) => iso
     ? new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
     : '—';
+  // Local YYYY-MM-DD for defaulting date inputs. toISOString() is UTC and
+  // goes a day back after 7pm Central — this one doesn't.
+  const todayLocal = () => {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
   const fmtDateTime = (iso) => iso
     ? new Date(/[zZ]|[+-]\d\d:\d\d$/.test(iso) ? iso : `${iso}Z`).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
     : '—';
@@ -78,6 +85,7 @@
       info: 'bg-navy-800 text-beige-50 ring-navy-600',
       ok: 'bg-sage-700 text-beige-50 ring-sage-500',
       err: 'bg-red-800 text-beige-50 ring-red-600',
+      error: 'bg-red-800 text-beige-50 ring-red-600',
     };
     const el = document.createElement('div');
     el.className = `pointer-events-auto rounded-xl px-4 py-3 text-sm shadow-botanical ring-1 ${tones[kind]}`;
@@ -190,6 +198,19 @@
   function onBoot(fn) { inits.push(fn); }
   function onBootLate(fn) { lateInits.push(fn); }
 
+  // Cached app settings (week_start, default_weight_unit, slideshow_interval,
+  // confirm_water_all, ...). Fetched once per page load; never rejects.
+  let _settings = null;
+  async function getSettings() {
+    if (_settings) return _settings;
+    try {
+      _settings = await api.get('/api/settings');
+    } catch (error) {
+      _settings = {};
+    }
+    return _settings;
+  }
+
   function boot() {
     setVersion();
     setActiveNavigation();
@@ -201,7 +222,8 @@
 
   globalThis.Verdant = {
     $, $$, esc, fmtDate, fmtDateTime, fmtAmount, tempUnit, fmtTemp, api, toast, markdown,
-    uploadFiles, wireDraft, renderStats, healthBar, plantCard, onBoot, onBootLate,
+    uploadFiles, wireDraft, renderStats, healthBar, plantCard, onBoot, onBootLate, todayLocal,
+    getSettings,
   };
 
   document.addEventListener('DOMContentLoaded', boot);

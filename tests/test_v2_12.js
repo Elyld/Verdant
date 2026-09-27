@@ -94,6 +94,7 @@ globalThis.Verdant = {
   },
   toast: (m) => seenToasts.push(String(m)),
   fmtDate: (s) => s,
+  todayLocal: () => '2026-09-26',
 };
 
 const tick = (ms) => new Promise((r) => setTimeout(r, ms));

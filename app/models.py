@@ -1,11 +1,14 @@
 """SQLModel table definitions for the Gardening Blog & Observation Log."""
 
+import re
 import secrets
 from datetime import date as Date
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
+import sqlalchemy as sa
+from fastapi import HTTPException
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -239,7 +242,7 @@ class Expense(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     date: str = Field(index=True, default="")  # ISO YYYY-MM-DD
-    category: str = Field(default="Supplies", index=True)  # Seeds, Soil, Fertilizer, Tools, Plants, Other
+    category: str = Field(default="Supplies", index=True)  # Seeds, Soil, Fertilizer, Tools, Plants, Supplies, Other
     description: str = Field(default="")
     amount: float = Field(default=0.0)  # dollars
     notes: Optional[str] = None
@@ -407,3 +410,97 @@ class SeedlingBatch(SQLModel, table=True):
     # sowing → germinating → growing → hardening → transplanted → finished | failed
     transplant_date: str = Field(default="")  # ISO
     notes: str = Field(default="")
+
+
+# --------------------------------------------------------------------------- #
+# PATCH helper
+# --------------------------------------------------------------------------- #
+_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _coerce_patch_value(key: str, value: Any, col: sa.Column) -> Any:
+    """Coerce one PATCH value to its column type; 422 on garbage."""
+    if value is None:
+        if col.nullable:
+            return None
+        raise HTTPException(422, f"{key}: null is not allowed here.")
+    col_type = col.type
+    if isinstance(col_type, sa.Date):
+        if isinstance(value, Date):
+            return value
+        text = str(value).strip()
+        try:
+            return Date.fromisoformat(text)
+        except ValueError:
+            raise HTTPException(422, f"{key}: {value!r} is not a valid YYYY-MM-DD date.")
+    if isinstance(col_type, sa.Boolean):
+        if isinstance(value, bool):
+            return value
+        text = str(value).strip().lower()
+        if text in ("true", "1", "yes"):
+            return True
+        if text in ("false", "0", "no"):
+            return False
+        raise HTTPException(422, f"{key}: {value!r} is not true/false.")
+    if isinstance(col_type, sa.Integer):
+        if isinstance(value, bool):
+            raise HTTPException(422, f"{key}: {value!r} is not a whole number.")
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            if value.is_integer():
+                return int(value)
+            raise HTTPException(422, f"{key}: {value!r} is not a whole number.")
+        try:
+            return int(str(value).strip())
+        except (ValueError, TypeError):
+            raise HTTPException(422, f"{key}: {value!r} is not a whole number.")
+    if isinstance(col_type, (sa.Float, sa.Numeric)):
+        if isinstance(value, bool):
+            raise HTTPException(422, f"{key}: {value!r} is not a number.")
+        if isinstance(value, (int, float)):
+            return value
+        try:
+            return float(str(value).strip())
+        except (ValueError, TypeError):
+            raise HTTPException(422, f"{key}: {value!r} is not a number.")
+    # String columns. Dates are stored as ISO strings by convention, so a
+    # date object becomes ISO and a non-empty date-ish string must parse.
+    if isinstance(value, Date) and (key == "date" or key.endswith("_date")):
+        return value.isoformat()
+    if isinstance(value, str) and (key == "date" or key.endswith("_date")):
+        text = value.strip()
+        if text and not _ISO_DATE_RE.match(text):
+            raise HTTPException(422, f"{key}: {value!r} is not a valid YYYY-MM-DD date.")
+        try:
+            if text:
+                Date.fromisoformat(text)
+        except ValueError:
+            raise HTTPException(422, f"{key}: {value!r} is not a valid YYYY-MM-DD date.")
+        return text
+    return value
+
+
+def apply_patch(obj: SQLModel, payload: Dict[str, Any], exclude: tuple = ()) -> None:
+    """Apply a JSON PATCH payload onto a table row, safely.
+
+    Only real table columns are assigned: relationship names (``plant``,
+    ``images``…) and unknown keys are ignored instead of poisoning the
+    session and 500ing at commit. Primary keys and any ``exclude``d public
+    IDs (``harvest_id``…) are protected from overwrite. Values are coerced
+    to the column's type — ISO ``YYYY-MM-DD`` for Date columns, numbers
+    for Integer/Float columns — raising ``HTTPException`` 422 on bad
+    input instead of storing garbage that 500s on later reads.
+
+    The object is expected to be attached to the caller's session; the
+    caller commits.
+    """
+    table = type(obj).__table__
+    excluded = set(exclude)
+    for key, value in payload.items():
+        if key not in table.columns:
+            continue  # relationship name or unknown key: ignore, don't 500
+        col = table.columns[key]
+        if col.primary_key or key in excluded:
+            continue
+        setattr(obj, key, _coerce_patch_value(key, value, col))

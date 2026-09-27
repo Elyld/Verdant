@@ -3,7 +3,7 @@
   'use strict';
 
   const { $, $$, esc, fmtDate, fmtDateTime, api, toast, markdown,
-            uploadFiles, wireDraft, renderStats, healthBar, plantCard } = globalThis.Verdant;
+            uploadFiles, wireDraft, renderStats, healthBar, plantCard, todayLocal } = globalThis.Verdant;
 
   /* ------------------------------ Plants ------------------------------ */
 
@@ -69,7 +69,7 @@
     const photos = timeline.photos || [];
     const harvests = events.filter((e) => e.kind === 'harvest');
     const matchedPhotos = Array.isArray(matched) ? matched : [];
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayLocal();
     return `
       <div class="mb-4 flex items-start justify-between gap-3">
         <div>
@@ -174,7 +174,7 @@
     render();
   }
 
-  function openPlantModal(plant, timeline, locationName, matched) {
+  async function openPlantModal(plant, timeline, locationName, matched) {
     const modal = $('#plant-modal');
     if (!modal) return;
     modal.innerHTML = `<div class="modal-backdrop" data-close></div><div class="modal-card modal-wide card" role="dialog" aria-modal="true" aria-label="${esc(plant.variety_name)}">${plantModalHtml(plant, timeline, locationName, matched)}</div>`;
@@ -183,6 +183,12 @@
     modal.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
     wireTimelapse(modal, timeline.photos || []);
+    // Prefill the harvest form's weight unit from Preferences.
+    try {
+      const unit = (await globalThis.Verdant.getSettings()).default_weight_unit;
+      const sel = modal.querySelector('[data-hv-weight-unit]');
+      if (unit && sel) sel.value = unit;
+    } catch { /* preference is supplementary */ }
   }
 
   function closePlantModal() {
@@ -198,7 +204,7 @@
   function initPlants() {
     const grid = $('#plant-grid');
     if (!grid) return {};
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayLocal();
     let plants = [];
     let locations = [];
     let editingId = null;

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session, select
 
 from app.database import get_session
-from app.models import FertilizationLog
+from app.models import FertilizationLog, apply_patch
 from app.schemas import FertilizationCreate, FertilizationRead, FertilizationUpdate
 
 router = APIRouter(prefix="/api/fertilizations", tags=["fertilizations"])
@@ -39,7 +39,9 @@ def list_logs(
 def create_log(
     payload: FertilizationCreate, session: Session = Depends(get_session)
 ) -> FertilizationLog:
-    log = FertilizationLog(**payload.model_dump())
+    data = payload.model_dump()
+    data["date"] = data["date"].isoformat()
+    log = FertilizationLog(**data)
     log.fertilizer_name = log.fertilizer_name.strip()
     session.add(log)
     session.commit()
@@ -57,8 +59,7 @@ def update_log(
     log_id: int, payload: FertilizationUpdate, session: Session = Depends(get_session)
 ) -> FertilizationLog:
     log = _get_or_404(session, log_id)
-    for key, value in payload.model_dump(exclude_unset=True).items():
-        setattr(log, key, value)
+    apply_patch(log, payload.model_dump(exclude_unset=True))
     session.add(log)
     session.commit()
     session.refresh(log)

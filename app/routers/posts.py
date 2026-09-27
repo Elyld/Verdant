@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from sqlmodel import Session, delete, func, select
+from sqlmodel import Session, func, select
 
 from app.database import get_session
 from app.models import Post, PostImage, utcnow
@@ -111,13 +111,3 @@ def delete_post_image(
     session.delete(image)
     session.commit()
     delete_stored(path)
-
-
-@router.delete("", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
-def clear_posts(session: Session = Depends(get_session)) -> None:
-    """Delete every post, its images, and the files on disk."""
-    for path in session.exec(select(PostImage.file_path)).all():
-        delete_stored(path)
-    session.execute(delete(PostImage))
-    session.execute(delete(Post))
-    session.commit()

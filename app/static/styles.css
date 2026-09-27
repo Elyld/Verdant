@@ -1,5 +1,14 @@
 /* Verdant — component classes layered on top of Tailwind CDN utilities.
-   Palette: sage green (#688d61 family), navy blue (#233d5c family), beige (#f8f2e6 family). */
+   Palette: sage green (#688d61 family), navy blue (#233d5c family), beige (#f8f2e6 family).
+   Typography: Newsreader (display serif) + Source Sans 3 (body), after the Verdant demo. */
+
+/* Editorial display type: tight letterspacing like the demo. */
+.font-display { letter-spacing: -0.015em; }
+
+/* Deep-forest header gradient. */
+.site-header {
+  background: #142337;
+}
 
 .leaf-bg {
   background-image:
@@ -109,7 +118,8 @@
 /* Minimal markdown typography for rendered post bodies */
 .md { color: #1b3049; line-height: 1.65; }
 .md h1, .md h2, .md h3 {
-  font-family: Georgia, Cambria, serif;
+  font-family: Newsreader, Georgia, Cambria, serif;
+  letter-spacing: -0.015em;
   color: #142337;
   font-weight: 600;
   margin: 1rem 0 0.4rem;

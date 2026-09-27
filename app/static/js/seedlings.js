@@ -2,7 +2,7 @@
 (() => {
   'use strict';
 
-  const { $, esc, api, toast } = globalThis.Verdant;
+  const { $, esc, api, toast, todayLocal } = globalThis.Verdant;
 
   const STATUS_LABELS = {
     sowing: '🌱 Sowing',
@@ -36,7 +36,7 @@
     let packets = [];
     let editingId = null;
 
-    const todayISO = () => new Date().toISOString().slice(0, 10);
+    const todayISO = () => todayLocal();
     function daysBetween(aISO, bISO) {
       const ms = new Date(bISO + 'T12:00:00') - new Date(aISO + 'T12:00:00');
       return Math.round(ms / 86400000);

@@ -174,6 +174,15 @@ def import_immich_album(
         album = session.get(Album, album_id)
         if album is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Local album not found.")
+        # Don't mix Immich imports into an album that came from somewhere
+        # else (URL import, manual uploads): photos would land in the wrong
+        # album with no way back.
+        expected_source = f"immich:{immich_album_id}"
+        if album.source_url and album.source_url != expected_source:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                detail=f"Album '{album.name}' was not imported from this Immich album.",
+            )
 
     target_dir = UPLOAD_DIR / f"albums/{album.id}"
     target_dir.mkdir(parents=True, exist_ok=True)

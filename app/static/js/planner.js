@@ -246,14 +246,14 @@
       }
       const cur = forecast.current;
       const days = forecast.daily || [];
-      const tonight = days[0] ? fmtTemp(days[0].tmin_f) : '—';
+      const tonight = days[0] ? fmtTemp(days[0].tmin_c ?? days[0].tmin_f) : '—';
       const tm = days[1] || days[0] || {};
       const rain = tm.precip_prob != null ? `${tm.precip_prob}%` : '—';
       const gust = tm.gust_mph != null ? `${Math.round(tm.gust_mph)} mph` : '—';
       strip.innerHTML =
-        `<span class="font-semibold">${fmtTemp(cur.temp_f)} ${esc(cur.summary || '')}</span>` +
+        `<span class="font-semibold">${fmtTemp(cur.temp_c ?? cur.temp_f)} ${esc(cur.summary || '')}</span>` +
         `<span class="text-beige-300">·</span><span>🌙 Tonight ${tonight}</span>` +
-        `<span class="text-beige-300">·</span><span>☀️ Tomorrow ${fmtTemp(tm.tmax_f)}</span>` +
+        `<span class="text-beige-300">·</span><span>☀️ Tomorrow ${fmtTemp(tm.tmax_c ?? tm.tmax_f)}</span>` +
         `<span class="text-beige-300">·</span><span>💧 ${rain}</span>` +
         `<span class="text-beige-300">·</span><span>💨 ${gust}</span>` +
         `<span class="ml-auto text-xs text-beige-300">as of ${fmtTime(forecast.as_of)}</span>`;

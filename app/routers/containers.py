@@ -10,7 +10,7 @@ from sqlmodel import SQLModel
 from app import frost as frost_mod
 from app import units as units_mod
 from app.database import get_session
-from app.models import Container, Harvest, Plant, Planting
+from app.models import Container, Harvest, Location, Plant, Planting, apply_patch
 
 router = APIRouter(prefix="/api/containers", tags=["containers"])
 
@@ -84,8 +84,12 @@ def _rects_overlap(ax, ay, aw, ah, bx, by, bw, bh) -> bool:
 
 
 def first_free_spot(session: Session, year: int, w: int, h: int, cols: int, rows: int,
-                    ignore_id: Optional[int] = None) -> tuple:
-    """Scan for the first grid position that doesn't overlap existing containers."""
+                    ignore_id: Optional[int] = None) -> Optional[tuple]:
+    """Scan for the first grid position that doesn't overlap existing containers.
+
+    Returns None when the grid is completely full — callers must not stack a
+    new container on top of the others at (0, 0).
+    """
     others = session.query(Container).filter(Container.season_year == year).all()
     rects = [(c.grid_x or 0, c.grid_y or 0, c.grid_w or 1, c.grid_h or 1)
              for c in others if c.id != ignore_id and c.grid_x is not None]
@@ -93,7 +97,28 @@ def first_free_spot(session: Session, year: int, w: int, h: int, cols: int, rows
         for gx in range(0, cols - w + 1):
             if not any(_rects_overlap(gx, gy, w, h, *r) for r in rects):
                 return gx, gy
-    return 0, 0
+    return None
+
+
+def _assert_no_overlap(session: Session, container: Container) -> None:
+    """The planner canvas never stacks containers: reject overlapping moves."""
+    if container.grid_x is None or container.grid_y is None:
+        return
+    w, h = container.grid_w or 1, container.grid_h or 1
+    others = session.query(Container).filter(
+        Container.season_year == container.season_year,
+        Container.id != container.id,
+        Container.grid_x.isnot(None),
+    ).all()
+    for other in others:
+        if _rects_overlap(
+            container.grid_x, container.grid_y, w, h,
+            other.grid_x or 0, other.grid_y or 0, other.grid_w or 1, other.grid_h or 1,
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail=f"That spot overlaps '{other.name}' on the planner grid.",
+            )
 
 
 def backfill_grids(session: Session, containers: List[Container]) -> None:
@@ -340,7 +365,13 @@ def create_container(payload: dict, session: Session = Depends(get_session)) -> 
         h = max(1, min(rows, int(payload.get("grid_h", dh))))
     except (TypeError, ValueError):
         w, h = dw, dh
-    gx, gy = first_free_spot(session, year, w, h, cols, rows)
+    spot = first_free_spot(session, year, w, h, cols, rows)
+    if spot is None:
+        raise HTTPException(
+            status_code=409,
+            detail="The planner grid is full — make room or enlarge the grid in Settings.",
+        )
+    gx, gy = spot
     raw_h = payload.get("height_ft")
     try:
         height_ft = float(raw_h) if raw_h not in (None, "") else default_height(kind)
@@ -348,19 +379,35 @@ def create_container(payload: dict, session: Session = Depends(get_session)) -> 
         height_ft = default_height(kind)
     if height_ft is not None:
         height_ft = max(0.5, height_ft)
+    raw_volume = payload.get("volume_value")
+    try:
+        volume_value = float(raw_volume) if raw_volume not in (None, "") else None
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail=f"volume_value {raw_volume!r} is not a number.")
+    try:
+        x = float(payload.get("x", 10))
+        y = float(payload.get("y", 10))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="x/y canvas positions must be numbers.")
+    location_id = payload.get("location_id")
+    if location_id is not None and not session.get(Location, location_id):
+        raise HTTPException(status_code=404, detail=f"Location {location_id} not found")
+    plant_id = payload.get("plant_id")
+    if plant_id is not None and not session.get(Plant, plant_id):
+        raise HTTPException(status_code=404, detail=f"Plant {plant_id} not found")
     container = Container(
         name=name,
         kind=kind,
         size=size,
-        volume_value=payload.get("volume_value"),
+        volume_value=volume_value,
         volume_unit=(payload.get("volume_unit") or "").strip().lower(),
         height_ft=height_ft,
-        location_id=payload.get("location_id"),
+        location_id=location_id,
         season_year=year,
-        x=float(payload.get("x", 10)),
-        y=float(payload.get("y", 10)),
+        x=x,
+        y=y,
         grid_x=gx, grid_y=gy, grid_w=w, grid_h=h,
-        plant_id=payload.get("plant_id"),
+        plant_id=plant_id,
         soil_notes=(payload.get("soil_notes") or "").strip(),
     )
     session.add(container)
@@ -379,15 +426,24 @@ def update_container(
     container_id: int, payload: dict, session: Session = Depends(get_session)
 ) -> Container:
     container = _get_or_404(session, container_id)
-    for key, value in payload.items():
-        if hasattr(container, key) and key != "id":
-            if key in ("grid_x", "grid_y") and value is not None:
-                value = max(0, int(value))
-            if key in ("grid_w", "grid_h") and value is not None:
-                value = max(1, int(value))
-            if key == "height_ft":
-                value = None if value in (None, "") else max(0.5, float(value))
-            setattr(container, key, value)
+    payload = dict(payload)
+    # "" clears an optional height; anything else must be numeric.
+    if payload.get("height_ft") == "":
+        payload["height_ft"] = None
+    apply_patch(container, payload)
+    # Keep the planner invariants the canvas relies on.
+    if container.grid_x is not None:
+        container.grid_x = max(0, container.grid_x)
+    if container.grid_y is not None:
+        container.grid_y = max(0, container.grid_y)
+    if container.grid_w is not None:
+        container.grid_w = max(1, container.grid_w)
+    if container.grid_h is not None:
+        container.grid_h = max(1, container.grid_h)
+    if container.height_ft is not None:
+        container.height_ft = max(0.5, container.height_ft)
+    if any(k in payload for k in ("grid_x", "grid_y", "grid_w", "grid_h")):
+        _assert_no_overlap(session, container)
     session.add(container)
     session.commit()
     session.refresh(container)

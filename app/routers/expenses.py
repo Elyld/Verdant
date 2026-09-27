@@ -4,10 +4,21 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_session
-from app.models import Expense
+from app.models import Expense, apply_patch
 from app.schemas import ExpenseCreate, ExpenseRead
 
 router = APIRouter(prefix="/api/expenses", tags=["expenses"])
+
+# Must match the category dropdown on the /costs page.
+EXPENSE_CATEGORIES = ("Seeds", "Soil", "Fertilizer", "Tools", "Plants", "Supplies", "Other")
+
+
+def _check_category(category: str) -> None:
+    if category not in EXPENSE_CATEGORIES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown category {category!r} (want one of: {', '.join(EXPENSE_CATEGORIES)}).",
+        )
 
 
 def _get_or_404(session: Session, expense_id: int) -> Expense:
@@ -33,6 +44,7 @@ def create_expense(
     payload: ExpenseCreate,
     session: Session = Depends(get_session),
 ) -> Expense:
+    _check_category(payload.category)
     expense = Expense(
         date=payload.date.isoformat(),
         category=payload.category,
@@ -54,9 +66,9 @@ def update_expense(
     session: Session = Depends(get_session),
 ) -> Expense:
     expense = _get_or_404(session, expense_id)
-    for key, value in payload.items():
-        if hasattr(expense, key) and key != "id":
-            setattr(expense, key, value)
+    if "category" in payload:
+        _check_category(payload["category"])
+    apply_patch(expense, payload)
     session.add(expense)
     session.commit()
     session.refresh(expense)

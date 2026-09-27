@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_session
-from app.models import WateringLog, Location, Plant
+from app.models import WateringLog, Location, Plant, apply_patch
 from app.schemas import WateringCreate
 
 router = APIRouter(prefix="/api/watering-logs", tags=["watering-logs"])
@@ -46,9 +46,8 @@ def create_watering_log(
             raise HTTPException(status_code=404, detail=f"Plant {payload.plant_id} not found")
         if location_id is None:
             location_id = plant.location_id
-    elif location_id is not None:
-        if not session.get(Location, location_id):
-            raise HTTPException(status_code=404, detail=f"Location {location_id} not found")
+    if location_id is not None and not session.get(Location, location_id):
+        raise HTTPException(status_code=404, detail=f"Location {location_id} not found")
     if location_id is None:
         raise HTTPException(
             status_code=400,
@@ -83,9 +82,7 @@ def update_watering_log(
     session: Session = Depends(get_session)
 ) -> WateringLog:
     log = _get_or_404(session, watering_id)
-    for key, value in payload.items():
-        if hasattr(log, key) and key != "id":
-            setattr(log, key, value)
+    apply_patch(log, payload)
     session.add(log)
     session.commit()
     session.refresh(log)
@@ -93,7 +90,7 @@ def update_watering_log(
 
 
 @router.delete("/{watering_id}", status_code=204)
-def delete_watering_log(log_id: int, session: Session = Depends(get_session)) -> None:
-    log = _get_or_404(session, log_id)
+def delete_watering_log(watering_id: int, session: Session = Depends(get_session)) -> None:
+    log = _get_or_404(session, watering_id)
     session.delete(log)
     session.commit()

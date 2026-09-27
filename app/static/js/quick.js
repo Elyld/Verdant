@@ -3,12 +3,12 @@
   'use strict';
 
   const { $, $$, esc, fmtDate, fmtDateTime, api, toast, markdown,
-            uploadFiles, wireDraft, renderStats, healthBar, plantCard } = globalThis.Verdant;
+            uploadFiles, wireDraft, renderStats, healthBar, todayLocal, getSettings } = globalThis.Verdant;
 
   function initQuick() {
     const host = $('#quick-groups');
     if (!host) return;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayLocal();
     $('#quick-today').textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
 
     function flash(btn, label) {
@@ -29,6 +29,9 @@
 
     async function waterLocation(plants, btn) {
       try {
+        const settings = await getSettings();
+        if (settings.confirm_water_all !== false
+            && !window.confirm(`Water all ${plants.length} plants in this location?`)) return;
         await Promise.all(plants.map((p) => api.post('/api/watering-logs/', { plant_id: p.id, location_id: p.location_id || null, date: today })));
         toast(`Watered ${plants.length} plants 💧`, 'ok');
         flash(btn);
@@ -51,7 +54,7 @@
       } catch (error) { toast(`Could not log note: ${error.message}`, 'err'); }
     }
 
-    function plantCard(plant) {
+    function quickPlantCard(plant) {
       const card = document.createElement('div');
       card.className = 'card space-y-3';
       card.innerHTML = `
@@ -158,7 +161,7 @@
         section.appendChild(header);
         const grid = document.createElement('div');
         grid.className = 'grid gap-3 sm:grid-cols-2';
-        plist.forEach((p) => grid.appendChild(plantCard(p)));
+        plist.forEach((p) => grid.appendChild(quickPlantCard(p)));
         section.appendChild(grid);
         host.appendChild(section);
       });
@@ -176,8 +179,6 @@
 
     load().catch((error) => toast(`Could not load plants: ${error.message}`, 'err'));
   }
-
-  /* ------------------------------ Costs ------------------------------ */
 
   globalThis.Verdant.onBoot(initQuick);
 })();

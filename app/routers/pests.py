@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_session
-from app.models import PestLog, Plant
+from app.models import PestLog, Plant, apply_patch
 from app.schemas import PestLogCreate, PestLogRead
 
 router = APIRouter(prefix="/api/pests", tags=["pests"])
@@ -55,9 +55,9 @@ def update_pest_log(
     session: Session = Depends(get_session),
 ) -> PestLog:
     log = _get_or_404(session, pest_id)
-    for key, value in payload.items():
-        if hasattr(log, key) and key != "id":
-            setattr(log, key, value)
+    if payload.get("plant_id") is not None and not session.get(Plant, payload["plant_id"]):
+        raise HTTPException(status_code=404, detail=f"Plant {payload['plant_id']} not found")
+    apply_patch(log, payload)
     session.add(log)
     session.commit()
     session.refresh(log)

@@ -20,24 +20,38 @@ def _temp_unit(session: Session) -> str:
 
 
 def _convert(forecast: dict, unit: str) -> dict:
-    """Forecast arrives in F; convert to C when the user prefers it."""
+    """Forecast arrives in F; convert to C when the user prefers it.
+
+    Converted payloads use _c key names — the old _f keys holding Celsius
+    values were a trap for every future consumer.
+    """
     if unit == "F":
         return forecast
     out = dict(forecast)
-    out["current"] = dict(forecast.get("current") or {})
+    current = dict(forecast.get("current") or {})
 
     def c(f):
         return round((f - 32) * 5 / 9, 1) if isinstance(f, (int, float)) else f
 
-    if isinstance(out["current"].get("temp_f"), (int, float)):
-        out["current"]["temp_f"] = c(out["current"]["temp_f"])
-    out["hourly"] = [
-        {**h, "temp_f": c(h.get("temp_f"))} for h in (forecast.get("hourly") or [])
-    ]
-    out["daily"] = [
-        {**d, "tmax_f": c(d.get("tmax_f")), "tmin_f": c(d.get("tmin_f"))}
-        for d in (forecast.get("daily") or [])
-    ]
+    if isinstance(current.get("temp_f"), (int, float)):
+        current["temp_c"] = c(current.pop("temp_f"))
+    out["current"] = current
+    hourly = []
+    for h in forecast.get("hourly") or []:
+        h = dict(h)
+        if isinstance(h.get("temp_f"), (int, float)):
+            h["temp_c"] = c(h.pop("temp_f"))
+        hourly.append(h)
+    out["hourly"] = hourly
+    daily = []
+    for d in forecast.get("daily") or []:
+        d = dict(d)
+        if isinstance(d.get("tmax_f"), (int, float)):
+            d["tmax_c"] = c(d.pop("tmax_f"))
+        if isinstance(d.get("tmin_f"), (int, float)):
+            d["tmin_c"] = c(d.pop("tmin_f"))
+        daily.append(d)
+    out["daily"] = daily
     return out
 
 

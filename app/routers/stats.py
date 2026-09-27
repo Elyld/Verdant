@@ -193,7 +193,7 @@ def yield_leaderboard(
         if oz is None and units_mod.is_weight_unit(h.unit):
             # Legacy rows recorded "8 lbs" as quantity+unit with no weight.
             oz = units_mod.to_oz(float(h.quantity or 0), h.unit)
-        if oz:
+        if oz is not None:
             entry = by_w.setdefault(h.plant_id, {"oz": 0.0, "count": 0})
             entry["oz"] += oz
             entry["count"] += 1

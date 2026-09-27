@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_session
-from app.models import Fertilizer
+from app.models import Fertilizer, apply_patch
 
 router = APIRouter(prefix="/api/fertilizers", tags=["fertilizers"])
 
@@ -70,9 +70,7 @@ def update_fertilizer(
     session: Session = Depends(get_session)
 ) -> Fertilizer:
     fert = _get_or_404(session, fert_id)
-    for key, value in payload.items():
-        if hasattr(fert, key) and key != "id":
-            setattr(fert, key, value)
+    apply_patch(fert, payload)
     session.add(fert)
     session.commit()
     session.refresh(fert)

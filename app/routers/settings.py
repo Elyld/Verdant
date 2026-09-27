@@ -29,6 +29,10 @@ SETTING_KEYS = (
     "discord_webhook_url",
     "digest_time",
     "temperature_unit",
+    "week_start",
+    "default_weight_unit",
+    "slideshow_interval",
+    "confirm_water_all",
 )
 
 # Set by app.main at startup so saving new digest settings re-arms the
@@ -49,6 +53,10 @@ class SettingsUpdate(BaseModel):
     discord_webhook_url: str = ""
     digest_time: str = "08:00"
     temperature_unit: str = "F"  # "F" or "C" — display unit for weather temps (stored Celsius)
+    week_start: str = "0"  # "0" = Sunday, "1" = Monday — first column of the calendar
+    default_weight_unit: str = "oz"  # prefill for the harvest form weight-unit select
+    slideshow_interval: int = 5  # default slideshow autoplay interval, seconds
+    confirm_water_all: bool = True  # confirm() before "Water all" on Quick Log
 
 
 def _validate(payload: SettingsUpdate) -> None:
@@ -59,13 +67,19 @@ def _validate(payload: SettingsUpdate) -> None:
         ("last_frost_date", payload.last_frost_date),
     ):
         if raw and frost_mod._parse_month_day(raw) is None:
-            raise HTTPException(400, f"Bad {label} {raw!r} (want YYYY-MM-DD).")
+            raise HTTPException(400, f"Bad {label} {raw!r} (want YYYY-MM-DD or MM-DD).")
     if not TIME_RE.match((payload.digest_time or "").strip()):
         raise HTTPException(400, f"Bad digest_time {payload.digest_time!r} (want HH:MM, 24h).")
     if payload.digest_enabled and not payload.discord_webhook_url.strip():
         raise HTTPException(400, "Digest is on but no Discord webhook URL was given.")
     if payload.temperature_unit not in ("F", "C"):
         raise HTTPException(400, f"Bad temperature_unit {payload.temperature_unit!r} (want 'F' or 'C').")
+    if payload.week_start not in ("0", "1"):
+        raise HTTPException(400, f"Bad week_start {payload.week_start!r} (want '0' for Sunday or '1' for Monday).")
+    if payload.default_weight_unit not in ("oz", "g", "lb", "kg"):
+        raise HTTPException(400, f"Bad default_weight_unit {payload.default_weight_unit!r} (want oz/g/lb/kg).")
+    if payload.slideshow_interval not in (3, 5, 10, 30):
+        raise HTTPException(400, f"Bad slideshow_interval {payload.slideshow_interval!r} (want 3/5/10/30).")
 
 
 def _frost_preview(session: Session, which: str) -> dict:
@@ -87,11 +101,28 @@ def current_settings(session: Session) -> dict:
     temp_unit = frost_mod.get_setting(session, "temperature_unit") or "F"
     if temp_unit not in ("F", "C"):
         temp_unit = "F"
+    week_start = frost_mod.get_setting(session, "week_start") or "0"
+    if week_start not in ("0", "1"):
+        week_start = "0"
+    default_weight_unit = frost_mod.get_setting(session, "default_weight_unit") or "oz"
+    if default_weight_unit not in ("oz", "g", "lb", "kg"):
+        default_weight_unit = "oz"
+    try:
+        slideshow_interval = int(frost_mod.get_setting(session, "slideshow_interval") or 5)
+    except (TypeError, ValueError):
+        slideshow_interval = 5
+    if slideshow_interval not in (3, 5, 10, 30):
+        slideshow_interval = 5
+    confirm_water_all = (frost_mod.get_setting(session, "confirm_water_all") or "true") == "true"
     return {
         "zone": frost_mod.get_setting(session, "zone"),
         "frost_date": frost_mod.get_setting(session, "frost_date"),
         "last_frost_date": frost_mod.get_setting(session, "last_frost_date"),
         "temperature_unit": temp_unit,
+        "week_start": week_start,
+        "default_weight_unit": default_weight_unit,
+        "slideshow_interval": slideshow_interval,
+        "confirm_water_all": confirm_water_all,
         "digest_enabled": digest.enabled,
         "discord_webhook_url": digest.webhook_url,
         "digest_time": digest.time,
@@ -118,6 +149,10 @@ def save_settings(payload: SettingsUpdate, session: Session = Depends(get_sessio
     frost_mod.set_setting(session, "discord_webhook_url", payload.discord_webhook_url.strip())
     frost_mod.set_setting(session, "digest_time", payload.digest_time.strip() or "08:00")
     frost_mod.set_setting(session, "temperature_unit", payload.temperature_unit)
+    frost_mod.set_setting(session, "week_start", payload.week_start)
+    frost_mod.set_setting(session, "default_weight_unit", payload.default_weight_unit)
+    frost_mod.set_setting(session, "slideshow_interval", str(payload.slideshow_interval))
+    frost_mod.set_setting(session, "confirm_water_all", "true" if payload.confirm_water_all else "false")
     session.commit()
     if _reschedule_digest is not None and payload.digest_time.strip() != old_time:
         _reschedule_digest()

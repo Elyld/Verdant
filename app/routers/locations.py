@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_session
-from app.models import Location
+from app.models import Location, apply_patch
 
 router = APIRouter(prefix="/api/locations", tags=["locations"])
 
@@ -35,8 +35,10 @@ def create_location(
     notes: Optional[str] = None,
     session: Session = Depends(get_session)
 ) -> Location:
+    if not (name or "").strip():
+        raise HTTPException(status_code=422, detail="Location name is required.")
     loc = Location(
-        name=name,
+        name=name.strip(),
         type=type,
         light=light,
         notes=notes
@@ -67,9 +69,8 @@ def update_location(
     session: Session = Depends(get_session)
 ) -> Location:
     loc = _get_or_404(session, loc_id)
-    for key, value in payload.items():
-        if hasattr(loc, key) and key != "id":
-            setattr(loc, key, value)
+    # location_id is the stable public ID (CSV re-import keys on it): never rewritable.
+    apply_patch(loc, payload, exclude=("location_id",))
     session.add(loc)
     session.commit()
     session.refresh(loc)
