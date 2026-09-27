@@ -97,11 +97,13 @@
       $('#packet-notes').value = packet ? (packet.notes || '') : '';
       $('#packet-photo').value = '';
       $('#packet-photo-back').value = '';
-      // Library attach needs an existing packet id, so it only shows when editing.
-      const isEdit = !!packet;
-      $('#packet-library-row').classList.toggle('hidden', !isEdit);
-      $('#packet-library-row').classList.toggle('flex', isEdit);
-      $('#packet-library-hint').classList.toggle('hidden', !isEdit);
+      // Library attach works for new packets too: the pick is stashed and
+      // attached right after the packet is created on save.
+      pendingLibrary = {};
+      renderPending();
+      $('#packet-library-row').classList.remove('hidden');
+      $('#packet-library-row').classList.add('flex');
+      $('#packet-library-hint').classList.remove('hidden');
       $('#packet-modal').classList.remove('hidden');
       $('#packet-modal').classList.add('flex');
       $('#packet-variety').focus();
@@ -133,6 +135,15 @@
 
     // ---- Photo library picker ----
     let libSide = 'front';
+    // side -> image_id picked for a not-yet-saved (new) packet; attached on save.
+    let pendingLibrary = {};
+
+    function renderPending() {
+      $('#packet-library-front').textContent =
+        `🖼️ Front from photo library${pendingLibrary.front ? ' ✓' : ''}`;
+      $('#packet-library-back').textContent =
+        `🖼️ Back from photo library${pendingLibrary.back ? ' ✓' : ''}`;
+    }
 
     function closeLibraryPicker() {
       $('#library-modal').classList.add('hidden');
@@ -181,11 +192,20 @@
       const btn = e.target.closest('[data-lib-img]');
       if (!btn) return;
       const packetId = $('#packet-id').value;
-      if (!packetId) return;
+      const imageId = Number(btn.dataset.libImg);
+      const sideLabel = libSide === 'front' ? 'Front' : 'Back';
+      if (!packetId) {
+        // New packet: stash the pick, attach it right after creation on save.
+        pendingLibrary[libSide] = imageId;
+        renderPending();
+        toast(`${sideLabel} photo will be attached when you save.`);
+        closeLibraryPicker();
+        return;
+      }
       try {
         await api.post(`/api/seed-packets/${packetId}/photo-from-library`,
-          { image_id: Number(btn.dataset.libImg), side: libSide });
-        toast(`${libSide === 'front' ? 'Front' : 'Back'} photo set from the library.`);
+          { image_id: imageId, side: libSide });
+        toast(`${sideLabel} photo set from the library.`);
         closeLibraryPicker();
         closeModal();
         load();
@@ -224,6 +244,15 @@
           form.append('file', backFile);
           await api.upload(`/api/seed-packets/${saved.id}/photo?side=back`, form);
         }
+        // Library photos picked on the add form (or stashed before a save):
+        // attach after files so an explicitly uploaded file wins a conflict.
+        for (const side of ['front', 'back']) {
+          if (pendingLibrary[side]) {
+            await api.post(`/api/seed-packets/${saved.id}/photo-from-library`,
+              { image_id: pendingLibrary[side], side });
+          }
+        }
+        pendingLibrary = {};
         closeModal();
         toast(id ? 'Packet updated.' : 'Packet added.');
         load();

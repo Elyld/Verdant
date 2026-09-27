@@ -33,7 +33,7 @@ function makeEl() {
   };
   return el;
 }
-for (const id of ['#packet-id', '#library-side-label', '#library-album', '#library-grid',
+for (const id of ['#packet-id', '#packet-form', '#library-side-label', '#library-album', '#library-grid',
   '#library-empty', '#library-modal', '#packet-library-front', '#packet-library-back',
   '#library-close', '#catalog-photo', '#packet-modal', '#catalog-grid', '#catalog-empty',
   '#catalog-search', '#catalog-category']) {
@@ -66,7 +66,11 @@ globalThis.Verdant = {
       }
       return [];
     },
-    post: async (url, body) => { calls.post.push({ url, body }); return {}; },
+    post: async (url, body) => {
+      calls.post.push({ url, body });
+      if (url === '/api/seed-packets/') return { id: 9 };
+      return {};
+    },
     patch: async () => ({}),
     del: async () => ({}),
     upload: async () => ({}),
@@ -128,6 +132,35 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
   await tick(50);
   check('back button opens picker with back label',
     named['#library-side-label'].textContent.includes('back'));
+
+  // ---- Add-form flow: pick stashes, submit attaches after create ----
+  calls.post.length = 0;
+  named['#packet-id'].value = ''; // new packet, no id yet
+  fire(named['#packet-library-front'], 'click');
+  await tick(50);
+  const btn2 = { dataset: { libImg: '42' } };
+  fire(named['#library-grid'], 'click', { target: { closest: (sel) => (sel === '[data-lib-img]' ? btn2 : null) } });
+  await tick(50);
+  check('new packet: library pick stashes instead of posting',
+    !calls.post.some((c) => c.url.includes('photo-from-library')));
+  check('new packet: toast says it attaches on save',
+    toasts.some((t) => /when you save/i.test(t.msg)));
+  check('new packet: front button shows pending check',
+    named['#packet-library-front'].textContent.includes('✓'));
+
+  fire(named['#packet-form'], 'submit', { preventDefault: () => {} });
+  await tick(50);
+  let attachCalls = calls.post.filter((c) => c.url.includes('photo-from-library'));
+  check('save attaches stashed photo to the new packet',
+    attachCalls.length === 1 &&
+    attachCalls[0].url === '/api/seed-packets/9/photo-from-library' &&
+    attachCalls[0].body.image_id === 42 && attachCalls[0].body.side === 'front');
+
+  // Second save (nothing newly picked) must not re-attach.
+  fire(named['#packet-form'], 'submit', { preventDefault: () => {} });
+  await tick(50);
+  attachCalls = calls.post.filter((c) => c.url.includes('photo-from-library'));
+  check('no duplicate attach on second save', attachCalls.length === 1);
 
   console.log(failures ? `\n${failures} FAILURES` : '\nall seed library checks passed');
   process.exit(failures ? 1 : 0);
