@@ -277,6 +277,10 @@ class Invoice(SQLModel, table=True):
     notes: Optional[str] = None
     source: str = Field(default="manual")  # manual | csv | gmail
     expense_id: Optional[int] = Field(default=None, foreign_key="expenses.id", index=True)
+    # True when the linked expense was auto-created from this invoice (see
+    # app/invoice_expenses.py). Auto-created expenses are synced and deleted
+    # along with the invoice; manually linked ones are left alone.
+    expense_auto_created: bool = Field(default=False)
 
     expense: Optional["Expense"] = Relationship()
 

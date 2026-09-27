@@ -50,6 +50,9 @@ def test_create_and_list(client):
     assert body["vendor"] == "Territorial Seed"
     assert body["order_number"] == "WW1149159"
     assert body["total"] == 52.12
+    inv_id = body["id"]
+    # POST auto-creates the backing expense; the response links it.
+    assert body["expense_id"]
 
     res = client.get("/api/invoices/")
     assert res.status_code == 200
@@ -58,6 +61,11 @@ def test_create_and_list(client):
     res = client.get("/api/invoices/", params={"vendor": "territorial"})
     assert res.status_code == 200
     assert all("territorial" in i["vendor"].lower() for i in res.json())
+
+    # Clean up: deleting the invoice takes its auto-created expense with it,
+    # keeping the shared test DB tidy for other modules' count assertions.
+    res = client.delete(f"/api/invoices/{inv_id}")
+    assert res.status_code == 204
 
 
 def test_bad_source_rejected(client):
@@ -155,3 +163,11 @@ def test_csv_import_idempotent(client):
 
     res = client.get("/api/invoices/", params={"vendor": "Seed Savers"})
     assert any(i["order_number"] == "SO1114706" and i["source"] == "csv" for i in res.json())
+
+    # Clean up the imported invoices (and their auto-created expenses) so the
+    # shared test DB stays tidy for other modules' count assertions.
+    for order_no in ("SO1114706", "247-9981"):
+        inv = next(i for i in client.get("/api/invoices/").json()
+                   if i["order_number"] == order_no)
+        res = client.delete(f"/api/invoices/{inv['id']}")
+        assert res.status_code == 204
