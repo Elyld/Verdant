@@ -64,6 +64,18 @@
             + `<select class="inp mt-1" data-assign="${esc(r.key)}">${opts(r.key)}</select></label>`).join('');
         }
       }
+      if (p.packet_assign_rows && p.packet_assign_rows.length) {
+        const opts = (key) => `<option value="">— no link —</option>` + (p.packet_options || []).map((o) =>
+          `<option value="${o.id}"${String(o.id) === String((p.suggested_packets || {})[key]) ? ' selected' : ''}>${esc(o.variety_name)}${o.vendor_name ? ` (${esc(o.vendor_name)})` : ''}</option>`).join('');
+        assignHost.classList.remove('hidden');
+        assignHost.innerHTML += `<h4 class="font-semibold text-sm mt-3">🔗 Link a seed packet to each invoice <span class="font-normal text-navy-400">(optional — best guess pre-selected)</span></h4>`
+          + p.packet_assign_rows.map((r) =>
+            `<label class="block text-sm"><span class="text-navy-600">${esc(r.label)}</span>`
+            + (r.suggestions && r.suggestions.length
+              ? `<span class="block text-xs text-sage-700">suggested: ${r.suggestions.map((s) => `${esc(s.variety)} (${Math.round(s.score * 100)}%)`).join(', ')}</span>`
+              : '')
+            + `<select class="inp mt-1" data-assign-packet="${esc(r.key)}">${opts(r.key)}</select></label>`).join('');
+      }
       runBtn.textContent = `⬇ Import ${c.new} row${c.new === 1 ? '' : 's'}`;
       runBtn.disabled = c.new === 0;
     }
@@ -97,6 +109,10 @@
       $$('#import-assign [data-assign]').forEach((sel) => {
         if (sel.value) assignments[sel.dataset.assign] = parseInt(sel.value, 10);
       });
+      const packetAssignments = {};
+      $$('#import-assign [data-assign-packet]').forEach((sel) => {
+        if (sel.value) packetAssignments[sel.dataset.assignPacket] = parseInt(sel.value, 10);
+      });
       runBtn.disabled = true;
       runBtn.textContent = 'Importing…';
       try {
@@ -104,6 +120,7 @@
         form.append('entity', lastEntity);
         form.append('file', lastFile);
         form.append('assignments', JSON.stringify(assignments));
+        form.append('packet_assignments', JSON.stringify(packetAssignments));
         const res = await api.upload('/api/import/run', form);
         resultCard.classList.remove('hidden');
         const bits = [`<b>${res.imported}</b> imported`, `${res.skipped} skipped`];

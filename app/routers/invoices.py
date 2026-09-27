@@ -3,9 +3,11 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
+from sqlmodel import select
 
 from app.database import get_session
-from app.models import Expense, Invoice, apply_patch
+from app.models import Expense, Invoice, InvoiceSeedPacket, SeedPacket, apply_patch
+from app.packet_match import suggest_packets
 from app.schemas import InvoiceCreate, InvoiceRead
 from app.storage import delete_stored, save_pdf_upload
 
@@ -96,6 +98,12 @@ def delete_invoice(
     invoice = _get_or_404(session, invoice_id)
     if invoice.pdf_path:
         delete_stored(invoice.pdf_path)
+    # Drop packet links explicitly as well as via ON DELETE CASCADE, so the
+    # cleanup holds even where the connection didn't enable FK enforcement.
+    for link in session.exec(
+        select(InvoiceSeedPacket).where(InvoiceSeedPacket.invoice_id == invoice_id)
+    ).all():
+        session.delete(link)
     session.delete(invoice)
     session.commit()
 
@@ -133,3 +141,87 @@ def remove_invoice_pdf(
         session.commit()
         session.refresh(invoice)
     return invoice
+
+
+# ------------------------- seed packet links ------------------------- #
+
+def _packet_or_404(session: Session, packet_id: int) -> SeedPacket:
+    packet = session.get(SeedPacket, packet_id)
+    if not packet:
+        raise HTTPException(status_code=404, detail=f"Seed packet {packet_id} not found")
+    return packet
+
+
+def _packet_dict(packet: SeedPacket) -> dict:
+    return {
+        "id": packet.id,
+        "variety_name": packet.variety_name,
+        "vendor_name": packet.vendor_name or "",
+    }
+
+
+@router.get("/{invoice_id}/packets")
+def list_invoice_packets(
+    invoice_id: int,
+    session: Session = Depends(get_session),
+) -> List[dict]:
+    _get_or_404(session, invoice_id)
+    links = session.exec(
+        select(InvoiceSeedPacket).where(InvoiceSeedPacket.invoice_id == invoice_id)
+    ).all()
+    packets = [session.get(SeedPacket, link.seed_packet_id) for link in links]
+    return [_packet_dict(p) for p in packets if p is not None]
+
+
+@router.post("/{invoice_id}/packets")
+def attach_invoice_packet(
+    invoice_id: int,
+    payload: dict,
+    session: Session = Depends(get_session),
+) -> dict:
+    """Link a seed packet to an invoice. Re-attaching is a no-op."""
+    _get_or_404(session, invoice_id)
+    packet_id = payload.get("seed_packet_id")
+    packet = _packet_or_404(session, packet_id) if packet_id else None
+    if packet is None:
+        raise HTTPException(status_code=422, detail="seed_packet_id is required and must exist")
+    existing = session.get(InvoiceSeedPacket, (invoice_id, packet.id))
+    if existing is None:
+        session.add(InvoiceSeedPacket(invoice_id=invoice_id, seed_packet_id=packet.id))
+        session.commit()
+    return _packet_dict(packet)
+
+
+@router.delete("/{invoice_id}/packets/{packet_id}", status_code=204)
+def detach_invoice_packet(
+    invoice_id: int,
+    packet_id: int,
+    session: Session = Depends(get_session),
+) -> None:
+    _get_or_404(session, invoice_id)
+    link = session.get(InvoiceSeedPacket, (invoice_id, packet_id))
+    if link is None:
+        raise HTTPException(status_code=404, detail="That packet is not linked to this invoice")
+    session.delete(link)
+    session.commit()
+
+
+@router.get("/{invoice_id}/packet-suggestions")
+def invoice_packet_suggestions(
+    invoice_id: int,
+    session: Session = Depends(get_session),
+) -> List[dict]:
+    """Heuristic packet matches for the invoice's items text.
+
+    Already-linked packets are excluded; the UI lets the user confirm
+    before anything is attached.
+    """
+    invoice = _get_or_404(session, invoice_id)
+    linked_ids = frozenset(
+        link.seed_packet_id
+        for link in session.exec(
+            select(InvoiceSeedPacket).where(InvoiceSeedPacket.invoice_id == invoice_id)
+        ).all()
+    )
+    packets = session.exec(select(SeedPacket).order_by(SeedPacket.variety_name)).all()
+    return suggest_packets(invoice.items_summary or "", packets, exclude_ids=linked_ids)

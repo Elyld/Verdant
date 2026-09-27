@@ -90,11 +90,36 @@ const invoices = [
 const expenses = [
   { id: 3, date: '2026-04-20', category: 'Supplies', description: 'Grow bags (5-pack)', amount: 24.99 },
 ];
-global.fetch = async (url) => {
+const packets = [
+  { id: 10, variety_name: 'Costoluto Fiorentino', vendor_name: 'Territorial Seed' },
+  { id: 11, variety_name: 'Habanero', vendor_name: "Matt's Peppers" },
+];
+const linkedPackets = {
+  1: [{ id: 10, variety_name: 'Costoluto Fiorentino', vendor_name: 'Territorial Seed' }],
+  2: [],
+};
+const suggestions = {
+  1: [{ packet_id: 11, variety: 'Habanero', matched_item: 'Habanero - SEED / 25 seeds', score: 0.9 }],
+  2: [],
+};
+const fetchCalls = [];
+global.fetch = async (url, options = {}) => {
+  fetchCalls.push({ url, method: options.method || 'GET', body: options.body });
   let body = [];
   if (url === '/api/invoices/') body = invoices;
   else if (url === '/api/expenses/') body = expenses;
-  return { ok: true, status: 200, json: async () => body };
+  else if (url === '/api/seed-packets/') body = packets;
+  else if ((options.method === 'POST' || options.method === 'DELETE')
+           && /^\/api\/invoices\/\d+\/packets(\/\d+)?$/.test(url)) {
+    body = options.method === 'POST'
+      ? { id: 11, variety_name: 'Habanero', vendor_name: "Matt's Peppers" }
+      : null;
+  } else {
+    const m = url.match(/^\/api\/invoices\/(\d+)\/(packets|packet-suggestions)$/);
+    if (m) body = m[2] === 'packets' ? (linkedPackets[m[1]] || []) : (suggestions[m[1]] || []);
+  }
+  const status = options.method === 'DELETE' ? 204 : 200;
+  return { ok: true, status, json: async () => body };
 };
 
 const JS_FILES = ['core.js', 'costs.js'];
@@ -134,6 +159,37 @@ const tick = (ms) => new Promise((r) => setTimeout(r, ms));
   check('expense badge shown on linked invoice', rows.includes('Grow bags (5-pack)') && rows.includes('💸'));
   check('empty notice hidden', named['#invoices-empty'].classList.contains('hidden'));
   check('expense dropdown populated', named['#inv-expense'].innerHTML.includes('Grow bags (5-pack)'));
+
+  // 3. Seed packet links render per invoice row.
+  check('linked packet chip rendered', rows.includes('🌱') && rows.includes('Costoluto Fiorentino'));
+  check('detach button carries invoice:packet ids', rows.includes('data-detach-packet="1:10"'));
+  check('suggestion button rendered with packet id', rows.includes('data-attach-packet="1:11"') && rows.includes('+ Habanero'));
+  check('suggestion shows matched item in title', rows.includes('Habanero - SEED / 25 seeds'));
+  check('packet picker select rendered per row', rows.includes('data-packet-picker="1"') && rows.includes('data-packet-picker="2"'));
+  check('picker offers all seed packets', rows.includes("Matt&#39;s Peppers") || rows.includes("Matt's Peppers"));
+
+  // 4. One-tap suggestion attach POSTs the right packet.
+  const clickFns = named['#invoices-rows']._listeners.click || [];
+  const fakeAttach = { target: { closest: (sel) => (sel === '[data-attach-packet]' ? { dataset: { attachPacket: '2:11' } } : null) } };
+  await Promise.all(clickFns.map((fn) => fn(fakeAttach)));
+  await tick(80);
+  const attachCall = fetchCalls.find((c) => c.url === '/api/invoices/2/packets' && c.method === 'POST');
+  check('suggestion attach POSTs to invoice packets endpoint', !!attachCall);
+  check('suggestion attach sends the packet id', !!attachCall && JSON.parse(attachCall.body).seed_packet_id === 11);
+
+  // 5. Detach DELETEs the right link.
+  const fakeDetach = { target: { closest: (sel) => (sel === '[data-detach-packet]' ? { dataset: { detachPacket: '1:10' } } : null) } };
+  await Promise.all(clickFns.map((fn) => fn(fakeDetach)));
+  await tick(80);
+  check('detach DELETEs the invoice/packet link', fetchCalls.some((c) => c.url === '/api/invoices/1/packets/10' && c.method === 'DELETE'));
+
+  // 6. Picker change attaches the chosen packet.
+  const changeFns = named['#invoices-rows']._listeners.change || [];
+  const fakePick = { target: { closest: () => ({ dataset: { packetPicker: '2' }, value: '10' }) } };
+  await Promise.all(changeFns.map((fn) => fn(fakePick)));
+  await tick(80);
+  const pickCall = fetchCalls.filter((c) => c.url === '/api/invoices/2/packets' && c.method === 'POST').pop();
+  check('picker change attaches the chosen packet', !!pickCall && JSON.parse(pickCall.body).seed_packet_id === 10);
 
   process.exit(failures ? 1 : 0);
 })();

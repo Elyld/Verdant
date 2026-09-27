@@ -29,11 +29,14 @@ from app.models import (
     Fertilizer,
     Harvest,
     Invoice,
+    InvoiceSeedPacket,
     Location,
     Plant,
+    SeedPacket,
     SeedSource,
     WateringLog,
 )
+from app.packet_match import suggest_packets
 
 router = APIRouter(prefix="/api/import", tags=["import"])
 
@@ -141,6 +144,7 @@ class _Ctx:
         self.locations = {loc.location_id: loc for loc in session.exec(select(Location)).all()}
         self.plants = {p.plant_id: p for p in session.exec(select(Plant)).all()}
         self.plants_by_variety = {p.variety_name.strip().lower(): p for p in self.plants.values()}
+        self.packets = session.exec(select(SeedPacket).order_by(SeedPacket.variety_name)).all()
         self.fertilizers = {f.fertilizer_id: f for f in session.exec(select(Fertilizer)).all()}
         self.warnings: List[str] = []
 
@@ -407,7 +411,9 @@ def _build_invoice(row: Dict[str, str], ctx: _Ctx) -> Dict[str, Any]:
             source="csv",
         )
     label = f"{vendor} {order_number or when.isoformat()} — ${total:.2f}"
-    return {"status": "new", "label": label, "key": order_number, "make": make}
+    # items_summary rides along so the preview can suggest seed packets.
+    return {"status": "new", "label": label, "key": order_number, "make": make,
+            "items_summary": items_summary}
 
 
 def _harvest_weight_from_row(row: Dict[str, str], unit: str) -> tuple[Optional[float], str]:
@@ -566,6 +572,27 @@ async def preview_import(
         payload["assign_rows"] = assign_rows
         payload["suggested_assignments"] = suggested
         payload["needs_plants_first"] = not options
+    if entity == "invoices":
+        # Suggest seed packets per new invoice row; the preview shows a
+        # picker per row (pre-selected with the top suggestion) and the run
+        # links whatever the user picked. Keys are row indexes so they stay
+        # stable between preview and run for the same file.
+        payload["packet_options"] = [
+            {"id": p.id, "variety_name": p.variety_name, "vendor_name": p.vendor_name or ""}
+            for p in ctx.packets
+        ]
+        packet_rows = []
+        suggested_packets = {}
+        for i, r in enumerate(results):
+            if r["status"] != "new":
+                continue
+            key = f"inv:{i}"
+            cands = suggest_packets(r.get("items_summary") or "", ctx.packets)[:3]
+            packet_rows.append({"key": key, "label": r["label"], "suggestions": cands})
+            if cands:
+                suggested_packets[key] = cands[0]["packet_id"]
+        payload["packet_assign_rows"] = packet_rows
+        payload["suggested_packets"] = suggested_packets
     return payload
 
 
@@ -574,6 +601,7 @@ async def run_import(
     entity: str = Form(...),
     file: UploadFile = File(...),
     assignments: str = Form("{}"),
+    packet_assignments: str = Form("{}"),
     session: Session = Depends(get_session),
 ) -> Dict[str, Any]:
     if entity not in ENTITIES:
@@ -582,17 +610,25 @@ async def run_import(
         assignment_map = json.loads(assignments or "{}")
     except json.JSONDecodeError:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="assignments is not valid JSON.")
+    try:
+        packet_map = json.loads(packet_assignments or "{}")
+    except json.JSONDecodeError:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="packet_assignments is not valid JSON.")
     rows = _read_rows(file)
     if not rows:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="No data rows found in the CSV.")
     ctx = _Ctx(session)
     results = _process(entity, rows, ctx, assignments=assignment_map if isinstance(assignment_map, dict) else {})
     imported, skipped, updated, errors = 0, 0, 0, []
-    for r in results:
+    new_invoices: List[tuple] = []  # (result_index, Invoice) for packet linking
+    for i, r in enumerate(results):
         if r["status"] == "new":
             try:
-                session.add(r["make"]())
+                inst = r["make"]()
+                session.add(inst)
                 imported += 1
+                if entity == "invoices":
+                    new_invoices.append((i, inst))
             except Exception as exc:  # noqa: BLE001 - report per-row, keep going
                 errors.append(f"{r.get('key') or '?'}: {exc}")
         elif r["status"] == "update":
@@ -618,6 +654,23 @@ async def run_import(
             status_code=422,
             detail=f"Import failed: duplicate IDs in the file ({exc.orig}). No rows were imported.",
         )
+    if new_invoices and isinstance(packet_map, dict):
+        linked = 0
+        for i, inst in new_invoices:
+            raw_pid = packet_map.get(f"inv:{i}")
+            if not raw_pid:
+                continue
+            try:
+                pid = int(raw_pid)
+            except (TypeError, ValueError):
+                continue
+            if not session.get(SeedPacket, pid):
+                continue
+            if session.get(InvoiceSeedPacket, (inst.id, pid)) is None:
+                session.add(InvoiceSeedPacket(invoice_id=inst.id, seed_packet_id=pid))
+                linked += 1
+        if linked:
+            session.commit()
     # Refresh lookups so a second file in the same session sees new rows.
     return {
         "entity": entity,
