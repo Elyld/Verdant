@@ -3,11 +3,12 @@ import re
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_session
-from app.models import SeedPacket, SeedSource
-from app.storage import delete_stored, save_upload
+from app.models import AlbumImage, SeedPacket, SeedSource
+from app.storage import copy_stored, delete_stored, save_upload
 
 router = APIRouter(prefix="/api/seed-packets", tags=["seed-packets"])
 
@@ -176,6 +177,39 @@ async def upload_packet_photo(
     if getattr(packet, attr):
         delete_stored(getattr(packet, attr))
     setattr(packet, attr, await save_upload(file, f"seed-packets/{packet.id}"))
+    session.add(packet)
+    session.commit()
+    session.refresh(packet)
+    return packet
+
+
+class LibraryPhotoAttach(BaseModel):
+    image_id: int
+    side: str = Field(default="front", pattern="^(front|back)$")
+
+
+@router.post("/{packet_id}/photo-from-library", response_model=SeedPacket)
+def attach_library_photo(
+    packet_id: int,
+    body: LibraryPhotoAttach,
+    session: Session = Depends(get_session),
+) -> SeedPacket:
+    """Set a packet's front/back photo from an existing library photo.
+
+    The library image is *copied* into the packet's own storage folder, so
+    replacing or deleting the packet photo never touches the original
+    (e.g. the Immich album import it came from).
+    """
+    packet = _get_or_404(session, packet_id)
+    img = session.get(AlbumImage, body.image_id)
+    if not img:
+        raise HTTPException(
+            status_code=404, detail=f"Library photo {body.image_id} not found"
+        )
+    attr = "photo_path" if body.side == "front" else "photo_back_path"
+    if getattr(packet, attr):
+        delete_stored(getattr(packet, attr))
+    setattr(packet, attr, copy_stored(img.file_path, f"seed-packets/{packet.id}"))
     session.add(packet)
     session.commit()
     session.refresh(packet)

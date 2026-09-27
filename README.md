@@ -1,4 +1,4 @@
-# 🌿 Verdant — Self-Hosted Garden Journal (v2.15.0)
+# 🌿 Verdant — Self-Hosted Garden Journal (v2.16.0)
 
 Your garden, logged. Plant profiles with care reminders, a daily observation log
 with a calendar heatmap, photo albums with slideshows, a seed stash and seedling
@@ -70,11 +70,16 @@ vendor, filterable, linkable to the plants you grew from them.
 ### 🌱 Seed stash — the binder, catalogued
 Every packet you own, inventoried: a photo of the packet, vendor (with link),
 type, year bought, and how many seeds are left. Searchable and filterable —
-stick an NFC tag on the binder and tapping it opens the "add packet" form.
+including a 📷 filter for which packs have photos. Packet photos can be
+uploaded or picked straight from your photo library (e.g. an Immich album of
+packet shots). Stick an NFC tag on the binder and tapping it opens the
+"add packet" form.
 
 ![Seed stash](docs/screenshots/seed-stash.png)
 
 ![Packet front/back flip](docs/screenshots/packet-flip.png)
+
+![Pick a packet photo from the library](docs/screenshots/packet-library-picker.png)
 
 ### ✍️ Blog — garden stories
 Markdown blog posts with photo galleries, for the season's stories — first
@@ -494,6 +499,13 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.16.0** — Seed packets meet the photo library. A packet's front/back
+  photo can now be picked from photos already in Verdant — e.g. an Immich
+  album of packet shots — instead of only uploading a file. New
+  `POST /api/seed-packets/{id}/photo-from-library` attaches a library photo
+  as a *copy*, so the original album import is never touched. The seed stash
+  gains a 📷 photo filter (all / with photos / without photos) for going
+  through which packs have pictures so far.
 - **2.15.0** — Planner 2.0: the backyard builder grows up. A real **grid
   system** (1 cell = 1 ft, resizable up to 60×60) with snap-to-grid dragging —
   containers are drawn at their **true footprint**, so a 4×8 raised bed dwarfs
