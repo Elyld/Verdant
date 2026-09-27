@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_session
-from app.models import Expense, apply_patch
+from app.models import Expense, Invoice, apply_patch
 from app.schemas import ExpenseCreate, ExpenseRead
 
 router = APIRouter(prefix="/api/expenses", tags=["expenses"])
@@ -81,5 +81,12 @@ def delete_expense(
     session: Session = Depends(get_session),
 ) -> None:
     expense = _get_or_404(session, expense_id)
+    # Unlink any invoices pointing at this expense first: invoices.expense_id
+    # has no ON DELETE action and FKs are enforced, so the delete would 500.
+    # The invoices themselves are kept; they just become unlinked.
+    for inv in session.query(Invoice).filter(Invoice.expense_id == expense_id).all():
+        inv.expense_id = None
+        inv.expense_auto_created = False
+        session.add(inv)
     session.delete(expense)
     session.commit()

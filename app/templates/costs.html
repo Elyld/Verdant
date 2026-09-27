@@ -19,7 +19,7 @@
       </div>
 
       <form id="cost-form" class="card space-y-3">
-        <h3 class="font-display text-lg font-semibold text-navy-800">Log a purchase</h3>
+        <h3 id="cost-form-title" class="font-display text-lg font-semibold text-navy-800">Log a purchase</h3>
         <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <label class="block"><span class="lbl">Date</span><input id="cost-date" type="date" class="inp" required /></label>
           <label class="block"><span class="lbl">Category</span>
@@ -33,7 +33,8 @@
           <label class="block"><span class="lbl">For plant (optional)</span><select id="cost-plant" class="inp"><option value="">— whole garden —</option></select></label>
           <label class="block"><span class="lbl">Notes</span><input id="cost-notes" type="text" class="inp" placeholder="optional" /></label>
         </div>
-        <button type="submit" class="btn-primary">Add expense</button>
+        <button type="submit" id="cost-submit" class="btn-primary">Add expense</button>
+        <button type="button" id="cost-cancel" class="btn-ghost hidden">Cancel</button>
       </form>
 
       <div class="card overflow-x-auto">

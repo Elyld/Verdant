@@ -50,7 +50,7 @@ function makeEl() {
 
 const named = {};
 const namedAll = {};
-['cost-form', 'cost-date', 'cost-category', 'cost-desc', 'cost-amount', 'cost-notes',
+['cost-form', 'cost-form-title', 'cost-submit', 'cost-cancel', 'cost-date', 'cost-category', 'cost-desc', 'cost-amount', 'cost-notes',
  'cost-plant', 'costs-rows', 'costs-empty', 'costs-total', 'costs-by-cat',
  'invoice-form', 'inv-vendor', 'inv-date', 'inv-order', 'inv-total', 'inv-items',
  'inv-expense', 'inv-notes', 'inv-pdf', 'invoices-rows', 'invoices-empty',
@@ -58,6 +58,7 @@ const namedAll = {};
   named[`#${id}`] = makeEl();
 });
 named['#costs-empty'].classList.add('hidden');
+named['#cost-cancel'].classList.add('hidden');
 named['#invoices-empty'].classList.add('hidden');
 
 const docListeners = {};
@@ -200,6 +201,42 @@ const tick = (ms) => new Promise((r) => setTimeout(r, ms));
   await tick(80);
   check('create-expense click POSTs to the create-expense endpoint',
     fetchCalls.some((c) => c.url === '/api/invoices/1/create-expense' && c.method === 'POST'));
+
+  // 8. Expense rows carry an edit affordance; clicking it loads the form.
+  const costRows = named['#costs-rows'].innerHTML;
+  check('expense row has edit button', costRows.includes('data-edit-cost="3"'));
+  const costClickFns = named['#costs-rows']._listeners.click || [];
+  const fakeEdit = { target: { closest: (sel) => (sel === '[data-edit-cost]' ? { dataset: { editCost: '3' } } : null) } };
+  await Promise.all(costClickFns.map((fn) => fn(fakeEdit)));
+  await tick(20);
+  check('edit populates date', named['#cost-date'].value === '2026-04-20');
+  check('edit populates category', named['#cost-category'].value === 'Supplies');
+  check('edit populates description', named['#cost-desc'].value === 'Grow bags (5-pack)');
+  check('edit populates amount', String(named['#cost-amount'].value) === '24.99');
+  check('form switches to editing mode',
+    named['#cost-form-title'].textContent === 'Edit expense' && named['#cost-submit'].textContent === 'Save changes');
+  check('cancel button shown while editing', !named['#cost-cancel'].classList.contains('hidden'));
+
+  // 9. Submitting while editing PATCHes the expense, then the form resets.
+  const submitFns = named['#cost-form']._listeners.submit || [];
+  await Promise.all(submitFns.map((fn) => fn({ preventDefault: () => {} })));
+  await tick(80);
+  const patchCall = fetchCalls.find((c) => c.url === '/api/expenses/3' && c.method === 'PATCH');
+  check('edit submit PATCHes the expense', !!patchCall);
+  check('PATCH sends the form fields', !!patchCall && JSON.parse(patchCall.body).category === 'Supplies');
+  check('form resets to add mode after save',
+    named['#cost-form-title'].textContent === 'Log a purchase'
+    && named['#cost-submit'].textContent === 'Add expense'
+    && named['#cost-cancel'].classList.contains('hidden'));
+
+  // 10. Cancel abandons editing without any API call.
+  await Promise.all(costClickFns.map((fn) => fn(fakeEdit)));
+  await tick(20);
+  const callsBefore = fetchCalls.length;
+  const cancelFns = named['#cost-cancel']._listeners.click || [];
+  cancelFns.forEach((fn) => fn());
+  check('cancel resets the form title', named['#cost-form-title'].textContent === 'Log a purchase');
+  check('cancel makes no API call', fetchCalls.length === callsBefore);
 
   process.exit(failures ? 1 : 0);
 })();
