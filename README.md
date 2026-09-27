@@ -548,6 +548,17 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.18.0** — The visual refresh, plus a few fixes. Newsreader serif
+  headings and Source Sans body text, a warmer beige palette, and the classic
+  navy header. New ✨ Preferences card in Settings: which day the calendar
+  week starts on, default harvest weight unit, slideshow autoplay interval,
+  and a confirm-before-"Water all" guard for the Quick Log. The unguarded
+  bulk-delete posts endpoint is gone (`DELETE /api/posts` now returns 405;
+  deleting a single post still works). Fixed: `POST /api/plants/` no longer
+  500s when `date_planted` arrives as an ISO string — dates are coerced,
+  blanks become null, garbage gets a 422. Plus a pre-release audit pass over
+  the backend and frontend fixing assorted small glitches. The README tour
+  was re-shot in the new style with a new Tips & tricks section.
 - **2.17.0** — Albums can now be deleted from the Photos page. Pick an album
   and hit **🗑️ Delete album**: a confirm dialog names the album and its photo
   count, then the album, its photo rows, and their downloaded files are all
