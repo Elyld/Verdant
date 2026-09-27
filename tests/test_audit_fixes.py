@@ -160,3 +160,16 @@ def test_backup_unsafe_zip_leaves_everything_alone():
     assert r.status_code == 400, r.text
     assert probe.is_file(), "upload dir was wiped before the zip was validated"
     assert not (UPLOAD_DIR / "ok.txt").exists()
+
+
+def test_bulk_delete_posts_removed():
+    """DELETE /api/posts (clear_posts: wipe every post, no guard) was
+    removed at Josh's request. Single-post DELETE still works."""
+    r = client.post("/api/posts", json={"title": "Keep me", "content": "x"})
+    assert r.status_code in (200, 201), r.text
+    post_id = r.json()["id"]
+    r = client.request("DELETE", "/api/posts")
+    assert r.status_code == 405, r.text
+    # the post survived, and per-post delete still works
+    assert client.get(f"/api/posts/{post_id}").status_code == 200
+    assert client.delete(f"/api/posts/{post_id}").status_code == 204
