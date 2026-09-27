@@ -65,16 +65,24 @@
         }
       }
       if (p.packet_assign_rows && p.packet_assign_rows.length) {
-        const opts = (key) => `<option value="">— no link —</option>` + (p.packet_options || []).map((o) =>
-          `<option value="${o.id}"${String(o.id) === String((p.suggested_packets || {})[key]) ? ' selected' : ''}>${esc(o.variety_name)}${o.vendor_name ? ` (${esc(o.vendor_name)})` : ''}</option>`).join('');
+        // Multi-select: every packet is a checkbox per invoice row; strong
+        // suggestions (score >= 0.9) come pre-checked, suggested first.
+        const byId = new Map((p.packet_options || []).map((o) => [o.id, o]));
         assignHost.classList.remove('hidden');
-        assignHost.innerHTML += `<h4 class="font-semibold text-sm mt-3">🔗 Link a seed packet to each invoice <span class="font-normal text-navy-400">(optional — best guess pre-selected)</span></h4>`
-          + p.packet_assign_rows.map((r) =>
-            `<label class="block text-sm"><span class="text-navy-600">${esc(r.label)}</span>`
-            + (r.suggestions && r.suggestions.length
-              ? `<span class="block text-xs text-sage-700">suggested: ${r.suggestions.map((s) => `${esc(s.variety)} (${Math.round(s.score * 100)}%)`).join(', ')}</span>`
-              : '')
-            + `<select class="inp mt-1" data-assign-packet="${esc(r.key)}">${opts(r.key)}</select></label>`).join('');
+        assignHost.innerHTML += `<h4 class="font-semibold text-sm mt-3">🔗 Link seed packets to each invoice <span class="font-normal text-navy-400">(optional — best guesses pre-checked)</span></h4>`
+          + p.packet_assign_rows.map((r) => {
+            const sugg = new Map((r.suggestions || []).map((s) => [s.packet_id, s]));
+            const prechecked = new Set([...sugg.values()].filter((s) => s.score >= 0.9).map((s) => s.packet_id));
+            const ordered = [
+              ...[...sugg.keys()].filter((id) => byId.has(id)).map((id) => ({ o: byId.get(id), s: sugg.get(id) })),
+              ...(p.packet_options || []).filter((o) => !sugg.has(o.id)).map((o) => ({ o, s: null })),
+            ];
+            return `<div class="block text-sm mt-2"><span class="text-navy-600">${esc(r.label)}</span>`
+              + `<div class="mt-1 max-h-44 overflow-y-auto rounded-lg border border-beige-200 bg-white p-2">`
+              + ordered.map(({ o, s }) =>
+                `<label class="flex items-center gap-1.5 text-xs py-0.5 cursor-pointer"><input type="checkbox" data-assign-packet="${esc(r.key)}" value="${o.id}"${prechecked.has(o.id) ? ' checked' : ''} class="accent-sage-700"> <span>${esc(o.variety_name)}${o.vendor_name ? ` (${esc(o.vendor_name)})` : ''}${s ? ` <span class="text-sage-700">— suggested (${Math.round(s.score * 100)}%, ${esc(s.matched_item)})</span>` : ''}</span></label>`).join('')
+              + `</div></div>`;
+          }).join('');
       }
       runBtn.textContent = `⬇ Import ${c.new} row${c.new === 1 ? '' : 's'}`;
       runBtn.disabled = c.new === 0;
@@ -110,8 +118,9 @@
         if (sel.value) assignments[sel.dataset.assign] = parseInt(sel.value, 10);
       });
       const packetAssignments = {};
-      $$('#import-assign [data-assign-packet]').forEach((sel) => {
-        if (sel.value) packetAssignments[sel.dataset.assignPacket] = parseInt(sel.value, 10);
+      $$('#import-assign [data-assign-packet]:checked').forEach((box) => {
+        const key = box.dataset.assignPacket;
+        (packetAssignments[key] = packetAssignments[key] || []).push(parseInt(box.value, 10));
       });
       runBtn.disabled = true;
       runBtn.textContent = 'Importing…';

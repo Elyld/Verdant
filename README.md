@@ -554,6 +554,14 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.23.0** — **🌱 Multi seed-packet tagging for invoices + expenses.** The
+  invoice packet picker is now a true multi-select (checkbox panel — link as
+  many packets as an order had), and the import preview links multiple packets
+  per invoice too (strong suggestions pre-checked). Expenses ("transactions")
+  get their own packet tagging: 🌱 chips with one-tap suggestions and the same
+  multi picker on every expense row, backed by a new `expense_seed_packets`
+  table. Invoice and expense tags are independent — tagging one never touches
+  the other.
 - **2.22.0** — **✏️ Expense editing + smarter invoice categories.** Expense
   rows on the Costs page now have edit and delete buttons — editing loads the
   row into the log-a-purchase form (Save changes / Cancel), and deleting an

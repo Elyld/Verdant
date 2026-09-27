@@ -99,9 +99,15 @@ const linkedPackets = {
   1: [{ id: 10, variety_name: 'Costoluto Fiorentino', vendor_name: 'Territorial Seed' }],
   2: [],
 };
+const linkedExpensePackets = {
+  3: [{ id: 11, variety_name: 'Habanero', vendor_name: "Matt's Peppers" }],
+};
 const suggestions = {
   1: [{ packet_id: 11, variety: 'Habanero', matched_item: 'Habanero - SEED / 25 seeds', score: 0.9 }],
   2: [],
+};
+const expenseSuggestions = {
+  3: [{ packet_id: 10, variety: 'Costoluto Fiorentino', matched_item: 'Costoluto Fiorentino Tomato - ORGANIC SEED', score: 1.0 }],
 };
 const fetchCalls = [];
 global.fetch = async (url, options = {}) => {
@@ -111,13 +117,17 @@ global.fetch = async (url, options = {}) => {
   else if (url === '/api/expenses/') body = expenses;
   else if (url === '/api/seed-packets/') body = packets;
   else if ((options.method === 'POST' || options.method === 'DELETE')
-           && /^\/api\/invoices\/\d+\/packets(\/\d+)?$/.test(url)) {
+           && /^\/api\/(invoices|expenses)\/\d+\/packets(\/\d+)?$/.test(url)) {
     body = options.method === 'POST'
       ? { id: 11, variety_name: 'Habanero', vendor_name: "Matt's Peppers" }
       : null;
   } else {
-    const m = url.match(/^\/api\/invoices\/(\d+)\/(packets|packet-suggestions)$/);
-    if (m) body = m[2] === 'packets' ? (linkedPackets[m[1]] || []) : (suggestions[m[1]] || []);
+    const m = url.match(/^\/api\/(invoices|expenses)\/(\d+)\/(packets|packet-suggestions)$/);
+    if (m) {
+      const store = m[1] === 'invoices' ? linkedPackets : linkedExpensePackets;
+      const sugg = m[1] === 'invoices' ? suggestions : expenseSuggestions;
+      body = m[3] === 'packets' ? (store[m[2]] || []) : (sugg[m[2]] || []);
+    }
   }
   const status = options.method === 'DELETE' ? 204 : 200;
   return { ok: true, status, json: async () => body };
@@ -161,17 +171,19 @@ const tick = (ms) => new Promise((r) => setTimeout(r, ms));
   check('empty notice hidden', named['#invoices-empty'].classList.contains('hidden'));
   check('expense dropdown populated', named['#inv-expense'].innerHTML.includes('Grow bags (5-pack)'));
 
-  // 3. Seed packet links render per invoice row.
+  // 3. Seed packet links render per invoice row (multi-select).
   check('linked packet chip rendered', rows.includes('🌱') && rows.includes('Costoluto Fiorentino'));
-  check('detach button carries invoice:packet ids', rows.includes('data-detach-packet="1:10"'));
-  check('suggestion button rendered with packet id', rows.includes('data-attach-packet="1:11"') && rows.includes('+ Habanero'));
+  check('detach button carries kind:invoice:packet ids', rows.includes('data-pk-detach="invoice:1:10"'));
+  check('suggestion button rendered with packet id', rows.includes('data-pk-attach="invoice:1:11"') && rows.includes('+ Habanero'));
   check('suggestion shows matched item in title', rows.includes('Habanero - SEED / 25 seeds'));
-  check('packet picker select rendered per row', rows.includes('data-packet-picker="1"') && rows.includes('data-packet-picker="2"'));
-  check('picker offers all seed packets', rows.includes("Matt&#39;s Peppers") || rows.includes("Matt's Peppers"));
+  check('multi checkbox panel rendered per row', rows.includes('data-pk-check="invoice:1:10"') && rows.includes('data-pk-check="invoice:2:11"'));
+  check('linked packets come pre-checked', rows.includes('data-pk-check="invoice:1:10" checked'));
+  check('unlinked packets unchecked', !rows.includes('data-pk-check="invoice:2:10" checked'));
+  check('checkboxes offer all seed packets', rows.includes("Matt&#39;s Peppers") || rows.includes("Matt's Peppers"));
 
   // 4. One-tap suggestion attach POSTs the right packet.
   const clickFns = named['#invoices-rows']._listeners.click || [];
-  const fakeAttach = { target: { closest: (sel) => (sel === '[data-attach-packet]' ? { dataset: { attachPacket: '2:11' } } : null) } };
+  const fakeAttach = { target: { closest: (sel) => (sel === '[data-pk-attach]' ? { dataset: { pkAttach: 'invoice:2:11' } } : null) } };
   await Promise.all(clickFns.map((fn) => fn(fakeAttach)));
   await tick(80);
   const attachCall = fetchCalls.find((c) => c.url === '/api/invoices/2/packets' && c.method === 'POST');
@@ -179,18 +191,22 @@ const tick = (ms) => new Promise((r) => setTimeout(r, ms));
   check('suggestion attach sends the packet id', !!attachCall && JSON.parse(attachCall.body).seed_packet_id === 11);
 
   // 5. Detach DELETEs the right link.
-  const fakeDetach = { target: { closest: (sel) => (sel === '[data-detach-packet]' ? { dataset: { detachPacket: '1:10' } } : null) } };
+  const fakeDetach = { target: { closest: (sel) => (sel === '[data-pk-detach]' ? { dataset: { pkDetach: 'invoice:1:10' } } : null) } };
   await Promise.all(clickFns.map((fn) => fn(fakeDetach)));
   await tick(80);
   check('detach DELETEs the invoice/packet link', fetchCalls.some((c) => c.url === '/api/invoices/1/packets/10' && c.method === 'DELETE'));
 
-  // 6. Picker change attaches the chosen packet.
+  // 6. Checking a packet checkbox attaches it; unchecking detaches.
   const changeFns = named['#invoices-rows']._listeners.change || [];
-  const fakePick = { target: { closest: () => ({ dataset: { packetPicker: '2' }, value: '10' }) } };
-  await Promise.all(changeFns.map((fn) => fn(fakePick)));
+  const fakeCheck = { target: { closest: () => ({ dataset: { pkCheck: 'invoice:2:10' }, checked: true }) } };
+  await Promise.all(changeFns.map((fn) => fn(fakeCheck)));
   await tick(80);
-  const pickCall = fetchCalls.filter((c) => c.url === '/api/invoices/2/packets' && c.method === 'POST').pop();
-  check('picker change attaches the chosen packet', !!pickCall && JSON.parse(pickCall.body).seed_packet_id === 10);
+  const checkCall = fetchCalls.filter((c) => c.url === '/api/invoices/2/packets' && c.method === 'POST').pop();
+  check('checkbox check attaches the packet', !!checkCall && JSON.parse(checkCall.body).seed_packet_id === 10);
+  const fakeUncheck = { target: { closest: () => ({ dataset: { pkCheck: 'invoice:1:10' }, checked: false }) } };
+  await Promise.all(changeFns.map((fn) => fn(fakeUncheck)));
+  await tick(80);
+  check('checkbox uncheck detaches the packet', fetchCalls.some((c) => c.url === '/api/invoices/1/packets/10' && c.method === 'DELETE'));
 
   // 7. "Create expense" button only on invoices without a linked expense.
   check('create-expense button shown for unlinked invoice',
@@ -237,6 +253,32 @@ const tick = (ms) => new Promise((r) => setTimeout(r, ms));
   cancelFns.forEach((fn) => fn());
   check('cancel resets the form title', named['#cost-form-title'].textContent === 'Log a purchase');
   check('cancel makes no API call', fetchCalls.length === callsBefore);
+
+  // 11. Expense rows carry seed-packet chips, suggestions, and the multi picker.
+  const costRowsAfter = named['#costs-rows'].innerHTML;
+  check('expense packet chip rendered', costRowsAfter.includes('data-pk-detach="expense:3:11"') && costRowsAfter.includes('Habanero'));
+  check('expense multi checkbox panel rendered', costRowsAfter.includes('data-pk-check="expense:3:10"') && costRowsAfter.includes('data-pk-check="expense:3:11"'));
+  check('expense linked packet pre-checked', costRowsAfter.includes('data-pk-check="expense:3:11" checked'));
+  check('expense suggestion button rendered', costRowsAfter.includes('data-pk-attach="expense:3:10"') && costRowsAfter.includes('+ Costoluto Fiorentino'));
+
+  // 12. Expense packet checkbox check/uncheck hits the expense endpoints.
+  const costChangeFns = named['#costs-rows']._listeners.change || [];
+  const fakeExpCheck = { target: { closest: () => ({ dataset: { pkCheck: 'expense:3:10' }, checked: true }) } };
+  await Promise.all(costChangeFns.map((fn) => fn(fakeExpCheck)));
+  await tick(80);
+  const expCheckCall = fetchCalls.filter((c) => c.url === '/api/expenses/3/packets' && c.method === 'POST').pop();
+  check('expense checkbox check attaches the packet', !!expCheckCall && JSON.parse(expCheckCall.body).seed_packet_id === 10);
+  const fakeExpUncheck = { target: { closest: () => ({ dataset: { pkCheck: 'expense:3:11' }, checked: false }) } };
+  await Promise.all(costChangeFns.map((fn) => fn(fakeExpUncheck)));
+  await tick(80);
+  check('expense checkbox uncheck detaches the packet', fetchCalls.some((c) => c.url === '/api/expenses/3/packets/11' && c.method === 'DELETE'));
+
+  // 13. Expense suggestion one-tap attach POSTs to the expense endpoint.
+  const fakeExpAttach = { target: { closest: (sel) => (sel === '[data-pk-attach]' ? { dataset: { pkAttach: 'expense:3:10' } } : null) } };
+  await Promise.all(costClickFns.map((fn) => fn(fakeExpAttach)));
+  await tick(80);
+  const expAttachCall = fetchCalls.filter((c) => c.url === '/api/expenses/3/packets' && c.method === 'POST').pop();
+  check('expense suggestion attach POSTs to expense packets endpoint', !!expAttachCall && JSON.parse(expAttachCall.body).seed_packet_id === 10);
 
   process.exit(failures ? 1 : 0);
 })();
