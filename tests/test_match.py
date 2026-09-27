@@ -96,6 +96,25 @@ def _make_image(session, album_id, source_url="", with_file=False) -> int:
     return img_id
 
 
+def test_delete_album_removes_rows_and_files(client):
+    with Session(engine) as s:
+        album_id = _make_album(s, "Doomed", "immich:DEL")
+        img_id = _make_image(s, album_id, "immich:9", with_file=True)
+        img = s.get(AlbumImage, img_id)
+        disk = UPLOAD_DIR / f"albums/{album_id}" / img.file_path.rsplit("/", 1)[-1]
+        assert disk.exists()
+
+    resp = client.delete(f"/api/albums/{album_id}")
+    assert resp.status_code == 204, resp.text
+
+    with Session(engine) as s:
+        assert s.get(Album, album_id) is None
+        assert s.get(AlbumImage, img_id) is None
+    assert not disk.exists()
+    # Second delete is a 404, not a crash.
+    assert client.delete(f"/api/albums/{album_id}").status_code == 404
+
+
 def test_assign_and_unassign_photo(client):
     with Session(engine) as s:
         plant_id = _make_plant(s)
