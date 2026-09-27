@@ -61,8 +61,13 @@ def _order_columns(model):
     return pk or [next(iter(model.__table__.columns.values()))]
 
 
-# Image tables carry uploaded files (detected by the file_path column).
-IMAGE_TABLES = {m for m in TABLES_IN_ORDER if "file_path" in m.__table__.columns}
+# Tables carrying uploaded files (detected by file_path / pdf_path columns).
+# Maps each such model to the columns holding /uploads/ paths.
+FILE_TABLES = {
+    m: [c for c in ("file_path", "pdf_path") if c in m.__table__.columns]
+    for m in TABLES_IN_ORDER
+    if any(c in m.__table__.columns for c in ("file_path", "pdf_path"))
+}
 
 
 def _upload_relpath(file_path: str) -> str | None:
@@ -88,14 +93,15 @@ def export_backup(include_photos: bool = True, session: Session = Depends(get_se
             rows = session.exec(select(model).order_by(*_order_columns(model))).all()
             dumped = [r.model_dump(mode="json") for r in rows]
             tables[model.__tablename__] = dumped
-            if include_photos and model in IMAGE_TABLES:
+            if include_photos and model in FILE_TABLES:
                 for d in dumped:
-                    rel = _upload_relpath(d.get("file_path") or "")
-                    if not rel:
-                        continue
-                    src = UPLOAD_DIR / rel
-                    if src.is_file():
-                        zf.write(src, f"files/{rel}")
+                    for col in FILE_TABLES[model]:
+                        rel = _upload_relpath(d.get(col) or "")
+                        if not rel:
+                            continue
+                        src = UPLOAD_DIR / rel
+                        if src.is_file():
+                            zf.write(src, f"files/{rel}")
         manifest = {
             "format": FORMAT_MARKER,
             "format_version": FORMAT_VERSION,

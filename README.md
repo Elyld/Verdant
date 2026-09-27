@@ -170,7 +170,10 @@ today's entries at a glance. NFC tags can drop you straight here.
 ### 💰 Costs — was it worth growing?
 Every garden expense in one place, broken down by category. Tag a purchase
 to a plant and the Season Review scorecard splits costs per variety, so you
-can finally answer whether the peppers beat the grocery store.
+can finally answer whether the peppers beat the grocery store. Below the
+expenses, a **🧾 Invoices** section keeps the paper trail: vendor, order
+date, order number, total, and the PDF receipt, each optionally linked to
+the expense it documents.
 
 ![Costs](docs/screenshots/costs.png)
 
@@ -398,6 +401,7 @@ ignored):
 | Watering logs | `log_id`, `date`, `location`, `plant`, `method`, `amount` (parsed to number + unit when it looks like one, e.g. `2 gal`), `notes` |
 | Fertilization logs | `log_id`, `date`, `fertilizer`, `npk_ratio`, `amount_used` (free text), `plant`, `notes` |
 | Harvests | `harvest_id`, `date`, `plant`, `quantity`, `unit`, `weight`, `weight_unit` (oz/g/lb/kg — defaults to oz) |
+| Invoices | `vendor`, `order_number`, `order_date`, `total`, `items`, `notes` |
 
 Notes:
 
@@ -548,6 +552,12 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.19.0** — **🧾 Invoices** on the Costs page. Keep the paper trail for
+  seed and supply orders: vendor, order date, order number, total, items,
+  and the PDF receipt, each optionally linked to the expense it documents.
+  Import them from CSV on the Import page (columns: `vendor`,
+  `order_number`, `order_date`, `total`, `items`, `notes` — re-runs skip
+  what's already there), and invoice PDFs ride along in backups.
 - **2.18.0** — The visual refresh, plus a few fixes. Newsreader serif
   headings and Source Sans body text, a warmer beige palette, and the classic
   navy header. New ✨ Preferences card in Settings: which day the calendar

@@ -254,6 +254,34 @@ class Expense(SQLModel, table=True):
 
 
 # --------------------------------------------------------------------------- #
+# Invoices
+# --------------------------------------------------------------------------- #
+class Invoice(SQLModel, table=True):
+    """A purchase invoice / order receipt, usually from a seed or garden supplier.
+
+    Lives on the Costs page next to the expenses it backs up. Invoices can be
+    entered by hand, imported from CSV, or pulled from order-confirmation
+    emails (source="gmail"). An invoice may link to the Expense row it
+    documents via expense_id.
+    """
+
+    __tablename__ = "invoices"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    vendor: str = Field(default="", index=True)
+    order_date: str = Field(index=True, default="")  # ISO YYYY-MM-DD
+    order_number: str = Field(default="", index=True)
+    total: float = Field(default=0.0)  # dollars
+    items_summary: Optional[str] = None  # short human-readable list of what was ordered
+    pdf_path: Optional[str] = None  # /uploads/invoices/<id>/xxxx.pdf
+    notes: Optional[str] = None
+    source: str = Field(default="manual")  # manual | csv | gmail
+    expense_id: Optional[int] = Field(default=None, foreign_key="expenses.id", index=True)
+
+    expense: Optional["Expense"] = Relationship()
+
+
+# --------------------------------------------------------------------------- #
 # Pests
 # --------------------------------------------------------------------------- #
 class PestLog(SQLModel, table=True):

@@ -46,5 +46,37 @@
         </table>
         <p id="costs-empty" class="py-4 text-center text-sm text-navy-400">No expenses yet.</p>
       </div>
+
+      <div class="card space-y-4">
+        <div>
+          <h3 class="font-display text-lg font-semibold text-navy-800">🧾 Invoices</h3>
+          <p class="text-sm text-navy-500">Order receipts from seed &amp; garden suppliers — the paper trail behind the spending above.</p>
+        </div>
+        <form id="invoice-form" class="space-y-3">
+          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <label class="block"><span class="lbl">Vendor</span><input id="inv-vendor" type="text" class="inp" placeholder="Territorial Seed" maxlength="120" required /></label>
+            <label class="block"><span class="lbl">Order date</span><input id="inv-date" type="date" class="inp" required /></label>
+            <label class="block"><span class="lbl">Order #</span><input id="inv-order" type="text" class="inp" placeholder="WW1149159" maxlength="80" /></label>
+            <label class="block"><span class="lbl">Total ($)</span><input id="inv-total" type="number" min="0" step="0.01" class="inp" placeholder="0.00" /></label>
+            <label class="block sm:col-span-2"><span class="lbl">Items</span><input id="inv-items" type="text" class="inp" placeholder="Garlic sampler, tomato seeds…" /></label>
+            <label class="block"><span class="lbl">Links to expense (optional)</span><select id="inv-expense" class="inp"><option value="">— none —</option></select></label>
+            <label class="block"><span class="lbl">Notes</span><input id="inv-notes" type="text" class="inp" placeholder="optional" /></label>
+          </div>
+          <div class="flex flex-wrap items-center gap-3">
+            <button type="submit" class="btn-primary">Add invoice</button>
+            <label class="text-sm text-navy-500">PDF receipt <input id="inv-pdf" type="file" accept="application/pdf,.pdf" class="text-sm" /></label>
+          </div>
+        </form>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead><tr class="text-left text-xs uppercase tracking-widest text-navy-400">
+              <th class="py-2 pr-3">Date</th><th class="py-2 pr-3">Vendor</th><th class="py-2 pr-3">Order</th>
+              <th class="py-2 pr-3">Items</th><th class="py-2 pr-3 text-right">Total</th><th class="py-2"></th>
+            </tr></thead>
+            <tbody id="invoices-rows"></tbody>
+          </table>
+          <p id="invoices-empty" class="py-4 text-center text-sm text-navy-400">No invoices yet.</p>
+        </div>
+      </div>
     </section>
 {% endblock %}
