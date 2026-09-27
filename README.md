@@ -1,4 +1,4 @@
-# 🌿 Verdant — Self-Hosted Garden Journal (v2.16.2)
+# 🌿 Verdant — Self-Hosted Garden Journal (v2.17.0)
 
 Your garden, logged. Plant profiles with care reminders, a daily observation log
 with a calendar heatmap, photo albums with slideshows, a seed stash and seedling
@@ -499,6 +499,13 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.17.0** — Albums can now be deleted from the Photos page. Pick an album
+  and hit **🗑️ Delete album**: a confirm dialog names the album and its photo
+  count, then the album, its photo rows, and their downloaded files are all
+  removed. Your originals in Immich are never touched, so re-importing is
+  always an option; plant photo assignments from a deleted album are removed
+  with it. Handy when duplicates or stale metadata make a clean re-import
+  easier than surgery.
 - **2.16.2** — Static assets (JS/CSS) now carry the app version in their URL,
   so browsers fetch fresh code after every redeploy instead of running stale
   cached scripts. Fixes the case where the footer showed a new version but

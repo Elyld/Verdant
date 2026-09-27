@@ -82,6 +82,39 @@
 
     picker.addEventListener('change', () => openAlbum(picker.value));
     $('#photo-refresh').addEventListener('click', () => loadAlbums().catch((error) => toast(`Could not load albums: ${error.message}`, 'err')));
+    $('#photo-delete-album').addEventListener('click', async (event) => {
+      const btn = event.currentTarget;
+      const id = picker.value;
+      if (!id) { toast('Choose an album first.', 'err'); return; }
+      let album;
+      try {
+        album = await api.get(`/api/albums/${id}`);
+      } catch (error) {
+        toast(`Could not load album: ${error.message}`, 'err');
+        return;
+      }
+      const count = (album.images || []).length;
+      const ok = window.confirm(
+        `Delete the album "${album.name}" and its ${count} photo${count === 1 ? '' : 's'} from Verdant?\n\n` +
+        'Your originals in Immich are untouched — you can re-import anytime. ' +
+        'Any plant photo assignments from this album will be removed too.',
+      );
+      if (!ok) return;
+      const label = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Deleting…';
+      try {
+        await api.del(`/api/albums/${id}`);
+        toast(`Deleted album "${album.name}".`);
+        await loadAlbums();
+        openAlbum('');
+      } catch (error) {
+        toast(`Delete failed: ${error.message}`, 'err');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = label;
+      }
+    });
     $('#photo-sync-meta').addEventListener('click', async (event) => {
       const btn = event.currentTarget;
       const id = picker.value;

@@ -51,7 +51,7 @@ function makeEl() {
 const named = {};
 const namedAll = {};
 ['photo-album-select', 'slideshow', 'photos-empty', 'slide-stage', 'slide-img',
- 'slide-caption', 'slide-counter', 'slide-play', 'photo-refresh', 'photo-sync-meta', 'slide-prev',
+ 'slide-caption', 'slide-counter', 'slide-play', 'photo-refresh', 'photo-sync-meta', 'photo-delete-album', 'slide-prev',
  'slide-next', 'slide-fullscreen', 'immich-album-select', 'immich-import',
  'calendar-grid', 'calendar-empty', 'day-modal', 'toasts', 'app-version'].forEach((id) => {
   named[`#${id}`] = makeEl();
@@ -93,6 +93,7 @@ const IMAGES = [0, 1, 2].map((i) => ({
   title: `Photo ${i}`, original_name: `p${i}.jpg`,
 }));
 let immichImportCalls = 0;
+let deleteCalls = 0;
 let immichFailMode = false; // when true, every batch fails (e.g. missing asset.download permission)
 global.fetch = async (url, options) => {  const method = (options && options.method) || 'GET';
   let body = null;
@@ -111,6 +112,10 @@ global.fetch = async (url, options) => {  const method = (options && options.met
     }
   }
   else if (url === '/api/albums') body = [{ id: 7, name: 'Garden 2026', images: IMAGES }];
+  else if (url === '/api/albums/7' && method === 'DELETE') {
+    deleteCalls += 1;
+    return { ok: true, status: 204, json: async () => null };
+  }
   else if (url === '/api/albums/7') body = { id: 7, name: 'Garden 2026', images: IMAGES };
   else if (url === '/api/albums/7/sync-metadata' && method === 'POST') body = { album_id: 7, total: 3, updated: 2 };
   else if (url === '/api/stats/calendar') body = [];
@@ -210,6 +215,23 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
   picker.value = '';
   await picker._listeners.change[0]();
   check('empty state on deselect', named['#slideshow'].classList.contains('hidden'));
+
+  // --- Delete album button ---
+  const delBtn = named['#photo-delete-album'];
+  check('delete button wired', Array.isArray(delBtn._listeners.click) && delBtn._listeners.click.length === 1);
+  // No album chosen -> toast, no request.
+  picker.value = '';
+  await delBtn._listeners.click[0]({ currentTarget: delBtn });
+  await tick(60);
+  check('delete without selection warns', seenToasts.some((t) => t.includes('Choose an album first')));
+  check('delete without selection sends no request', deleteCalls === 0);
+  // Choose the album and delete (window.confirm stubbed to true).
+  picker.value = '7';
+  await delBtn._listeners.click[0]({ currentTarget: delBtn });
+  await tick(120);
+  check('delete sends DELETE for the chosen album', deleteCalls === 1);
+  check('delete toast confirms', seenToasts.some((t) => t.includes('Deleted album')));
+  check('delete button restored', delBtn.textContent !== 'Deleting…' && delBtn.disabled === false);
 
   console.log(failures ? `\n${failures} FAILURE(S)` : '\nAll checks passed.');
   process.exit(failures ? 1 : 0);
