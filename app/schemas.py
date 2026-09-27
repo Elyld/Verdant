@@ -13,6 +13,11 @@ def _none_to_str(value):
     return "" if value is None else value
 
 
+def _none_to_false(value):
+    """Coerce NULLs from old databases (pre-column rows) to False."""
+    return False if value is None else bool(value)
+
+
 class ImageRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -384,10 +389,12 @@ class InvoiceRead(BaseModel):
     notes: str = ""
     source: str = "manual"
     expense_id: Optional[int] = None
+    expense_auto_created: bool = False
 
     _null_str = field_validator(
         "vendor", "order_number", "items_summary", "notes", "source", mode="before"
     )(_none_to_str)
+    _null_bool = field_validator("expense_auto_created", mode="before")(_none_to_false)
 
 
 # --------------------------------- Pest log -------------------------------- #

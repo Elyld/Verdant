@@ -554,6 +554,13 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.21.0** — **💸 Expenses from invoices.** Creating an invoice now
+  auto-creates its expense row (amount, date, vendor, items as notes) so the
+  Costs page fills itself in — or link an existing expense by hand as before.
+  Older invoices get a "➕ Create expense" button, edits to an invoice sync
+  onto its auto-created expense, and deleting the invoice takes the
+  auto-created expense with it. CSV imports back expenses automatically too,
+  with re-runs still skipping cleanly.
 - **2.20.0** — **🔗 Invoice ↔ seed packet links.** An invoice now knows which
   seed packets it bought: link packets from a picker on each invoice row, or
   tap a suggested match (the app guesses from the invoice's item text — you

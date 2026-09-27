@@ -6,6 +6,11 @@ from sqlalchemy.orm import Session
 from sqlmodel import select
 
 from app.database import get_session
+from app.invoice_expenses import (
+    auto_create_expense,
+    delete_auto_expense,
+    sync_auto_expense,
+)
 from app.models import Expense, Invoice, InvoiceSeedPacket, SeedPacket, apply_patch
 from app.packet_match import suggest_packets
 from app.schemas import InvoiceCreate, InvoiceRead
@@ -63,6 +68,26 @@ def create_invoice(
         expense_id=payload.expense_id,
     )
     session.add(invoice)
+    if payload.expense_id is None:
+        # No manual link: back the invoice with an auto-created expense.
+        auto_create_expense(session, invoice)
+    session.commit()
+    session.refresh(invoice)
+    return invoice
+
+
+@router.post("/{invoice_id}/create-expense", response_model=InvoiceRead)
+def create_invoice_expense(
+    invoice_id: int,
+    session: Session = Depends(get_session),
+) -> Invoice:
+    """Back an existing invoice with an expense row.
+
+    Idempotent: an invoice that already links to an expense is returned
+    unchanged — this never creates a duplicate expense.
+    """
+    invoice = _get_or_404(session, invoice_id)
+    auto_create_expense(session, invoice)
     session.commit()
     session.refresh(invoice)
     return invoice
@@ -83,7 +108,15 @@ def update_invoice(
         raise HTTPException(
             status_code=422, detail=f"Expense {payload['expense_id']} not found"
         )
+    prev_expense_id = invoice.expense_id
     apply_patch(invoice, payload, exclude=("id", "pdf_path"))
+    if "expense_id" in payload and payload["expense_id"] != prev_expense_id:
+        # The link was changed (or removed) by hand: it's manual now, and the
+        # auto-created expense — if any — is left in place, never deleted here.
+        invoice.expense_auto_created = False
+    else:
+        # Push total/date/vendor/description onto the auto-created expense.
+        sync_auto_expense(session, invoice)
     session.add(invoice)
     session.commit()
     session.refresh(invoice)
@@ -98,6 +131,9 @@ def delete_invoice(
     invoice = _get_or_404(session, invoice_id)
     if invoice.pdf_path:
         delete_stored(invoice.pdf_path)
+    # An auto-created expense goes with its invoice (unless another invoice
+    # still links to it); a manually linked expense is left alone.
+    delete_auto_expense(session, invoice)
     # Drop packet links explicitly as well as via ON DELETE CASCADE, so the
     # cleanup holds even where the connection didn't enable FK enforcement.
     for link in session.exec(

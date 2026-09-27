@@ -132,7 +132,7 @@
         <tr class="border-t border-beige-200">
           <td class="py-2 pr-3 whitespace-nowrap">${fmtDate(inv.order_date)}</td>
           <td class="py-2 pr-3 font-semibold">${esc(inv.vendor || '—')}</td>
-          <td class="py-2 pr-3">${esc(inv.order_number || '—')}${inv.expense_id && expNames.get(inv.expense_id) ? `<span class="block text-xs text-sage-700">💸 ${esc(expNames.get(inv.expense_id))}</span>` : ''}</td>
+          <td class="py-2 pr-3">${esc(inv.order_number || '—')}${inv.expense_id && expNames.get(inv.expense_id) ? `<span class="block text-xs text-sage-700">💸 ${esc(expNames.get(inv.expense_id))}</span>` : (inv.expense_id ? '' : `<button type="button" data-create-expense="${inv.id}" class="block text-xs text-sage-700 underline">➕ Create expense</button>`)}</td>
           <td class="py-2 pr-3">${esc(inv.items_summary || '—')}${inv.notes ? `<span class="block text-xs text-navy-400">${esc(inv.notes)}</span>` : ''}${packetBlock(inv)}</td>
           <td class="py-2 pr-3 text-right font-semibold">${money(inv.total)}</td>
           <td class="py-2 text-right whitespace-nowrap">
@@ -169,6 +169,15 @@
     });
 
     $('#invoices-rows').addEventListener('click', async (event) => {
+      const createExpBtn = event.target.closest('[data-create-expense]');
+      if (createExpBtn) {
+        try {
+          await api.post(`/api/invoices/${createExpBtn.dataset.createExpense}/create-expense`);
+          toast('Expense created 💸', 'ok');
+          load();
+        } catch (error) { toast(`Could not create expense: ${error.message}`, 'err'); }
+        return;
+      }
       const attachBtn = event.target.closest('[data-attach-packet]');
       if (attachBtn) {
         const [invId, pid] = attachBtn.dataset.attachPacket.split(':').map(Number);
@@ -191,7 +200,7 @@
       }
       const btn = event.target.closest('[data-del-inv]');
       if (!btn) return;
-      if (!window.confirm('Delete this invoice? Its PDF goes with it.')) return;
+      if (!window.confirm('Delete this invoice? Its PDF and any auto-created expense go with it.')) return;
       try {
         await api.del(`/api/invoices/${btn.dataset.delInv}`);
         toast('Invoice deleted.', 'ok');

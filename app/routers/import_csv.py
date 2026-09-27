@@ -24,6 +24,7 @@ from sqlmodel import Session, select
 
 from app.database import get_session
 from app import units as units_mod
+from app.invoice_expenses import auto_create_expense
 from app.models import (
     FertilizationLog,
     Fertilizer,
@@ -628,6 +629,10 @@ async def run_import(
                 session.add(inst)
                 imported += 1
                 if entity == "invoices":
+                    # Back every imported invoice with an expense row, in the
+                    # same transaction. Re-imports skip (no new invoice), so
+                    # this never dupes.
+                    auto_create_expense(session, inst)
                     new_invoices.append((i, inst))
             except Exception as exc:  # noqa: BLE001 - report per-row, keep going
                 errors.append(f"{r.get('key') or '?'}: {exc}")

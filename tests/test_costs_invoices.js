@@ -191,5 +191,15 @@ const tick = (ms) => new Promise((r) => setTimeout(r, ms));
   const pickCall = fetchCalls.filter((c) => c.url === '/api/invoices/2/packets' && c.method === 'POST').pop();
   check('picker change attaches the chosen packet', !!pickCall && JSON.parse(pickCall.body).seed_packet_id === 10);
 
+  // 7. "Create expense" button only on invoices without a linked expense.
+  check('create-expense button shown for unlinked invoice',
+    rows.includes('data-create-expense="1"') && rows.includes('➕ Create expense'));
+  check('no create-expense button on linked invoice', !rows.includes('data-create-expense="2"'));
+  const fakeCreateExp = { target: { closest: (sel) => (sel === '[data-create-expense]' ? { dataset: { createExpense: '1' } } : null) } };
+  await Promise.all(clickFns.map((fn) => fn(fakeCreateExp)));
+  await tick(80);
+  check('create-expense click POSTs to the create-expense endpoint',
+    fetchCalls.some((c) => c.url === '/api/invoices/1/create-expense' && c.method === 'POST'));
+
   process.exit(failures ? 1 : 0);
 })();
