@@ -27,7 +27,7 @@
     }
   };
 </script>
-<link rel="stylesheet" href="/static/styles.css" />
+<link rel="stylesheet" href="/static/styles.css?v={{ __version__ }}" />
 {% block head_extra %}{% endblock %}
 </head>
 <body class="{% block body_class %}h-full font-body bg-beige-100 text-navy-800 antialiased{% endblock %}">
@@ -96,29 +96,29 @@
 <div id="toasts" role="status" aria-live="polite" class="pointer-events-none fixed bottom-4 right-4 z-50 flex w-80 flex-col gap-2"></div>
 
 {% block scripts %}
-<script src="/static/js/core.js"></script>
-<script src="/static/js/blog.js"></script>
-<script src="/static/js/observations.js"></script>
-<script src="/static/js/plants.js"></script>
-<script src="/static/js/review.js"></script>
-<script src="/static/js/backup.js"></script>
-<script src="/static/js/seeds.js"></script>
-<script src="/static/js/import.js"></script>
-<script src="/static/js/calendar.js"></script>
-<script src="/static/js/immich.js"></script>
-<script src="/static/js/photos.js"></script>
-<script src="/static/js/slideshow.js"></script>
-<script src="/static/js/quick.js"></script>
-<script src="/static/js/costs.js"></script>
-<script src="/static/js/pests.js"></script>
-<script src="/static/js/settings.js"></script>
-<script src="/static/js/match.js"></script>
-<script src="/static/js/lightbox.js"></script>
-<script src="/static/js/fertilizers.js"></script>
-<script src="/static/js/seed_catalog.js"></script>
-<script src="/static/js/seedlings.js"></script>
-<script src="/static/js/tags.js"></script>
-<script src="/static/js/planner.js"></script>
+<script src="/static/js/core.js?v={{ __version__ }}"></script>
+<script src="/static/js/blog.js?v={{ __version__ }}"></script>
+<script src="/static/js/observations.js?v={{ __version__ }}"></script>
+<script src="/static/js/plants.js?v={{ __version__ }}"></script>
+<script src="/static/js/review.js?v={{ __version__ }}"></script>
+<script src="/static/js/backup.js?v={{ __version__ }}"></script>
+<script src="/static/js/seeds.js?v={{ __version__ }}"></script>
+<script src="/static/js/import.js?v={{ __version__ }}"></script>
+<script src="/static/js/calendar.js?v={{ __version__ }}"></script>
+<script src="/static/js/immich.js?v={{ __version__ }}"></script>
+<script src="/static/js/photos.js?v={{ __version__ }}"></script>
+<script src="/static/js/slideshow.js?v={{ __version__ }}"></script>
+<script src="/static/js/quick.js?v={{ __version__ }}"></script>
+<script src="/static/js/costs.js?v={{ __version__ }}"></script>
+<script src="/static/js/pests.js?v={{ __version__ }}"></script>
+<script src="/static/js/settings.js?v={{ __version__ }}"></script>
+<script src="/static/js/match.js?v={{ __version__ }}"></script>
+<script src="/static/js/lightbox.js?v={{ __version__ }}"></script>
+<script src="/static/js/fertilizers.js?v={{ __version__ }}"></script>
+<script src="/static/js/seed_catalog.js?v={{ __version__ }}"></script>
+<script src="/static/js/seedlings.js?v={{ __version__ }}"></script>
+<script src="/static/js/tags.js?v={{ __version__ }}"></script>
+<script src="/static/js/planner.js?v={{ __version__ }}"></script>
 {% endblock %}
 {% endblock %}
 </body>
