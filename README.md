@@ -554,6 +554,13 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.22.0** — **✏️ Expense editing + smarter invoice categories.** Expense
+  rows on the Costs page now have edit and delete buttons — editing loads the
+  row into the log-a-purchase form (Save changes / Cancel), and deleting an
+  expense cleanly unlinks any invoices that pointed at it. Auto-created
+  expenses are also categorized by vendor now (247Garden → Supplies, seed
+  vendors → Seeds) with keyword fallback on the items text, instead of
+  everything landing in Seeds.
 - **2.21.0** — **💸 Expenses from invoices.** Creating an invoice now
   auto-creates its expense row (amount, date, vendor, items as notes) so the
   Costs page fills itself in — or link an existing expense by hand as before.

@@ -13,12 +13,53 @@ and deletes can tell them apart from manually linked ones:
 """
 from typing import Optional
 
+import re
+
 from sqlmodel import Session, select
 
 from app.models import Expense, Invoice
 
-AUTO_CATEGORY = "Seeds"
 NOTES_MAX = 500
+
+# Vendor substrings (lowercase) -> expense category. Checked before keywords.
+VENDOR_CATEGORIES = [
+    ("247garden", "Supplies"),
+    ("territorial", "Seeds"),
+    ("seed savers", "Seeds"),
+    ("true leaf", "Seeds"),
+    ("matt's peppers", "Seeds"),
+    ("matt\u2019s peppers", "Seeds"),  # curly apostrophe variant
+]
+
+# Word-boundary keyword scan of the items text -> category. Vendor wins.
+KEYWORD_CATEGORIES = [
+    (r"grow bags?", "Supplies"),
+    (r"growbags?", "Supplies"),
+    (r"containers?", "Supplies"),
+    (r"planters?", "Supplies"),
+    (r"pots?", "Supplies"),
+    ("fertilizer", "Fertilizer"),
+    ("fertiliser", "Fertilizer"),
+    ("potting mix", "Soil"),
+    ("soil", "Soil"),
+]
+
+
+def category_for_invoice(invoice: Invoice) -> str:
+    """Pick an expense category for an auto-created invoice expense.
+
+    Vendor match wins; otherwise scan the items text for keywords;
+    default "Seeds" when nothing matches.
+    """
+    vendor = (invoice.vendor or "").lower()
+    for needle, category in VENDOR_CATEGORIES:
+        if needle in vendor:
+            return category
+    text = f"{invoice.items_summary or ''} {invoice.notes or ''}".lower()
+    for needle, category in KEYWORD_CATEGORIES:
+        if re.search(r"\b" + needle + r"\b", text):
+            return category
+    return "Seeds"
 
 
 def expense_description(invoice: Invoice) -> str:
@@ -46,7 +87,7 @@ def auto_create_expense(session: Session, invoice: Invoice) -> Expense:
         notes = notes[: NOTES_MAX - 3].rstrip() + "..."
     expense = Expense(
         date=invoice.order_date or "",
-        category=AUTO_CATEGORY,
+        category=category_for_invoice(invoice),
         description=expense_description(invoice),
         amount=float(invoice.total or 0.0),
         notes=notes or None,

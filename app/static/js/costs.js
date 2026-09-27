@@ -11,6 +11,19 @@
     const today = todayLocal();
     $('#cost-date').value = today;
     const money = (n) => `$${Number(n || 0).toFixed(2)}`;
+    let editingId = null;
+    let lastList = [];
+
+    function resetCostForm() {
+      editingId = null;
+      $('#cost-form-title').textContent = 'Log a purchase';
+      $('#cost-submit').textContent = 'Add expense';
+      $('#cost-cancel').classList.add('hidden');
+      $('#cost-desc').value = '';
+      $('#cost-amount').value = '';
+      $('#cost-notes').value = '';
+      $('#cost-plant').value = '';
+    }
 
     async function load() {
       const [expenses, plants] = await Promise.all([
@@ -18,6 +31,7 @@
         api.get('/api/plants/').catch(() => []),
       ]);
       const list = Array.isArray(expenses) ? expenses : [];
+      lastList = list;
       const plantNames = new Map((Array.isArray(plants) ? plants : []).map((p) => [p.id, p.variety_name]));
       const sel = $('#cost-plant');
       if (sel && !sel.dataset.loaded) {
@@ -39,36 +53,59 @@
           <td class="py-2 pr-3"><span class="pill">${esc(e.category)}</span></td>
           <td class="py-2 pr-3">${esc(e.description || '—')}${e.plant_id && plantNames.get(e.plant_id) ? `<span class="block text-xs text-sage-700">🌱 ${esc(plantNames.get(e.plant_id))}</span>` : ''}${e.notes ? `<span class="block text-xs text-navy-400">${esc(e.notes)}</span>` : ''}</td>
           <td class="py-2 pr-3 text-right font-semibold">${money(e.amount)}</td>
-          <td class="py-2 text-right"><button type="button" data-del-cost="${e.id}" class="text-xs text-red-700 underline">delete</button></td>
+          <td class="py-2 text-right whitespace-nowrap"><button type="button" data-edit-cost="${e.id}" class="text-xs text-sage-700 underline mr-2">edit</button><button type="button" data-del-cost="${e.id}" class="text-xs text-red-700 underline">delete</button></td>
         </tr>`).join('');
     }
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
+      const payload = {
+        date: $('#cost-date').value || today,
+        category: $('#cost-category').value,
+        description: $('#cost-desc').value.trim(),
+        amount: Number($('#cost-amount').value) || 0,
+        notes: $('#cost-notes').value.trim(),
+        plant_id: $('#cost-plant').value ? Number($('#cost-plant').value) : null,
+      };
       try {
-        await api.post('/api/expenses/', {
-          date: $('#cost-date').value || today,
-          category: $('#cost-category').value,
-          description: $('#cost-desc').value.trim(),
-          amount: Number($('#cost-amount').value) || 0,
-          notes: $('#cost-notes').value.trim(),
-          plant_id: $('#cost-plant').value ? Number($('#cost-plant').value) : null,
-        });
-        toast('Expense logged 💸', 'ok');
-        $('#cost-desc').value = '';
-        $('#cost-amount').value = '';
-        $('#cost-notes').value = '';
-        $('#cost-plant').value = '';
+        if (editingId) {
+          await api.patch(`/api/expenses/${editingId}`, payload);
+          toast('Expense updated 💸', 'ok');
+        } else {
+          await api.post('/api/expenses/', payload);
+          toast('Expense logged 💸', 'ok');
+        }
+        resetCostForm();
         load();
       } catch (error) { toast(`Could not save expense: ${error.message}`, 'err'); }
     });
 
+    $('#cost-cancel').addEventListener('click', resetCostForm);
+
     $('#costs-rows').addEventListener('click', async (event) => {
+      const editBtn = event.target.closest('[data-edit-cost]');
+      if (editBtn) {
+        const e = lastList.find((x) => String(x.id) === editBtn.dataset.editCost);
+        if (!e) return;
+        editingId = e.id;
+        $('#cost-date').value = (e.date || '').slice(0, 10) || today;
+        $('#cost-category').value = e.category || 'Supplies';
+        $('#cost-desc').value = e.description || '';
+        $('#cost-amount').value = e.amount ?? '';
+        $('#cost-notes').value = e.notes || '';
+        $('#cost-plant').value = e.plant_id ? String(e.plant_id) : '';
+        $('#cost-form-title').textContent = 'Edit expense';
+        $('#cost-submit').textContent = 'Save changes';
+        $('#cost-cancel').classList.remove('hidden');
+        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
       const btn = event.target.closest('[data-del-cost]');
       if (!btn) return;
       if (!window.confirm('Delete this expense?')) return;
       try {
         await api.del(`/api/expenses/${btn.dataset.delCost}`);
+        if (editingId && String(editingId) === btn.dataset.delCost) resetCostForm();
         toast('Expense deleted.', 'ok');
         load();
       } catch (error) { toast(`Could not delete: ${error.message}`, 'err'); }
