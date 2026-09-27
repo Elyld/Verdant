@@ -554,6 +554,11 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.20.0** — **🔗 Invoice ↔ seed packet links.** An invoice now knows which
+  seed packets it bought: link packets from a picker on each invoice row, or
+  tap a suggested match (the app guesses from the invoice's item text — you
+  confirm). Links are shown as 🌱 chips and survive in backups; importing
+  invoices from CSV offers the best-guess packet per row right in the preview.
 - **Unreleased** — Fixed: the 🧾 Invoices section on the Costs page never
   rendered its table (a script variable was used before its declaration),
   so invoices now list correctly with PDF links and linked-expense badges.
