@@ -173,3 +173,21 @@ def test_bulk_delete_posts_removed():
     # the post survived, and per-post delete still works
     assert client.get(f"/api/posts/{post_id}").status_code == 200
     assert client.delete(f"/api/posts/{post_id}").status_code == 204
+
+
+def test_plant_create_coerces_iso_date_strings():
+    """POST /api/plants/ with date_planted as an ISO string used to 500
+    (raw table model, no validation). Now coerced; bad dates 422."""
+    r = client.post("/api/plants/", json={
+        "variety_name": "Audit Tomato", "species_type": "Tomato",
+        "date_planted": "2026-05-10", "date_started_indoors": "2026-03-01",
+    })
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["date_planted"] == "2026-05-10"
+    assert body["date_started_indoors"] == "2026-03-01"
+    r = client.post("/api/plants/", json={
+        "variety_name": "Audit Tomato 2", "species_type": "Tomato",
+        "date_planted": "not-a-date",
+    })
+    assert r.status_code == 422, r.text

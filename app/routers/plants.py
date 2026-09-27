@@ -26,6 +26,22 @@ def _get_or_404(session: Session, plant_id: int) -> Plant:
     return plant
 
 
+def _coerce_dates(plant: Plant) -> Plant:
+    """SQLModel table models skip validation, so coerce ISO date strings by hand."""
+    for field in ("date_started_indoors", "date_planted"):
+        value = getattr(plant, field)
+        if isinstance(value, str):
+            text = value.strip()
+            if not text:
+                setattr(plant, field, None)
+                continue
+            try:
+                setattr(plant, field, Date.fromisoformat(text))
+            except ValueError:
+                raise HTTPException(422, f"{field} {value!r} is not a valid YYYY-MM-DD date.")
+    return plant
+
+
 @router.get("/", response_model=List[Plant])
 def list_plants(
     location_id: Optional[int] = Query(None, description="Filter by location"),
@@ -48,6 +64,7 @@ def create_plant(
     plant: Plant,
     session: Session = Depends(get_session)
 ) -> Plant:
+    _coerce_dates(plant)
     if plant.location_id:
         loc = session.get(Location, plant.location_id)
         if not loc:
