@@ -122,6 +122,98 @@
     });
   }
 
+  // Canonical nav sections (key, href, icon, label). The mobile tab bar
+  // renderer uses this; the Settings chip picker reads it off Verdant.
+  const NAV_SECTIONS = [
+    { key: 'home', href: '/', icon: '📖', label: 'Blog & Stories' },
+    { key: 'observations', href: '/observations', icon: '📝', label: 'Garden Logs' },
+    { key: 'calendar', href: '/calendar', icon: '📅', label: 'Calendar' },
+    { key: 'photos', href: '/photos', icon: '📷', label: 'Photos' },
+    { key: 'plants', href: '/plants', icon: '🌿', label: 'Plants' },
+    { key: 'seeds', href: '/seeds', icon: '🫘', label: 'Seeds' },
+    { key: 'seedlings', href: '/seedlings', icon: '🌱', label: 'Seedlings' },
+    { key: 'review', href: '/review', icon: '📊', label: 'Review' },
+    { key: 'import', href: '/import', icon: '📥', label: 'Import' },
+    { key: 'quick', href: '/quick', icon: '⚡', label: 'Quick Log' },
+    { key: 'costs', href: '/costs', icon: '💰', label: 'Costs' },
+    { key: 'pests', href: '/pests', icon: '🐛', label: 'Pests' },
+    { key: 'fertilizers', href: '/fertilizers', icon: '🧪', label: 'Fertilizers' },
+    { key: 'planner', href: '/planner', icon: '🗺️', label: 'Planner' },
+    { key: 'tags', href: '/tags', icon: '🏷️', label: 'Tags' },
+  ];
+  const DEFAULT_MOBILE_TABS = ['quick', 'plants', 'calendar', 'planner'];
+  const MAX_MOBILE_TABS = 4;
+
+  // Parse the mobile_tabs setting (JSON array string). Returns the key list
+  // in the user's order, or null when unset/invalid (caller falls back to
+  // DEFAULT_MOBILE_TABS). Unknown keys invalidate the whole value.
+  function parseMobileTabs(raw) {
+    try {
+      const arr = JSON.parse(raw || '[]');
+      if (!Array.isArray(arr) || !arr.length) return null;
+      const valid = new Set(NAV_SECTIONS.map((s) => s.key));
+      const seen = new Set();
+      const out = [];
+      for (const k of arr) {
+        if (typeof k !== 'string' || !valid.has(k)) return null;
+        if (!seen.has(k)) { seen.add(k); out.push(k); }
+      }
+      if (!out.length || out.length > MAX_MOBILE_TABS) return null;
+      return out;
+    } catch { return null; }
+  }
+
+  function mobileTabHtml(section) {
+    return `<a href="${section.href}" class="mobile-tab flex-1" data-tab="${section.key}">` +
+      `<span class="mobile-tab-icon" aria-hidden="true">${section.icon}</span>` +
+      `<span class="mobile-tab-label">${esc(section.label)}</span>` +
+      `<span class="mobile-tab-dot" aria-hidden="true"></span></a>`;
+  }
+
+  async function initMobileNav() {
+    // Mobile bottom tab bar (below md). Renders the user's picks from the
+    // mobile_tabs setting (tap order), falling back to the defaults; More
+    // stays fixed last and opens the bottom sheet with everything else.
+    const linksHost = $('#mobile-tab-links');
+    const sheet = $('#mobile-sheet');
+    if (!linksHost) return;
+    let picks = null;
+    try {
+      const s = await getSettings();
+      picks = parseMobileTabs(s && s.mobile_tabs);
+    } catch { picks = null; }
+    const keys = picks || DEFAULT_MOBILE_TABS.slice();
+    const byKey = Object.fromEntries(NAV_SECTIONS.map((s) => [s.key, s]));
+    linksHost.innerHTML = keys.map((k) => mobileTabHtml(byKey[k])).join('');
+    const grid = $('#mobile-sheet-grid');
+    if (grid) {
+      const picked = new Set(keys);
+      grid.innerHTML = NAV_SECTIONS.filter((s) => !picked.has(s.key)).map((s) =>
+        `<a href="${s.href}" class="sheet-link"><span class="text-xl" aria-hidden="true">${s.icon}</span>` +
+        `<span>${esc(s.label)}</span></a>`
+      ).join('');
+    }
+    setActiveNavigation(); // mark the freshly rendered tabs
+    if (!sheet) return;
+    const open = () => {
+      sheet.classList.remove('hidden');
+      if (document.body && document.body.classList) document.body.classList.add('overflow-hidden');
+    };
+    const close = () => {
+      sheet.classList.add('hidden');
+      if (document.body && document.body.classList) document.body.classList.remove('overflow-hidden');
+    };
+    const moreBtn = $('#mobile-nav-more');
+    if (moreBtn) moreBtn.addEventListener('click', open);
+    const closeBtn = $('#mobile-sheet-close');
+    if (closeBtn) closeBtn.addEventListener('click', close);
+    const backdrop = $('#mobile-sheet-backdrop');
+    if (backdrop) backdrop.addEventListener('click', close);
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !sheet.classList.contains('hidden')) close();
+    });
+  }
+
   async function uploadFiles(path, files) {
     if (!files?.length) return;
     const form = new FormData();
@@ -253,12 +345,13 @@
     for (const fn of lateInits) fn(reloaders);
     initFrost();
     initWeatherRibbon();
+    initMobileNav();
   }
 
   globalThis.Verdant = {
     $, $$, esc, fmtDate, fmtDateTime, fmtAmount, tempUnit, fmtTemp, api, toast, markdown,
     uploadFiles, wireDraft, renderStats, healthBar, plantCard, onBoot, onBootLate, todayLocal,
-    getSettings,
+    getSettings, NAV_SECTIONS, DEFAULT_MOBILE_TABS, parseMobileTabs,
   };
 
   document.addEventListener('DOMContentLoaded', boot);

@@ -19,6 +19,7 @@ function makeEl() {
     },
     textContent: '',
     dataset: {},
+    addEventListener: () => {},
   };
   let html = '';
   Object.defineProperty(el, 'innerHTML', { get: () => html, set: (v) => { html = String(v); } });
