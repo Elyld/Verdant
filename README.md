@@ -1,4 +1,4 @@
-# 🌿 Verdant — Self-Hosted Garden Journal (v2.32.1)
+# 🌿 Verdant — Self-Hosted Garden Journal (v2.33.0)
 
 Your garden, logged. Plant profiles with care reminders, a daily observation log
 with a calendar heatmap, photo albums with slideshows, a seed stash and seedling
@@ -619,6 +619,13 @@ correct, and the container's clock/timezone matches yours — `DIGEST_TIME` is
 server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
+
+- **2.33.0** — **🔎 Crop lookup: varieties + your seed stash.** The lookup now
+  searches 48 curated varieties (Cherokee Purple, Sungold, Marketmore 76…)
+  with their own maturity timing, matches your own seed packets (vendor, year,
+  and quantity shown), and every result says where it came from — the built-in
+  crop guide or your seed stash. Picking a variety or packet fills the plant
+  form, variety name included.
 
 - **2.32.1** — **🤖 Local AI connection help.** The Test connection button now
   also tells you whether your configured model is actually pulled (with the

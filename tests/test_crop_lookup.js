@@ -46,8 +46,9 @@ function makeEl(opts = {}) {
   return el;
 }
 
-// Element whose innerHTML buttons (matched by regex) become clickable stubs.
-function makeButtonBox(btnRe) {
+// Element whose innerHTML <button> tags (with their data-* attributes)
+// become clickable stubs.
+function makeButtonBox() {
   const el = makeEl({ noHtml: true });
   let buttons = [];
   let html = '';
@@ -56,17 +57,19 @@ function makeButtonBox(btnRe) {
     set: (v) => {
       html = String(v);
       buttons = [];
-      let m;
-      const re = new RegExp(btnRe, 'g');
-      while ((m = re.exec(html))) {
+      const tagRe = /<button\b[^>]*>/g;
+      let tm;
+      while ((tm = tagRe.exec(html))) {
         const b = makeEl();
-        if (m[1] !== undefined) b.dataset.key = m[1];
-        if (m[2] !== undefined) b.id = m[2];
+        const attrRe = /data-([a-z]+)="([^"]*)"/g;
+        let am;
+        while ((am = attrRe.exec(tm[0]))) b.dataset[am[1]] = am[2];
+        if (/id="(crop-use)"/.test(tm[0])) b.id = 'crop-use';
         buttons.push(b);
       }
     },
   });
-  el.querySelectorAll = (sel) => (sel === '[data-key]' || sel === '#crop-use' ? buttons : []);
+  el.querySelectorAll = (sel) => (sel === '[data-kind]' || sel === '#crop-use' ? buttons : []);
   el.querySelector = (sel) => {
     if (sel === '#crop-use') return buttons[0] || makeEl();
     return makeEl();
@@ -79,8 +82,8 @@ function makeModal() {
   const el = makeEl();
   const kids = {
     '#crop-q': makeEl(),
-    '#crop-results': makeButtonBox('data-key="([^"]+)"'),
-    '#crop-detail': makeButtonBox('id="(crop-use)"'),
+    '#crop-results': makeButtonBox(),
+    '#crop-detail': makeButtonBox(),
   };
   el.querySelector = (sel) => kids[sel] || makeEl();
   el.querySelectorAll = () => [];
@@ -92,6 +95,14 @@ const TOMATO = {
   key: 'tomato', name: 'Tomato', family: 'Nightshade (Solanaceae)', sun: 'Full Sun',
   spacing_in: '24–36', sowing_depth_in: '¼', days_to_germination: '5–10',
   days_to_maturity: 75, description: 'Start indoors 6–8 weeks before last frost.',
+  source: 'Built-in crop guide',
+  varieties: [{ name: 'Cherokee Purple', days_to_maturity: 80, note: 'Indeterminate heirloom beefsteak.' }],
+};
+
+const PACKET = {
+  id: 7, variety_name: 'Cherokee Purple', species_type: 'Tomato',
+  vendor_name: 'Territorial', vendor_url: 'https://example.com/p', year_acquired: 2025,
+  quantity: '1 packet', notes: 'packet notes',
 };
 
 const apiCalls = [];
@@ -100,11 +111,21 @@ const api = {
     apiCalls.push(url);
     if (url.startsWith('/api/crops?q=')) {
       const q = decodeURIComponent(url.split('=')[1]).toLowerCase();
-      return { ok: true, crops: 'tomato'.includes(q) || q === 'tom' ? [{
-        key: 'tomato', name: 'Tomato', family: 'Nightshade (Solanaceae)',
-        sun: 'Full Sun', days_to_maturity: 75 }] : [] };
+      const guide = [];
+      if ('tomato'.includes(q) || q === 'tom') guide.push({
+        kind: 'crop', key: 'tomato', name: 'Tomato', crop_name: 'Tomato',
+        family: 'Nightshade (Solanaceae)', sun: 'Full Sun', days_to_maturity: 75, note: '' });
+      if ('cherokee purple'.includes(q)) guide.push({
+        kind: 'variety', key: 'tomato', name: 'Cherokee Purple', crop_name: 'Tomato',
+        family: 'Nightshade (Solanaceae)', sun: 'Full Sun', days_to_maturity: 80,
+        note: 'Indeterminate heirloom beefsteak.' });
+      const stash = q.includes('cherokee') ? [{
+        kind: 'packet', packet_id: 7, variety_name: 'Cherokee Purple',
+        species_type: 'Tomato', vendor_name: 'Territorial', year_acquired: 2025 }] : [];
+      return { ok: true, guide, stash };
     }
     if (url === '/api/crops/tomato') return { ok: true, crop: TOMATO };
+    if (url === '/api/seed-packets/7') return PACKET;
     throw new Error('unexpected GET ' + url);
   },
 };
@@ -215,7 +236,53 @@ async function main() {
   const count = (named['#plant-notes'].value.match(/Growing info \(Tomato\)/g) || []).length;
   check('growing-info block not duplicated', count === 1);
 
-  // 6. Escape closes the modal.
+  // 6. Variety search: variety badge, detail shows variety note + source, apply fills variety name.
+  named['#plant-name'].value = '';
+  named['#plant-species'].value = '';
+  named['#plant-maturity'].value = '';
+  named['#plant-notes'].value = '';
+  named['#crop-lookup-btn'].click();
+  await tick(20);
+  const q3 = modal._kids['#crop-q'];
+  q3.value = 'cherokee';
+  q3.fire('keydown', { key: 'Enter', preventDefault: () => {} });
+  await tick(50);
+  check('variety badge rendered', resultsBox.innerHTML.includes('variety</span>'));
+  check('stash section rendered', resultsBox.innerHTML.includes('Your seed stash'));
+  const varBtn = resultsBox._buttons().find((b) => b.dataset.kind === 'variety');
+  check('variety button found', !!varBtn);
+  varBtn.click();
+  await tick(50);
+  check('detail shows variety note', detailBox.innerHTML.includes('Indeterminate heirloom'));
+  check('detail shows guide source', detailBox.innerHTML.includes('Source: Built-in crop guide · variety notes'));
+  detailBox.querySelector('#crop-use').click();
+  await tick(20);
+  check('variety name filled', named['#plant-name'].value === 'Cherokee Purple');
+  check('variety maturity override used', named['#plant-maturity'].value === 80);
+
+  // 7. Seed-stash packet: detail shows stash source, apply fills from the packet.
+  named['#plant-name'].value = '';
+  named['#plant-species'].value = '';
+  named['#plant-notes'].value = '';
+  named['#crop-lookup-btn'].click();
+  await tick(20);
+  const q4 = modal._kids['#crop-q'];
+  q4.value = 'cherokee';
+  q4.fire('keydown', { key: 'Enter', preventDefault: () => {} });
+  await tick(50);
+  const pktBtn = resultsBox._buttons().find((b) => b.dataset.kind === 'packet');
+  check('packet button found', !!pktBtn);
+  pktBtn.click();
+  await tick(50);
+  check('packet detail fetched', apiCalls.includes('/api/seed-packets/7'));
+  check('packet detail shows stash source', detailBox.innerHTML.includes('Source: your seed stash · Territorial'));
+  detailBox.querySelector('#crop-use').click();
+  await tick(20);
+  check('packet variety filled', named['#plant-name'].value === 'Cherokee Purple');
+  check('packet species filled', named['#plant-species'].value === 'Tomato');
+  check('packet notes mention stash', named['#plant-notes'].value.includes('From seed stash'));
+
+  // 8. Escape closes the modal.
   named['#crop-lookup-btn'].click();
   await tick(20);
   check('modal open again', !modal.classList.contains('hidden'));
