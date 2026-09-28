@@ -285,6 +285,58 @@
     } catch { /* the countdown is decorative; never break the page */ }
   }
 
+  async function initNoaaAlerts() {
+    // ⚠️ pill in the weather ribbon when National Weather Service alerts are
+    // active for the garden point; clicking toggles a small panel listing
+    // each alert. Decorative; never breaks the page.
+    const ribbon = $('#weather-ribbon');
+    const inner = $('#weather-ribbon-inner');
+    if (!ribbon || !inner) return;
+    let data;
+    try {
+      data = await api.get('/api/weather/noaa-alerts');
+    } catch { return; }
+    const alerts = (data && data.ok && Array.isArray(data.alerts)) ? data.alerts : [];
+    if (!alerts.length) return;
+    const rank = { Extreme: 0, Severe: 1, Moderate: 2, Minor: 3, Unknown: 4 };
+    const top = alerts.reduce((a, b) => (rank[a.severity] ?? 4) <= (rank[b.severity] ?? 4) ? a : b);
+    const tint = {
+      Extreme: 'bg-red-700 text-red-50 ring-red-500',
+      Severe: 'bg-red-700 text-red-50 ring-red-500',
+      Moderate: 'bg-amber-400 text-navy-900 ring-amber-300',
+      Minor: 'bg-sky-600 text-sky-50 ring-sky-500',
+    }[top.severity] || 'bg-navy-600 text-beige-100 ring-navy-500';
+    const fmtWhen = (iso) => {
+      if (!iso) return '';
+      const d = new Date(iso);
+      return Number.isNaN(d.getTime()) ? '' : d.toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+    };
+    const panel = document.createElement('div');
+    panel.id = 'noaa-panel';
+    panel.className = 'hidden w-full border-t border-navy-700/50 px-4 py-2 sm:px-6 lg:px-8';
+    panel.innerHTML = alerts.map((a) => {
+      const when = [fmtWhen(a.onset), fmtWhen(a.ends)].filter(Boolean).join(' → ');
+      return `<div class="mb-2 rounded-lg bg-navy-900/60 px-3 py-2 ring-1 ring-navy-700 last:mb-0">` +
+        `<p class="font-semibold text-beige-100">${esc(a.event)}${when ? ` <span class="font-normal text-beige-300">· ${esc(when)}</span>` : ''}</p>` +
+        (a.headline ? `<p class="text-beige-200">${esc(a.headline)}</p>` : '') +
+        (a.description ? `<p class="mt-1 text-beige-300/90">${esc(a.description)}</p>` : '') +
+        `</div>`;
+    }).join('');
+    const pill = document.createElement('button');
+    pill.type = 'button';
+    pill.id = 'noaa-pill';
+    pill.className = `rounded-full px-2.5 py-0.5 font-semibold ring-1 ${tint}`;
+    pill.setAttribute('aria-expanded', 'false');
+    pill.innerHTML = `⚠️ ${esc(top.event)}${alerts.length > 1 ? ` +${alerts.length - 1}` : ''}`;
+    pill.addEventListener('click', () => {
+      const open = panel.classList.toggle('hidden');
+      pill.setAttribute('aria-expanded', String(!open));
+    });
+    inner.appendChild(pill);
+    ribbon.appendChild(panel);
+    ribbon.classList.remove('hidden');
+  }
+
   async function initWeatherRibbon() {
     // Slim site-wide weather ribbon below the header; rendered from the
     // cached forecast endpoint. Stays hidden unless garden coordinates are
@@ -317,6 +369,9 @@
         (asOf ? `<span class="ml-auto text-beige-300/80">as of ${asOf}</span>` : '');
       ribbon.classList.remove('hidden');
     } catch { /* decorative; never break the page */ }
+    // Alert pill appends after the forecast spans (or alone when the
+    // forecast is down) — chained, not concurrent, so innerHTML can't wipe it.
+    await initNoaaAlerts();
   }
 
   const inits = [];
