@@ -152,6 +152,7 @@
           }
         } else {
           box.textContent = st.hint || 'Not reachable.';
+          if (st.error) box.textContent += ` (detail: ${st.error})`;
         }
       } catch (error) {
         box.textContent = `Check failed: ${error.message}`;
