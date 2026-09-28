@@ -61,7 +61,7 @@ def create_observation(
     obs = ObservationLog(**data)
     obs.plant_name = obs.plant_name.strip()
     # Stamp the current weather (Open-Meteo). Never fails the request.
-    weather = fetch_current_weather()
+    weather = fetch_current_weather(session)
     if weather:
         obs.temp_c = weather["temp_c"]
         obs.weather_summary = weather["summary"]

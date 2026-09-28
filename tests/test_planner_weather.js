@@ -173,7 +173,7 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
   check('companion hint shown for tomato x basil', hints.includes('tomato × basil') && hints.includes('🌱'));
   check('no false bad-pair hint', !hints.includes('⚠️'));
 
-  // unconfigured weather (no GARDEN_LAT/GARDEN_LON): hint instead of a silently hidden strip
+  // unconfigured weather (no garden coordinates): hint instead of a silently hidden strip
   const lsStore = {};
   global.localStorage = {
     getItem: (k) => (k in lsStore ? lsStore[k] : null),
@@ -202,7 +202,7 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
   const strip2 = named['#weather-strip'];
   check('unconfigured weather shows hint strip (not silently hidden)',
     !strip2.classList.contains('hidden') && strip2.classList.contains('flex'));
-  check('hint names GARDEN_LAT/GARDEN_LON', strip2.innerHTML.includes('GARDEN_LAT/GARDEN_LON'));
+  check('hint points at Settings', strip2.innerHTML.includes('set them in Settings'));
   check('hint has dismiss button', strip2.innerHTML.includes('data-wx-dismiss'));
   fire(dismissBtn, 'click');
   await tick(20);

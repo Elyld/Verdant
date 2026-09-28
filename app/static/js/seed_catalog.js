@@ -11,19 +11,24 @@
 
     let packets = [];
 
+    const SEED_TABS = ['sources', 'catalog', 'assistant'];
+    const TAB_ON = ['bg-beige-50', 'text-navy-800', 'shadow'];
     function setTab(which) {
-      const catalog = which === 'catalog';
-      $('#seed-tab-sources').classList.toggle('hidden', catalog);
-      $('#seed-tab-catalog').classList.toggle('hidden', !catalog);
-      $('#seed-vendor-filter').classList.toggle('hidden', catalog);
-      $('#seed-add-toggle').classList.toggle('hidden', catalog);
-      const on = ['bg-beige-50', 'text-navy-800', 'shadow'];
-      for (const cls of on) {
-        $('#seed-tabbtn-sources').classList.toggle(cls, !catalog);
-        $('#seed-tabbtn-catalog').classList.toggle(cls, catalog);
+      if (!SEED_TABS.includes(which)) which = 'sources';
+      for (const t of SEED_TABS) {
+        const active = t === which;
+        $(`#seed-tab-${t}`).classList.toggle('hidden', !active);
+        const btn = $(`#seed-tabbtn-${t}`);
+        if (btn) for (const cls of TAB_ON) btn.classList.toggle(cls, active);
       }
-      if (catalog) load();
+      const onSources = which === 'sources';
+      $('#seed-vendor-filter').classList.toggle('hidden', !onSources);
+      $('#seed-add-toggle').classList.toggle('hidden', !onSources);
+      if (which === 'catalog') load();
     }
+
+    const RATING_BADGE = { no: '👎', yes: '👍', favorite: '⭐' };
+    const RATING_TITLE = { no: 'Skip it', yes: 'Grow again', favorite: 'Favorite — must grow' };
 
     function card(p) {
       const vendorName = p.vendor_name || '';
@@ -36,7 +41,7 @@
           : `<div class="flex h-36 w-full items-center justify-center bg-sage-100 text-4xl">🌱</div>`}
         <div class="space-y-1 p-4">
           <div class="flex items-start justify-between gap-2">
-            <p class="font-semibold text-navy-800">${esc(p.variety_name)}</p>
+            <p class="font-semibold text-navy-800">${esc(p.variety_name)}${p.grow_again && RATING_BADGE[p.grow_again] ? ` <span title="Grow again: ${esc(RATING_TITLE[p.grow_again])}">${RATING_BADGE[p.grow_again]}</span>` : ''}</p>
             ${p.category ? `<span class="pill">${esc(p.category)}</span>` : ''}
           </div>
           ${p.species_type ? `<p class="text-sm italic text-navy-500">${esc(p.species_type)}</p>` : ''}
@@ -94,6 +99,7 @@
       $('#packet-vendor-url').value = packet ? packet.vendor_url : '';
       $('#packet-qty').value = packet ? packet.quantity : '';
       $('#packet-seed-count').value = packet && packet.seed_count != null ? packet.seed_count : '';
+      $('#packet-grow-again').value = packet ? (packet.grow_again || '') : '';
       $('#packet-notes').value = packet ? (packet.notes || '') : '';
       $('#packet-photo').value = '';
       $('#packet-photo-back').value = '';
@@ -116,6 +122,7 @@
 
     $('#seed-tabbtn-sources').addEventListener('click', () => setTab('sources'));
     $('#seed-tabbtn-catalog').addEventListener('click', () => setTab('catalog'));
+    $('#seed-tabbtn-assistant').addEventListener('click', () => setTab('assistant'));
     $('#catalog-add').addEventListener('click', () => openModal(null));
     $('#catalog-from-sources').addEventListener('click', async () => {
       if (!confirm('Copy every seed source into the stash as a packet? (Already-moved ones are skipped.)')) return;
@@ -226,6 +233,7 @@
         vendor_url: $('#packet-vendor-url').value.trim(),
         quantity: $('#packet-qty').value.trim(),
         seed_count: $('#packet-seed-count').value ? Number($('#packet-seed-count').value) : null,
+        grow_again: $('#packet-grow-again').value,
         notes: $('#packet-notes').value.trim(),
       };
       try {
@@ -293,7 +301,10 @@
     });
 
     // NFC tag deep link: /seeds?tab=catalog&add=1 opens the add form.
-    if (params.get('tab') === 'catalog') {
+    const tabParam = params.get('tab');
+    if (tabParam === 'assistant') {
+      setTab('assistant');
+    } else if (tabParam === 'catalog') {
       setTab('catalog');
       if (params.get('add') === '1') openModal(null);
     } else {

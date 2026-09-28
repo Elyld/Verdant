@@ -242,11 +242,11 @@
     function renderWeather() {
       const strip = $('#weather-strip');
       if (!forecast || !forecast.current) {
-        // Unconfigured (no GARDEN_LAT/GARDEN_LON): show a dismissible hint
+        // Unconfigured (no garden coordinates): show a dismissible hint
         // instead of silently hiding the strip.
         if (forecastUnconfigured && !localStorage.getItem('verdant.wx-hint-dismissed')) {
           strip.innerHTML =
-            `<span class="text-xs text-beige-300">🌤️ Weather strip needs GARDEN_LAT/GARDEN_LON set — see README</span>` +
+            `<span class="text-xs text-beige-300">🌤️ Weather strip needs garden coordinates — set them in Settings</span>` +
             `<button type="button" data-wx-dismiss class="ml-auto rounded-lg px-2 py-0.5 text-xs text-beige-300 hover:bg-navy-700" title="Dismiss">✕</button>`;
           strip.classList.remove('hidden');
           strip.classList.add('flex');

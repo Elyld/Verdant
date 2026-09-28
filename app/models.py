@@ -369,10 +369,27 @@ class SeedPacket(SQLModel, table=True):
     seed_count: Optional[int] = Field(default=None, ge=0)
     photo_path: str = Field(default="")  # /uploads/... packet photo (front)
     photo_back_path: str = Field(default="")  # /uploads/... packet photo (back, growing info)
+    # "Grow again?" rating for the winter order assistant: "" (unrated),
+    # "no" (skip), "yes" (grow again), "favorite" (must grow).
+    grow_again: str = Field(default="", max_length=16)
     notes: Optional[str] = None
     date_added: str = Field(default="", index=True)  # ISO YYYY-MM-DD
 
     vendor: Optional["SeedSource"] = Relationship()
+
+
+# --------------------------------------------------------------------------- #
+# Seed wishlist — varieties to buy on the next winter seed order
+# --------------------------------------------------------------------------- #
+class WishlistItem(SQLModel, table=True):
+    __tablename__ = "wishlist_items"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    variety_name: str = Field(index=True)
+    vendor_name: str = Field(default="")  # where it was bought / will be bought
+    notes: Optional[str] = None
+    checked: bool = Field(default=False)  # ticked for the next order
+    date_added: str = Field(default="", index=True)  # ISO YYYY-MM-DD
 
 
 # --------------------------------------------------------------------------- #

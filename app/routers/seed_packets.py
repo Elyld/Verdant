@@ -171,6 +171,12 @@ def update_packet(
             payload[key] = _coerce_optional_int(payload[key], key, minimum=0)
     if "year_acquired" in payload:
         payload["year_acquired"] = _coerce_optional_int(payload["year_acquired"], "year_acquired")
+    if "grow_again" in payload:
+        if payload["grow_again"] not in ("", "no", "yes", "favorite"):
+            raise HTTPException(
+                status_code=422,
+                detail='grow_again must be one of "", "no", "yes", "favorite"',
+            )
     if "vendor_id" in payload:
         _check_vendor_id(session, payload["vendor_id"])
     # packet_id is the stable public ID; photo paths are managed exclusively

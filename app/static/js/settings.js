@@ -30,6 +30,8 @@
       $('#set-zone').value = s.zone || '';
       $('#set-first-frost').value = (s.frost_date || '').slice(0, 10);
       $('#set-last-frost').value = (s.last_frost_date || '').slice(0, 10);
+      $('#set-lat').value = s.garden_lat || '';
+      $('#set-lon').value = s.garden_lon || '';
       $('#set-temp-unit').value = s.temperature_unit || 'F';
       $('#set-week-start').value = s.week_start || '0';
       $('#set-weight-unit').value = s.default_weight_unit || 'oz';
@@ -49,6 +51,8 @@
           zone: $('#set-zone').value,
           frost_date: $('#set-first-frost').value,
           last_frost_date: $('#set-last-frost').value,
+          garden_lat: $('#set-lat').value.trim(),
+          garden_lon: $('#set-lon').value.trim(),
           digest_enabled: $('#set-digest-enabled').checked,
           discord_webhook_url: $('#set-webhook').value.trim(),
           digest_time: $('#set-digest-time').value || '08:00',
@@ -72,7 +76,45 @@
         await api.post('/api/digest/send');
         toast('Test digest sent — check Discord 💬', 'ok');
       } catch (error) {
-        toast(`Could not send: ${error.message}`, 'err');
+        toast(`Could not send: ${error.message}`, 'error');
+      }
+    });
+
+    // "Use my location": browser geolocation first (accurate, needs a secure
+    // context + permission); one-shot city-level IP lookup as fallback.
+    // Click-only — never in the background. Fills the fields; saving is
+    // still the user's explicit Save settings click.
+    $('#set-locate').addEventListener('click', async () => {
+      const btn = $('#set-locate');
+      const fill = (lat, lon, where) => {
+        $('#set-lat').value = lat;
+        $('#set-lon').value = lon;
+        toast(`Location filled in${where ? ` — ${where}` : ''}. Hit Save settings to apply.`, 'ok');
+      };
+      btn.disabled = true;
+      try {
+        if (globalThis.navigator && globalThis.navigator.geolocation) {
+          const pos = await new Promise((resolve, reject) => {
+            globalThis.navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000 });
+          });
+          fill(pos.coords.latitude.toFixed(5), pos.coords.longitude.toFixed(5), 'from your browser');
+          return;
+        }
+        throw new Error('geolocation unavailable');
+      } catch (error) {
+        try {
+          const geo = await api.get('/api/weather/geolocate');
+          if (geo && geo.ok) {
+            fill(Number(geo.lat).toFixed(4), Number(geo.lon).toFixed(4),
+              geo.city ? `city-level, near ${geo.city}` : 'city-level');
+          } else {
+            toast('Could not determine your location — enter it by hand.', 'err');
+          }
+        } catch (fallbackError) {
+          toast('Could not determine your location — enter it by hand.', 'err');
+        }
+      } finally {
+        btn.disabled = false;
       }
     });
 

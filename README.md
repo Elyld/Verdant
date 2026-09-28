@@ -1,4 +1,4 @@
-# 🌿 Verdant — Self-Hosted Garden Journal (v2.17.0)
+# 🌿 Verdant — Self-Hosted Garden Journal (v2.26.0)
 
 Your garden, logged. Plant profiles with care reminders, a daily observation log
 with a calendar heatmap, photo albums with slideshows, a seed stash and seedling
@@ -79,7 +79,8 @@ Every packet you own, inventoried: a photo of the packet, vendor (with link),
 type, year bought, and how many seeds are left. Searchable and filterable —
 including a 📷 filter for which packs have photos. Packet photos can be
 uploaded or picked straight from your photo library (e.g. an Immich album of
-packet shots). Stick an NFC tag on the binder and tapping it opens the
+packet shots), and the ⇄ flip button shows the growing info on the back of
+the packet. Stick an NFC tag on the binder and tapping it opens the
 "add packet" form.
 
 ![Seed stash](docs/screenshots/seed-stash.png)
@@ -87,6 +88,18 @@ packet shots). Stick an NFC tag on the binder and tapping it opens the
 ![Packet front/back flip](docs/screenshots/packet-flip.png)
 
 ![Pick a packet photo from the library](docs/screenshots/packet-library-picker.png)
+
+### 🛒 Order assistant — winter seed ordering, minus the spreadsheet
+Come ordering season, the **Order assistant** tab pulls it all together: every
+stash packet with its age ("bought 2024 · 2 yrs old") and your one-tap
+**grow again?** rating — 👎 Skip, 👍 Grow again, ⭐ Favorite (tap again to
+clear) — plus last year's seed spend broken down by vendor, and a wishlist
+where each variety shows the last vendor and date you ordered it (resolved
+from your invoices). Tick the varieties you want and they roll up into an
+order list per vendor. No new state to maintain: ratings live on the packets,
+the wishlist is its own list, and invoices are the source of truth.
+
+![Order assistant](docs/screenshots/order-assistant.png)
 
 ### ✍️ Blog — garden stories
 Markdown blog posts with photo galleries, for the season's stories — first
@@ -124,6 +137,8 @@ rain chance, and wind gusts — and **garden alerts** underneath it read your
 actual data: frost warnings that name your tender containers, heat alerts for
 the thirsty pots and bags, rain-skip nudges when you watered recently, spray
 wash-off warnings, wind alerts for the arches, and a tomato blight watch.
+Set your coordinates on the Settings page to light it up; until then the
+strip shows a small dismissible nudge pointing you there.
 Hit **🔥 Yield** to tint every container by last season's harvest weight
 (darker = heavier), so the spots that earned their keep jump out. Open any
 container and the **🌱 companion hints** suggest good and bad neighbors from a
@@ -162,18 +177,23 @@ repeats what worked.
 
 ### ⚡ Quick Log — log it from the garden
 A phone-first page for when you're standing in the garden with dirty hands:
-one-tap watering per location ("Water all"), a harvest +/− stepper, and
-today's entries at a glance. NFC tags can drop you straight here.
+one-tap watering per location ("Water all"), a harvest +/− stepper with an
+optional **weight** input and unit (oz/g/lb/kg, prefilled from your default —
+leave it blank and it's a plain count), and today's entries at a glance.
+NFC tags can drop you straight here.
 
 ![Quick Log](docs/screenshots/quick.png)
 
 ### 💰 Costs — was it worth growing?
-Every garden expense in one place, broken down by category. Tag a purchase
+Every garden expense in one place, broken down by category — rows are
+editable in place. Tag a purchase
 to a plant and the Season Review scorecard splits costs per variety, so you
 can finally answer whether the peppers beat the grocery store. Below the
 expenses, a **🧾 Invoices** section keeps the paper trail: vendor, order
 date, order number, total, and the PDF receipt, each optionally linked to
-the expense it documents.
+the expense it documents — and both invoices and expenses can be **tagged
+with the seed packets** they bought (with smart suggestions matched from the
+order text), so the Order assistant knows exactly what came from where.
 
 ![Costs](docs/screenshots/costs.png)
 
@@ -207,11 +227,15 @@ before upgrades.
 ![Backup & restore](docs/screenshots/backup.png)
 
 ### ⚙️ Settings — your garden's particulars
-USDA zone, last/first frost dates (exact dates beat zone averages), temperature
-units, which day your calendar week starts on, default harvest weight unit,
-slideshow autoplay interval, and the morning digest schedule — all on one page.
-The frost dates drive the "days to first frost" countdown in the header and
-tune the seed-starting calendar on the Plants page.
+USDA zone, last/first frost dates (exact dates beat zone averages),
+temperature units, which day your calendar week starts on, default harvest
+weight unit, slideshow autoplay interval, and the morning digest schedule —
+all on one page. Your **garden coordinates** live here too (with a
+📍 *Use my location* button that fills them in from your browser, falling
+back to a one-time city-level lookup) — they power the Planner's weather
+strip and stamp new observations with the current conditions. The frost
+dates drive the "days to first frost" countdown in the header and tune the
+seed-starting calendar on the Plants page.
 
 ![Settings](docs/screenshots/settings.png)
 
@@ -352,7 +376,7 @@ to `.env` (or set them in your Dockge stack) for the ones you want.
 | `GARDEN_PUBLIC_URL` | `http://localhost:3113` | Base URL used to resolve relative URLs in "Import from URL" |
 | `IMMICH_BASE_URL` | (unset) | Your Immich server URL, e.g. `http://192.168.0.50:2283` (enables Immich import) |
 | `IMMICH_API_KEY` | (unset) | Immich API key (Account Settings → API Keys). Needs `album.read`, `asset.view`, `asset.download` |
-| `GARDEN_LAT` / `GARDEN_LON` | (unset) | Your garden's coordinates — stamps new observations with current weather (free Open-Meteo data, no key needed) |
+| `GARDEN_LAT` / `GARDEN_LON` | (unset) | Fallback for your garden's coordinates — prefer the Settings page (📍 Use my location button). Stamps new observations with current weather + powers the Planner weather strip (free Open-Meteo data, no key needed) |
 | `DIGEST_ENABLED` | `false` | Set `true` to enable the morning Discord digest |
 | `DISCORD_WEBHOOK_URL` | (unset) | Discord webhook URL (Server Settings → Integrations → Webhooks) |
 | `DIGEST_TIME` | `08:00` | When the digest sends (24h `HH:MM`, server local time) |
@@ -371,9 +395,14 @@ to `.env` (or set them in your Dockge stack) for the ones you want.
 
 ### Weather stamping
 
-Set `GARDEN_LAT` and `GARDEN_LON` (find your coordinates by clicking your spot
-on the map at <https://open-meteo.com>) and every new observation is stamped
-with the temperature and conditions at log time. Free, no API key.
+Set your garden coordinates on the **Settings page** (preferred — there's a
+📍 *Use my location* button that fills them in from your browser, falling back
+to a one-time city-level lookup via ip-api.com when you click it) or with the
+`GARDEN_LAT` / `GARDEN_LON` env vars (kept as a fallback; Settings win). Find
+coordinates by hand by clicking your spot on the map at
+<https://open-meteo.com>. Every new observation is then stamped with the
+temperature and conditions at log time, and the Planner shows its weather
+strip. Free, no API key.
 
 ### Discord digest
 
@@ -554,6 +583,23 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.26.0** — **📍 Garden coordinates move to Settings.** Latitude/longitude
+  are now first-class Settings-page fields (saved like everything else, no env
+  vars needed) with a **Use my location** button: it tries your browser's
+  geolocation first, and falls back to a one-time city-level IP lookup via
+  ip-api.com — click-only, never in the background, nothing stored beyond the
+  coordinates. Settings outrank the `GARDEN_LAT` / `GARDEN_LON` env vars (kept
+  as fallback), so a stale env var can never shadow what you picked in the UI.
+  The planner's unconfigured-weather hint now points at Settings too.
+- **2.25.0** — **🛒 Winter seed-order assistant.** New tab on the Seeds page
+  that pulls ordering season together: a ratings table for the stash (how old
+  each packet is, one-tap "grow again?" ratings — 👎 Skip, 👍 Grow again,
+  ⭐ Favorite — also editable from the packet form and shown as badges on the
+  stash cards), last year's seed spend grouped by vendor from your invoices,
+  and a winter wishlist. Each wishlist row shows the last vendor and date the
+  variety was ordered (resolved from past invoices) and has a checkbox; ticked
+  items roll up into an order list. Ratings are stored on the packet; the
+  wishlist is its own list with add/edit/delete.
 - **2.24.0** — **⚖️ Weight in Quick Log harvest.** The Quick Log harvest
   stepper now has a weight input + unit selector (prefilled from your
   Preferences, like the Plants page form), so the fastest way to log a
