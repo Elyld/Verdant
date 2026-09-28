@@ -224,3 +224,78 @@ def get_forecast(session=None) -> Optional[dict]:
     if _forecast_cache.get("coords") == coords:
         return _forecast_cache["data"]  # stale is better than nothing
     return None
+
+
+# --------------------------------------------------------------------------- #
+# NOAA / National Weather Service active alerts, cached server-side.
+# Free, no key — but api.weather.gov requires a User-Agent header.
+# --------------------------------------------------------------------------- #
+NOAA_TTL_S = 900  # 15 minutes
+_noaa_cache = {"at": 0.0, "data": None, "coords": None}
+
+
+def _trim_noaa_alert(props: dict) -> dict:
+    """Keep only what the ribbon panel needs."""
+    desc = props.get("description") or ""
+    if len(desc) > 600:
+        desc = desc[:600].rsplit(" ", 1)[0] + "…"
+    return {
+        "event": props.get("event") or "Alert",
+        "headline": props.get("headline") or "",
+        "severity": props.get("severity") or "Unknown",
+        "onset": props.get("onset"),
+        "ends": props.get("ends"),
+        "description": desc,
+    }
+
+
+def fetch_noaa_alerts(session=None) -> Optional[list]:
+    """Fetch active NWS alerts for the garden point. Never raises.
+
+    Returns a trimmed list of dicts; [] when coords are unconfigured or
+    genuinely no alerts are active; None when the fetch itself failed
+    (so callers can keep serving stale data instead of blanking).
+    """
+    coords = _coords(session)
+    if coords is None:
+        return []
+    lat, lon = coords
+    url = f"https://api.weather.gov/alerts/active?point={lat},{lon}"
+    try:
+        request = urllib.request.Request(
+            url, headers={"User-Agent": "verdant-garden-log", "Accept": "application/geo+json"}
+        )
+        with urllib.request.urlopen(request, timeout=10) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        features = payload.get("features") or []
+        return [_trim_noaa_alert(f.get("properties") or {}) for f in features]
+    except Exception:
+        return None
+
+
+def get_noaa_alerts(session=None) -> list:
+    """Cached NOAA alerts, keyed by coords. Never raises; stale data is
+    served when a refresh fails so a blip doesn't blank the ribbon."""
+    coords = _coords(session)
+    if coords is None:
+        return []
+    now = time.monotonic()
+    fresh = (
+        _noaa_cache["data"] is not None
+        and _noaa_cache.get("coords") == coords
+        and now - _noaa_cache["at"] < NOAA_TTL_S
+    )
+    if fresh:
+        return _noaa_cache["data"]
+    try:
+        data = fetch_noaa_alerts(session)
+    except Exception:
+        data = None
+    if data is not None:
+        _noaa_cache["at"] = now
+        _noaa_cache["data"] = data
+        _noaa_cache["coords"] = coords
+        return data
+    if _noaa_cache.get("coords") == coords:
+        return _noaa_cache["data"] or []  # stale is better than nothing
+    return []

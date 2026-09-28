@@ -152,7 +152,9 @@ it read your actual data: frost warnings that name your tender containers, heat
 alerts for the thirsty pots and bags, rain-skip nudges when you watered recently,
 spray wash-off warnings, wind alerts for the arches, and a tomato blight watch.
 Set your coordinates on the Settings page to light the ribbon up; until then it
-stays quietly hidden.
+stays quietly hidden. When the National Weather Service has active alerts for
+your garden point, a severity-tinted ⚠️ pill appears in the ribbon — click it
+for each alert's timing and details (free, no key; cached 15 minutes).
 
 ![Global weather ribbon](docs/screenshots/weather-ribbon.png)
 Hit **🔥 Yield** to tint every container by last season's harvest weight
@@ -599,6 +601,15 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.29.0** — **⚠️ National Weather Service alerts in the ribbon.** The
+  site-wide weather ribbon now shows a severity-tinted ⚠️ pill when the NWS
+  has active alerts for your garden point (Freeze Warning, Wind Advisory,
+  …) — click it to expand a panel with each alert's timing and details.
+  Free, no key (api.weather.gov), cached 15 minutes server-side, and it
+  degrades silently: no pill when there are no alerts, coords unset, or the
+  service is unreachable. Needs garden coordinates set (Settings page), like
+  the rest of the ribbon.
+  ![NWS alert pill and panel](docs/screenshots/noaa-alerts.png)
 - **2.28.0** — **🧭 Navigation refresh.** The desktop nav is now four labeled
   groups (Grow / Track / Manage / Read) with an icon on every tab and a faint
   fern watermark — no dropdown menus anywhere. On phones there's a bottom tab

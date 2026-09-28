@@ -87,6 +87,18 @@ def get_alerts(session: Session = Depends(get_session)) -> dict:
     return {"ok": True, "temp_unit": unit, "as_of": fc.get("as_of"), "alerts": alerts}
 
 
+@router.get("/noaa-alerts")
+def get_noaa_alerts(session: Session = Depends(get_session)) -> dict:
+    """Active National Weather Service alerts for the garden point.
+
+    Free, no key (api.weather.gov just needs a User-Agent). Cached ~15 min
+    server-side. Returns {"ok": True, "alerts": [...]}; alerts is [] when
+    coords are unconfigured or the service is unreachable — never raises.
+    """
+    alerts = weather_mod.get_noaa_alerts(session)
+    return {"ok": True, "alerts": alerts}
+
+
 @router.get("/geolocate")
 def geolocate() -> dict:
     """One-shot IP-based location lookup for the Settings page's
