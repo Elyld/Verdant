@@ -554,6 +554,14 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.24.0** — **⚖️ Weight in Quick Log harvest.** The Quick Log harvest
+  stepper now has a weight input + unit selector (prefilled from your
+  Preferences, like the Plants page form), so the fastest way to log a
+  harvest — including the NFC tap flow — captures the weight the scorecard's
+  by-weight board and the yield heatmap need. Weight stays optional; logging
+  by count alone works exactly as before. Also on the Planner page: when
+  GARDEN_LAT/GARDEN_LON aren't set, the weather strip now shows a small
+  dismissible hint explaining why instead of silently staying hidden.
 - **2.23.0** — **🌱 Multi seed-packet tagging for invoices + expenses.** The
   invoice packet picker is now a true multi-select (checkbox panel — link as
   many packets as an order had), and the import preview links multiple packets

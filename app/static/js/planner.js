@@ -32,6 +32,7 @@
     let editingId = null;
     let pendingPlantings = [];
     let forecast = null;
+    let forecastUnconfigured = false;
     let tempUnit = 'F';
     let wxAlerts = [];
     let companions = [];
@@ -188,6 +189,7 @@
       years = Array.isArray(ys) ? ys : [];
       warnings = Array.isArray(rw) ? rw : [];
       forecast = fc && fc.ok ? fc.forecast : null;
+      forecastUnconfigured = !!(fc && !fc.ok && fc.reason === 'not-configured');
       tempUnit = (fc && fc.temp_unit) || 'F';
       wxAlerts = al && al.ok && Array.isArray(al.alerts) ? al.alerts : [];
       companions = Array.isArray(cp) ? cp : [];
@@ -240,8 +242,24 @@
     function renderWeather() {
       const strip = $('#weather-strip');
       if (!forecast || !forecast.current) {
-        strip.classList.add('hidden');
-        strip.classList.remove('flex');
+        // Unconfigured (no GARDEN_LAT/GARDEN_LON): show a dismissible hint
+        // instead of silently hiding the strip.
+        if (forecastUnconfigured && !localStorage.getItem('verdant.wx-hint-dismissed')) {
+          strip.innerHTML =
+            `<span class="text-xs text-beige-300">🌤️ Weather strip needs GARDEN_LAT/GARDEN_LON set — see README</span>` +
+            `<button type="button" data-wx-dismiss class="ml-auto rounded-lg px-2 py-0.5 text-xs text-beige-300 hover:bg-navy-700" title="Dismiss">✕</button>`;
+          strip.classList.remove('hidden');
+          strip.classList.add('flex');
+          const dismissBtn = strip.querySelector('[data-wx-dismiss]');
+          if (dismissBtn) dismissBtn.addEventListener('click', () => {
+            try { localStorage.setItem('verdant.wx-hint-dismissed', '1'); } catch { /* private mode */ }
+            strip.classList.add('hidden');
+            strip.classList.remove('flex');
+          });
+        } else {
+          strip.classList.add('hidden');
+          strip.classList.remove('flex');
+        }
         return;
       }
       const cur = forecast.current;
