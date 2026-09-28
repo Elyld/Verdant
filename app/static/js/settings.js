@@ -83,6 +83,9 @@
       $('#set-digest-enabled').checked = !!s.digest_enabled;
       $('#set-webhook').value = s.discord_webhook_url || '';
       $('#set-digest-time').value = s.digest_time || '08:00';
+      $('#set-ai-enabled').checked = !!s.local_ai_enabled;
+      $('#set-ai-base').value = s.local_ai_base_url || 'http://localhost:11434';
+      $('#set-ai-model').value = s.local_ai_model || 'qwen3:4b';
       mobileTabPicks = parseMobileTabs(s.mobile_tabs) || [];
       initMobileChips();
       renderMobileChips();
@@ -108,6 +111,9 @@
           slideshow_interval: Number($('#set-slideshow-interval').value) || 5,
           confirm_water_all: $('#set-confirm-water-all').checked,
           mobile_tabs: JSON.stringify(mobileTabPicks),
+          local_ai_enabled: $('#set-ai-enabled').checked,
+          local_ai_base_url: $('#set-ai-base').value.trim(),
+          local_ai_model: $('#set-ai-model').value.trim(),
         });
         renderPreview(saved.frost_preview);
         status.textContent = '';
@@ -124,6 +130,25 @@
         toast('Test digest sent — check Discord 💬', 'ok');
       } catch (error) {
         toast(`Could not send: ${error.message}`, 'error');
+      }
+    });
+
+    // Local AI: ping the model server (GET /api/ai/status hits /api/tags).
+    $('#ai-test').addEventListener('click', async () => {
+      const box = $('#ai-test-status');
+      box.textContent = 'Checking…';
+      try {
+        const st = await api.get('/api/ai/status');
+        if (!st.enabled) {
+          box.textContent = 'Enable it and save first, then test.';
+        } else if (st.reachable) {
+          const n = (st.models || []).length;
+          box.textContent = `Connected ✓${n ? ` (${n} model${n === 1 ? '' : 's'} on the server)` : ''}`;
+        } else {
+          box.textContent = st.hint || 'Not reachable.';
+        }
+      } catch (error) {
+        box.textContent = `Check failed: ${error.message}`;
       }
     });
 

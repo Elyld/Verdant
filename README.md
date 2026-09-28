@@ -198,7 +198,11 @@ A phone-first page for when you're standing in the garden with dirty hands:
 one-tap watering per location ("Water all"), a harvest +/− stepper with an
 optional **weight** input and unit (oz/g/lb/kg, prefilled from your default —
 leave it blank and it's a plain count), and today's entries at a glance.
-NFC tags can drop you straight here.
+NFC tags can drop you straight here. And when your hands are too dirty to tap
+through forms: **🤖 “Tell Verdant what you did”** — type a sentence like
+“watered the tomatoes and harvested 3 peppers” and a small model running on
+*your own machine* drafts the log entries for you to confirm. Nothing leaves
+your server; opt-in on the Settings page.
 
 ![Quick Log](docs/screenshots/quick.png)
 
@@ -601,6 +605,17 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.30.0** — **🤖 “Tell Verdant what you did” — local AI logging (opt-in).**
+  New card on Quick Log: type a sentence like “watered the tomatoes and
+  harvested 3 peppers” and a small model running on **your own machine**
+  (Ollama-compatible, e.g. `qwen3:4b`) turns it into draft log entries —
+  plant, quantity, product, notes — which you review and confirm before
+  anything is saved. Nothing leaves your server. Configure it on the Settings
+  page (off by default): server URL, model name, and a Test connection
+  button. The model only ever produces drafts; the confirm step writes
+  through the normal log endpoints, so validation and history work exactly
+  as usual.
+  ![Tell Verdant what you did](docs/screenshots/ai-log.png)
 - **2.29.0** — **⚠️ National Weather Service alerts in the ribbon.** The
   site-wide weather ribbon now shows a severity-tinted ⚠️ pill when the NWS
   has active alerts for your garden point (Freeze Warning, Wind Advisory,
