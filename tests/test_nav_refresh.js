@@ -2,7 +2,7 @@
    - desktop grouped nav: 15 links, 4 labeled groups, no dropdowns, icon on every tab
    - mobile bottom tab bar: renders mobile_tabs picks (tap order) + fixed More,
      defaults when unset/invalid; More sheet lists everything else, no duplicates
-   - Settings chip picker: toggles with max-4 enforcement, order numbers, PUT saves
+   - Settings chip picker: toggles with max-5 enforcement, order numbers, PUT saves
 */
 'use strict';
 const path = require('path');
@@ -170,13 +170,13 @@ function sheetOpen() { return !named['#mobile-sheet'].classList.contains('hidden
   // B1: defaults when unset
   resetDom(); currentMobileTabs = ''; window.location.pathname = '/';
   await bootFresh(false);
-  check('default tabs: quick,plants,calendar,planner in order',
-    JSON.stringify(tabHrefs()) === JSON.stringify(['quick', 'plants', 'calendar', 'planner']));
+  check('default tabs: quick,plants,calendar,planner,settings in order',
+    JSON.stringify(tabHrefs()) === JSON.stringify(['quick', 'plants', 'calendar', 'planner', 'settings']));
   check('More button present after tabs', !!named['#mobile-nav-more']);
   {
     const sh = sheetHrefs();
     check('sheet lists the other 11, no duplicates',
-      sh.length === 11 && !['/quick', '/plants', '/calendar', '/planner'].some((h) => sh.includes(h)));
+      sh.length === 11 && !['/quick', '/plants', '/calendar', '/planner', '/settings'].some((h) => sh.includes(h)));
   }
 
   // B2: custom picks respected in tap order; sheet excludes them
@@ -186,8 +186,8 @@ function sheetOpen() { return !named['#mobile-sheet'].classList.contains('hidden
     JSON.stringify(tabHrefs()) === JSON.stringify(['planner', 'costs', 'seeds']));
   {
     const sh = sheetHrefs();
-    check('sheet excludes picked tabs (12 left)',
-      sh.length === 12 && !['/planner', '/costs', '/seeds'].some((h) => sh.includes(h))
+    check('sheet excludes picked tabs (13 left)',
+      sh.length === 13 && !['/planner', '/costs', '/seeds'].some((h) => sh.includes(h))
       && ['/quick', '/plants', '/calendar'].every((h) => sh.includes(h)));
   }
 
@@ -196,7 +196,7 @@ function sheetOpen() { return !named['#mobile-sheet'].classList.contains('hidden
     resetDom(); currentMobileTabs = bad; window.location.pathname = '/';
     await bootFresh(false);
     check(`invalid mobile_tabs falls back to defaults (${bad})`,
-      JSON.stringify(tabHrefs()) === JSON.stringify(['quick', 'plants', 'calendar', 'planner']));
+      JSON.stringify(tabHrefs()) === JSON.stringify(['quick', 'plants', 'calendar', 'planner', 'settings']));
   }
   resetDom(); currentMobileTabs = '["quick","quick","seeds","quick"]'; window.location.pathname = '/';
   await bootFresh(false);
@@ -250,8 +250,8 @@ function sheetOpen() { return !named['#mobile-sheet'].classList.contains('hidden
   await bootFresh(true);
   {
     const chips = chipState();
-    check('15 chips rendered, none pressed by default',
-      chips.length === 15 && chips.every((c) => !c.on));
+    check('16 chips rendered, none pressed by default',
+      chips.length === 16 && chips.every((c) => !c.on));
   }
   clickChip('quick');
   clickChip('plants');
@@ -268,21 +268,26 @@ function sheetOpen() { return !named['#mobile-sheet'].classList.contains('hidden
     const p = chips.find((c) => c.key === 'plants');
     check('deselect renumbers remaining pick to 1', !q.on && p.on && p.order === '1');
   }
-  // max 4
-  clickChip('quick'); clickChip('calendar'); clickChip('planner'); // now plants,quick,calendar,planner = 4
-  const toastsBefore = named['#toasts'].children.length;
-  clickChip('costs');
+  // max 5
+  clickChip('quick'); clickChip('calendar'); clickChip('planner'); clickChip('costs'); // plants,quick,calendar,planner,costs = 5
   {
     const chips = chipState();
-    check('max 4 enforced (5th tap rejected)',
-      chips.filter((c) => c.on).length === 4 && !chips.find((c) => c.key === 'costs').on);
+    check('5th tap accepted (max is 5)',
+      chips.filter((c) => c.on).length === 5 && chips.find((c) => c.key === 'costs').on);
+  }
+  const toastsBefore = named['#toasts'].children.length;
+  clickChip('seeds');
+  {
+    const chips = chipState();
+    check('max 5 enforced (6th tap rejected)',
+      chips.filter((c) => c.on).length === 5 && !chips.find((c) => c.key === 'seeds').on);
     check('toast shown on over-pick', named['#toasts'].children.length === toastsBefore + 1);
   }
   // save PUTs the array in tap order
   named['#settings-form'].fire('submit');
   await tick(30);
   check('save PUTs mobile_tabs JSON in tap order',
-    capturedPut && capturedPut.mobile_tabs === JSON.stringify(['plants', 'quick', 'calendar', 'planner']));
+    capturedPut && capturedPut.mobile_tabs === JSON.stringify(['plants', 'quick', 'calendar', 'planner', 'costs']));
 
   // existing picks load pressed with order
   resetDom(); currentMobileTabs = '["seeds","planner"]'; window.location.pathname = '/settings';
@@ -293,7 +298,7 @@ function sheetOpen() { return !named['#mobile-sheet'].classList.contains('hidden
     const p = chips.find((c) => c.key === 'planner');
     check('existing picks load pressed with order numbers',
       s.on && s.order === '1' && p.on && p.order === '2');
-    check('count line shows picks', /2 of 4/.test(named['#mobile-tab-count'].textContent));
+    check('count line shows picks', /2 of 5/.test(named['#mobile-tab-count'].textContent));
   }
 
   console.log(failures === 0 ? '\nALL NAV CHECKS PASSED' : `\n${failures} FAILURES`);

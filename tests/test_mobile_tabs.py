@@ -1,7 +1,8 @@
-"""Validation tests for the mobile_tabs setting (nav refresh, v2.28.0).
+"""Validation tests for the mobile_tabs setting (nav refresh, v2.28.0;
+Settings added as a 5th default tab in v2.32.0).
 
-mobile_tabs is stored as a JSON array string of tab keys (max 4, deduped,
-order preserved). PUT /api/settings must 400 on a bad key or >4 tabs.
+mobile_tabs is stored as a JSON array string of tab keys (max 5, deduped,
+order preserved). PUT /api/settings must 400 on a bad key or >5 tabs.
 Run with:  pytest -q
 """
 from __future__ import annotations
@@ -62,8 +63,15 @@ def test_mobile_tabs_bad_key_400():
 
 
 def test_mobile_tabs_too_many_400():
-    r = _put(json.dumps(["quick", "plants", "calendar", "planner", "costs"]))
+    r = _put(json.dumps(["quick", "plants", "calendar", "planner", "costs", "settings"]))
     assert r.status_code == 400, r.text
+
+
+def test_mobile_tabs_five_ok():
+    r = _put(json.dumps(["quick", "plants", "calendar", "planner", "settings"]))
+    assert r.status_code == 200, r.text
+    body = client.get("/api/settings").json()
+    assert json.loads(body["mobile_tabs"]) == ["quick", "plants", "calendar", "planner", "settings"]
 
 
 def test_mobile_tabs_not_json_400():
