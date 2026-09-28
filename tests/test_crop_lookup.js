@@ -126,6 +126,11 @@ const api = {
     }
     if (url === '/api/crops/tomato') return { ok: true, crop: TOMATO };
     if (url === '/api/seed-packets/7') return PACKET;
+    if (url.startsWith('/api/crops/sow-by')) return {
+      ok: true, days_to_maturity: 75, buffer_days: 14,
+      frost_date: '2026-11-15', frost_source: 'exact',
+      sow_by: '2026-10-04', days_left: 6, verdict: 'close',
+    };
     throw new Error('unexpected GET ' + url);
   },
 };
@@ -147,12 +152,14 @@ const named = {
   '#plant-light': makeEl(),
   '#plant-maturity': makeEl(),
   '#plant-notes': makeEl(),
+  '#crop-sowby': makeEl(),
 };
 
 globalThis.Verdant = {
   $: (sel) => named[sel] || makeEl(),
   $$: () => [],
   esc: (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])),
+  fmtDate: (s) => s,
   api,
   toast: (msg) => { toasts.push(msg); },
   onBoot: (fn) => { bootFns.push(fn); },
@@ -199,6 +206,12 @@ async function main() {
   check('detail shows spacing/depth/timing',
     detail.innerHTML.includes('24–36') && detail.innerHTML.includes('5–10'));
   check('use button present', detail.innerHTML.includes('id="crop-use"'));
+  check('sow-by calculator fetched with maturity',
+    apiCalls.some((u) => u === '/api/crops/sow-by?days_to_maturity=75'));
+  const sowby = named['#crop-sowby'];
+  check('planting calculator rendered in detail',
+    sowby.innerHTML.includes('Sow by') && sowby.innerHTML.includes('cutting it close')
+    && sowby.innerHTML.includes('2026-10-04'));
 
   // 4. "Use this info" fills empty fields, never clobbers.
   named['#plant-species'].value = '';

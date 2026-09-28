@@ -24,10 +24,10 @@ all in a single Docker container. FastAPI + SQLite, no build step, no cloud.
 ## Features
 
 ### 🧭 Navigation — grouped tabs, custom mobile bar
-The desktop nav is grouped into four labeled sections — **Grow** (Plants,
-Seeds, Seedlings, Planner), **Track** (Garden Logs, Calendar, Quick Log,
-Photos), **Manage** (Costs, Pests, Fertilizers, Review, Import, Tags), and
-**Read** (Blog & Stories) — over a faint fern watermark, with no dropdown
+The desktop nav is grouped into four labeled sections — **Grow** (Today,
+Plants, Seeds, Seedlings, Planner), **Track** (Garden Logs, Calendar, Quick
+Log, Photos), **Manage** (Costs, Pests, Fertilizers, Review, Import, Tags),
+and **Read** (Blog & Stories) — over a faint fern watermark, with no dropdown
 menus anywhere. On your phone you get a bottom tab bar instead: pick up to
 **5** of your own sections in the order you tap them, right on the
 📱 *Mobile tab bar* card of the Settings page (tap a chip to add it, tap
@@ -37,6 +37,17 @@ sections. Out of the box the bar is Quick Log, Plants, Calendar, Planner,
 and Settings — so Settings is always one tap away on your phone.
 
 ![Mobile tab bar](docs/screenshots/nav-mobile.png)
+
+### ☀️ Today — your garden's morning brief
+Today is the landing page: a greeting, the date, and everything that matters
+right now. **💧 Care due** lists what's overdue or due today for watering and
+feeding across all your plants. **🧺 Harvest forecast** predicts what's ready
+from planting dates + the crop guide (clearly labeled estimates — your eyes
+are the final judge). Below that, the weather strip, any active NOAA alerts,
+and a **❄️ frost countdown** to your first fall frost — or a gentle prompt to
+set it in Settings if you haven't. One glance, then grab your gloves.
+
+![Today](docs/screenshots/today.png)
 
 ### 📅 Calendar — daily log at a glance
 A GitHub-style heatmap of every observation, watering, and fertilization. Click
@@ -55,7 +66,10 @@ on the plant's profile, with a lightbox on click.
 Adding a plant? Hit **🔎 Look up growing info** on the form — search the
 built-in crop guide, pick your crop, and sun, days to maturity, spacing,
 sowing depth, and germination timing fill themselves in (only the empty
-fields; your typing is never overwritten).
+fields; your typing is never overwritten). Every crop detail also answers
+**“can I still plant this?”** — a 🌱 planting calculator that works back from
+your first frost date (minus the days to maturity and a 14-day buffer) and
+tells you it's still time, cutting it close, or too late for a fall harvest.
 
 ![Crop lookup](docs/screenshots/crop-lookup.png)
 
@@ -130,7 +144,8 @@ the wishlist is its own list, and invoices are the source of truth.
 
 ### ✍️ Blog — garden stories
 Markdown blog posts with photo galleries, for the season's stories — first
-harvests, experiments, lessons learned.
+harvests, experiments, lessons learned. The blog lives under **Read** in the
+nav (at `/blog`); the ☀️ Today page is the landing page now.
 
 ![Blog](docs/screenshots/blog.png)
 
@@ -211,6 +226,9 @@ A phone-first page for when you're standing in the garden with dirty hands:
 one-tap watering per location ("Water all"), a harvest +/− stepper with an
 optional **weight** input and unit (oz/g/lb/kg, prefilled from your default —
 leave it blank and it's a plain count), and today's entries at a glance.
+Every save pops a **↩ Undo** toast (about 8 seconds) — fat-fingered a
+watering from the garden? One tap takes it back. Watering, harvests, and
+notes can all be undone.
 NFC tags can drop you straight here. And when your hands are too dirty to tap
 through forms: **🤖 “Tell Verdant what you did”** — type a sentence like
 “watered the tomatoes and harvested 3 peppers” and a small model running on
@@ -220,6 +238,8 @@ your server; opt-in on the Settings page.
 ![Tell Verdant what you did](docs/screenshots/ai-log.png)
 
 ![Quick Log](docs/screenshots/quick.png)
+
+![Quick Log undo](docs/screenshots/quick-undo.png)
 
 ### 💰 Costs — was it worth growing?
 Every garden expense in one place, broken down by category — rows are
@@ -624,6 +644,18 @@ correct, and the container's clock/timezone matches yours — `DIGEST_TIME` is
 server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
+
+- **2.34.0** — **☀️ Today view, Quick Log undo, planting calculator.** A new
+  **Today** landing page: greeting + date, 💧 care-due list (overdue + due
+  watering/feeding), 🧺 harvest forecast from planting dates + the crop
+  guide (labeled estimates), weather strip, NOAA alerts, and a ❄️ frost
+  countdown. Quick Log saves now pop a **↩ Undo** toast (~8s) — watering,
+  harvests, and notes can all be taken back. And the crop-lookup dialog grew
+  a 🌱 **planting calculator**: pick a crop and it works back from your
+  first frost date (minus days to maturity and a 14-day buffer) to say
+  whether there's still time to sow. The blog moved to `/blog` under Read.
+  ![Today](docs/screenshots/today.png)
+  ![Quick Log undo](docs/screenshots/quick-undo.png)
 
 - **2.33.0** — **🔎 Crop lookup: varieties + your seed stash.** The lookup now
   searches 48 curated varieties (Cherokee Purple, Sungold, Marketmore 76…)

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Verdant · Today{% endblock %}
+{% block main %}
+<main class="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
+{% block content %}
+<section class="space-y-6">
+  <header class="flex flex-wrap items-baseline justify-between gap-2">
+    <div>
+      <h2 id="today-greeting" class="font-display text-2xl font-semibold text-navy-800">☀️ Today</h2>
+      <p class="text-sm text-navy-500">What needs doing out there?</p>
+    </div>
+    <p id="today-date" class="pill"></p>
+  </header>
+
+  <section id="today-weather" class="card hidden"></section>
+
+  <div id="today-alerts" class="space-y-2"></div>
+
+  <section class="card">
+    <h3 class="font-display text-lg font-semibold text-navy-800">💧 Care due</h3>
+    <ul id="today-due" class="mt-2 space-y-1 text-sm text-navy-600">
+      <li class="text-navy-400">Checking…</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h3 class="font-display text-lg font-semibold text-navy-800">🧺 Harvest forecast</h3>
+    <p class="text-xs text-navy-400">Estimates from planting dates + the crop guide — your eyes are the final judge.</p>
+    <ul id="today-harvest" class="mt-2 space-y-1 text-sm text-navy-600">
+      <li class="text-navy-400">Checking…</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h3 class="font-display text-lg font-semibold text-navy-800">❄️ First frost</h3>
+    <p id="today-frost" class="mt-2 text-sm text-navy-600">Checking…</p>
+  </section>
+</section>
+{% endblock %}
+</main>
+{% endblock %}

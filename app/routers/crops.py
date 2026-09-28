@@ -110,6 +110,47 @@ def search_crops(q: str = "", session: Session = Depends(get_session)) -> dict:
     return {"ok": True, "guide": guide, "stash": stash}
 
 
+@router.get("/sow-by")
+def sow_by(
+    days_to_maturity: int, session: Session = Depends(get_session)
+) -> dict:
+    """Planting calculator: last safe sow date for a fall harvest.
+
+    sow_by = next_first_frost − days_to_maturity − 14d buffer.
+    Uses the annualized next frost (same as the header countdown), so crops
+    like garlic — sown in fall for next year — get a sensible answer.
+    """
+    from datetime import date as date_cls
+
+    from app import frost as frost_mod
+    from app import planting
+
+    today = date_cls.today()
+    frost_date, source, _zone = frost_mod.resolve_frost(session, "first", today=today)
+    if frost_date is None or not days_to_maturity:
+        return {
+            "ok": True,
+            "days_to_maturity": days_to_maturity,
+            "buffer_days": planting.SOW_BUFFER_DAYS,
+            "frost_date": None,
+            "frost_source": None,
+            "sow_by": None,
+            "days_left": None,
+            "verdict": "no_frost_date",
+        }
+    sow_by_date = planting.last_safe_sow_date(frost_date, days_to_maturity)
+    return {
+        "ok": True,
+        "days_to_maturity": days_to_maturity,
+        "buffer_days": planting.SOW_BUFFER_DAYS,
+        "frost_date": frost_date.isoformat(),
+        "frost_source": source,
+        "sow_by": sow_by_date.isoformat(),
+        "days_left": (sow_by_date - today).days,
+        "verdict": planting.sow_verdict(sow_by_date, today),
+    }
+
+
 @router.get("/{key}")
 def crop_detail(key: str) -> dict:
     """Full growing info for one crop, including its varieties and source."""

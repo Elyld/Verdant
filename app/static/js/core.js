@@ -125,7 +125,8 @@
   // Canonical nav sections (key, href, icon, label). The mobile tab bar
   // renderer uses this; the Settings chip picker reads it off Verdant.
   const NAV_SECTIONS = [
-    { key: 'home', href: '/', icon: '📖', label: 'Blog & Stories' },
+    { key: 'today', href: '/', icon: '☀️', label: 'Today' },
+    { key: 'home', href: '/blog', icon: '📖', label: 'Blog & Stories' },
     { key: 'observations', href: '/observations', icon: '📝', label: 'Garden Logs' },
     { key: 'calendar', href: '/calendar', icon: '📅', label: 'Calendar' },
     { key: 'photos', href: '/photos', icon: '📷', label: 'Photos' },

@@ -87,7 +87,8 @@ def test_health(client):
 
 def test_route_pages_expose_visible_primary_content(client):
     routes = {
-        "/": ('id="panel-blog"', 'id="post-form"'),
+        "/": ('id="today-due"', 'id="today-harvest"'),
+        "/blog": ('id="panel-blog"', 'id="post-form"'),
         "/observations": ('id="panel-logs"', 'id="obs-form"'),
         "/calendar": ('id="panel-calendar"', 'id="calendar-grid"'),
         "/photos": ('id="panel-photos"', 'id="photo-album-select"', 'id="slideshow"'),
