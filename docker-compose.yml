@@ -17,6 +17,11 @@ services:
     restart: unless-stopped
     ports:
       - "${GARDEN_PORT:-3113}:8000"
+    # Let the container reach services on the Docker host by hostname
+    # (Linux needs this; Docker Desktop resolves it already). Used for
+    # host.docker.internal URLs, e.g. Ollama or Immich on the same machine.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       GARDEN_DATA_DIR: /data
       GARDEN_UPLOAD_DIR: /uploads

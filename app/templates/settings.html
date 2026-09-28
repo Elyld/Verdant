@@ -146,6 +146,13 @@
           <input id="set-ai-model" type="text" class="inp" placeholder="qwen3:4b" maxlength="80" />
         </label>
       </div>
+      <p class="text-xs text-navy-400">
+        Verdant runs in Docker, so <code>localhost</code> here means the Verdant
+        container itself — not your PC. To reach Ollama on the same machine, use
+        <code>http://host.docker.internal:11434</code>, and set
+        <code>OLLAMA_HOST=0.0.0.0</code> on Ollama so it accepts the connection.
+        No <code>/v1</code> needed — the app adds the <code>/api/…</code> paths itself.
+      </p>
       <div class="flex items-center gap-3">
         <button type="button" id="ai-test" class="btn-ghost text-sm">Test connection</button>
         <span id="ai-test-status" class="text-sm text-navy-400"></span>

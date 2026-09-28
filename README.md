@@ -1,4 +1,4 @@
-# 🌿 Verdant — Self-Hosted Garden Journal (v2.32.0)
+# 🌿 Verdant — Self-Hosted Garden Journal (v2.32.1)
 
 Your garden, logged. Plant profiles with care reminders, a daily observation log
 with a calendar heatmap, photo albums with slideshows, a seed stash and seedling
@@ -619,6 +619,14 @@ correct, and the container's clock/timezone matches yours — `DIGEST_TIME` is
 server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
+
+- **2.32.1** — **🤖 Local AI connection help.** The Test connection button now
+  also tells you whether your configured model is actually pulled (with the
+  `ollama pull` command to fix it), a trailing `/v1` on the server URL is
+  ignored (the app adds the `/api/…` paths itself), and unreachable
+  `localhost` URLs explain the Docker gotcha: use
+  `http://host.docker.internal:11434` (now resolvable on Linux too, via
+  `extra_hosts` in the compose file) with `OLLAMA_HOST=0.0.0.0` on Ollama.
 
 - **2.32.0** — **⚙️ Settings joins the mobile tab bar.** The bottom tab bar
   now fits up to **5** of your sections, and **Settings** is one of the

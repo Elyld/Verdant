@@ -143,7 +143,11 @@
           box.textContent = 'Enable it and save first, then test.';
         } else if (st.reachable) {
           const n = (st.models || []).length;
-          box.textContent = `Connected ✓${n ? ` (${n} model${n === 1 ? '' : 's'} on the server)` : ''}`;
+          if (st.model_present === false) {
+            box.textContent = `Connected ✓, but "${st.model}" isn't on the server — run \`ollama pull ${st.model}\` where Ollama runs, then test again.`;
+          } else {
+            box.textContent = `Connected ✓${n ? ` (${n} model${n === 1 ? '' : 's'} on the server)` : ''}`;
+          }
         } else {
           box.textContent = st.hint || 'Not reachable.';
         }
