@@ -1,4 +1,4 @@
-# 🌿 Verdant — Self-Hosted Garden Journal (v2.26.0)
+# 🌿 Verdant — Self-Hosted Garden Journal (v2.27.0)
 
 Your garden, logged. Plant profiles with care reminders, a daily observation log
 with a calendar heatmap, photo albums with slideshows, a seed stash and seedling
@@ -131,14 +131,16 @@ you put the same plant family where it grew last season. Copy last season's
 layout into the new year and shuffle things around. Flip to the **3D view** to
 walk your plan — orbit around the yard and see the beds, bags, arches, and
 plants in space, which makes the layout click in a way a flat grid never does.
-Click any container in 3D to edit it. A **🌤️ weather strip** runs across the
-top of the planner — current conditions, tonight's low, tomorrow's high,
-rain chance, and wind gusts — and **garden alerts** underneath it read your
-actual data: frost warnings that name your tender containers, heat alerts for
-the thirsty pots and bags, rain-skip nudges when you watered recently, spray
-wash-off warnings, wind alerts for the arches, and a tomato blight watch.
-Set your coordinates on the Settings page to light it up; until then the
-strip shows a small dismissible nudge pointing you there.
+Click any container in 3D to edit it. A slim **🌤️ weather ribbon** runs under
+the site header on every page — current conditions, tonight's low, tomorrow's
+high, rain chance, and wind gusts. On the planner, **garden alerts** underneath
+it read your actual data: frost warnings that name your tender containers, heat
+alerts for the thirsty pots and bags, rain-skip nudges when you watered recently,
+spray wash-off warnings, wind alerts for the arches, and a tomato blight watch.
+Set your coordinates on the Settings page to light the ribbon up; until then it
+stays quietly hidden.
+
+![Global weather ribbon](docs/screenshots/weather-ribbon.png)
 Hit **🔥 Yield** to tint every container by last season's harvest weight
 (darker = heavier), so the spots that earned their keep jump out. Open any
 container and the **🌱 companion hints** suggest good and bad neighbors from a
@@ -376,7 +378,7 @@ to `.env` (or set them in your Dockge stack) for the ones you want.
 | `GARDEN_PUBLIC_URL` | `http://localhost:3113` | Base URL used to resolve relative URLs in "Import from URL" |
 | `IMMICH_BASE_URL` | (unset) | Your Immich server URL, e.g. `http://192.168.0.50:2283` (enables Immich import) |
 | `IMMICH_API_KEY` | (unset) | Immich API key (Account Settings → API Keys). Needs `album.read`, `asset.view`, `asset.download` |
-| `GARDEN_LAT` / `GARDEN_LON` | (unset) | Fallback for your garden's coordinates — prefer the Settings page (📍 Use my location button). Stamps new observations with current weather + powers the Planner weather strip (free Open-Meteo data, no key needed) |
+| `GARDEN_LAT` / `GARDEN_LON` | (unset) | Fallback for your garden's coordinates — prefer the Settings page (📍 Use my location button). Stamps new observations with current weather + powers the site-wide weather ribbon (free Open-Meteo data, no key needed) |
 | `DIGEST_ENABLED` | `false` | Set `true` to enable the morning Discord digest |
 | `DISCORD_WEBHOOK_URL` | (unset) | Discord webhook URL (Server Settings → Integrations → Webhooks) |
 | `DIGEST_TIME` | `08:00` | When the digest sends (24h `HH:MM`, server local time) |
@@ -583,6 +585,13 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.27.0** — **🌤️ The weather strip goes site-wide.** The forecast ribbon
+  (current conditions, tonight's low, tomorrow's high, rain chance, wind gusts)
+  now lives under the site header on **every** page instead of only the
+  planner — slim, subtle, and rendered from the cached forecast endpoint, so
+  it's cheap. It stays hidden until your garden coordinates are set (Settings
+  page — no nagging), and the planner keeps its garden-alerts box, which reads
+  your actual container data.
 - **2.26.0** — **📍 Garden coordinates move to Settings.** Latitude/longitude
   are now first-class Settings-page fields (saved like everything else, no env
   vars needed) with a **Use my location** button: it tries your browser's
@@ -689,10 +698,11 @@ server local time. Test with `POST /api/digest/send`.
   **pallets**. A **3D view** renders the whole plan in space — orbit around
   the yard, see every bed, bag, arch, and plant, click any of them to edit.
   Old free-form positions migrate to the grid automatically on first load.
-  Then came the **intelligence batch**: a **🌤️ weather strip** across the top
-  of the planner (live conditions, tonight's low, tomorrow's high, rain
-  chance, wind gusts — powered by Open-Meteo, set your coordinates in
-  Settings), plus **garden alerts** that read your actual data — frost warnings
+  Then came the **intelligence batch**: a **🌤️ weather strip** (live conditions,
+  tonight's low, tomorrow's high, rain chance, wind gusts — powered by
+  Open-Meteo, set your coordinates in Settings), which went site-wide in
+  v2.27.0 as a slim ribbon under the header on every page, plus **garden
+  alerts** that read your actual data — frost warnings
   naming your tender containers, heat alerts for the thirsty pots, rain-skip
   nudges when you watered recently, spray wash-off warnings, wind alerts for
   the arches, and a tomato blight watch. The **🔥 Yield heatmap** tints every
