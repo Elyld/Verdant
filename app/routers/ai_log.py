@@ -157,13 +157,18 @@ def ai_status(session: Session = Depends(get_session)) -> dict:
         )
         return {"enabled": True, "reachable": True, "model": want,
                 "model_present": present, "models": models}
-    except Exception:
+    except Exception as e:
         hint = f"Could not reach {cfg['base_url']} — is the model server running?"
         if "localhost" in cfg["base_url"] or "127.0.0.1" in cfg["base_url"]:
             hint += (" Verdant runs in Docker, so localhost means the Verdant container itself — "
                      "use http://host.docker.internal:11434 to reach Ollama on the same machine, "
                      "and set OLLAMA_HOST=0.0.0.0 so Ollama accepts the connection.")
-        return {"enabled": True, "reachable": False, "model": cfg["model"], "hint": hint}
+        # Surface the raw failure so the Test connection button can show it:
+        # "refused" = nothing listening (Ollama down or bound to 127.0.0.1),
+        # "timed out" = firewall/routing, name-resolution errors = bad hostname.
+        detail = f"{type(e).__name__}: {e}".strip()
+        return {"enabled": True, "reachable": False, "model": cfg["model"],
+                "hint": hint, "error": detail[:300]}
 
 
 @router.post("/interpret")

@@ -678,6 +678,11 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.38.1** — **Local AI test shows the real error.** The Test connection button
+  used to swallow the failure and just say "couldn't connect." It now prints
+  the underlying error too — connection refused (Ollama isn't listening),
+  timed out (firewall), or a hostname that doesn't resolve — so a failed test
+  actually tells you what's wrong.
 - **2.38.0** — **🐛 Pest & disease guide.** The Pests page opens with a built-in
   guide: 40 common vegetable-garden pests and diseases — ID signs, organic and
   conventional treatments, prevention — compiled from university extension

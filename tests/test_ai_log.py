@@ -181,6 +181,14 @@ def test_status_unreachable_friendly(ai_on, monkeypatch):
     assert "http://localhost:11434" in body["hint"]
 
 
+def test_status_unreachable_includes_error_detail(ai_on, monkeypatch):
+    _stub_ollama(monkeypatch, error=URLError("[Errno 111] Connection refused"))
+    body = client.get("/api/ai/status").json()
+    assert body["reachable"] is False
+    assert "URLError" in body["error"]
+    assert "Connection refused" in body["error"]
+
+
 # --------------------------------------------------------------------------- #
 # /api/ai/interpret
 # --------------------------------------------------------------------------- #
