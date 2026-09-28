@@ -81,7 +81,7 @@ const api = {
   post: async (url, body) => { posts.push({ url, body }); return { id: 1 }; },
 };
 
-let bootFn = null;
+const bootFns = [];
 const cards = [];
 const spotEl = makeEl();
 const hostEl = makeEl();
@@ -109,7 +109,7 @@ globalThis.Verdant = {
   healthBar: () => '',
   todayLocal: () => '2026-09-27',
   getSettings: async () => ({ default_weight_unit: 'g' }),
-  onBoot: (fn) => { bootFn = fn; },
+  onBoot: (fn) => { bootFns.push(fn); },
 };
 global.document = {
   createElement: (tag) => (tag === 'div' ? makeCard() : makeEl()),
@@ -124,8 +124,8 @@ global.location = { search: '' };
 async function main() {
   const src = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'js', 'quick.js'), 'utf8');
   eval(src);
-  check('initQuick registered via onBoot', typeof bootFn === 'function');
-  await bootFn();
+  check('initQuick registered via onBoot', bootFns.length > 0);
+  for (const fn of bootFns) await fn();
   await tick(50);
 
   // Find the plant card (nested: host > section > grid > card).
@@ -180,7 +180,7 @@ async function main() {
   const spotClasses = new Set();
   spotEl.classList.add = (...c) => c.forEach((x) => spotClasses.add(x));
   spotEl.classList.remove = (...c) => c.forEach((x) => spotClasses.delete(x));
-  await bootFn();
+  for (const fn of bootFns) await fn();
   await tick(50);
   check('NFC harvest spotlight scrolls into view', spotEl.scrolled === true);
   check('NFC harvest spotlight adds ring classes',
