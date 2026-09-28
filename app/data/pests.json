@@ -1,0 +1,760 @@
+{
+ "meta": {
+  "count": 40,
+  "note": "Curated summaries compiled from university extension guidance (K-State, MU, Cornell, UC IPM, Iowa State). General garden guidance, not a substitute for a local extension diagnosis. Conventional options: always follow label directions.",
+  "version": 1
+ },
+ "pests": [
+  {
+   "hosts": [
+    "tomato",
+    "pepper",
+    "cucumber",
+    "squash",
+    "beans",
+    "lettuce",
+    "kale",
+    "eggplant"
+   ],
+   "name": "Aphids",
+   "prevention": "Row covers on young plants; avoid excess nitrogen (it fuels the tender growth aphids love); check transplants before they go in the ground.",
+   "signs": "Clusters of tiny soft-bodied insects (green, black, or gray) on new growth and leaf undersides. Leaves curl or yellow; sticky honeydew and black sooty mold follow. Ants farming a colony are a giveaway.",
+   "slug": "aphids",
+   "sources": [
+    "K-State Extension",
+    "UC IPM"
+   ],
+   "treatment_conventional": "Pyrethrin or malathion-based insecticides knock down heavy infestations fast. Follow label directions; avoid spraying open blooms.",
+   "treatment_organic": "Blast colonies off with a strong jet of water. Follow up with insecticidal soap or neem oil, coating leaf undersides. Encourage ladybugs and lacewings \u2014 one ladybug eats dozens a day.",
+   "type": "insect"
+  },
+  {
+   "hosts": [
+    "cabbage",
+    "kale",
+    "broccoli",
+    "cauliflower",
+    "brussels sprouts",
+    "collards"
+   ],
+   "name": "Cabbage caterpillars (cabbageworms & loopers)",
+   "prevention": "Floating row covers from transplant day until harvest; check leaf undersides weekly for yellow eggs and crush them.",
+   "signs": "Velvety green caterpillars (cabbageworm) or inching loopers chewing ragged holes in brassica leaves, with dark green frass pellets. White or brown moths/butterflies hovering around the plants.",
+   "slug": "cabbage-caterpillars",
+   "sources": [
+    "Cornell Extension",
+    "K-State Extension"
+   ],
+   "treatment_conventional": "Permethrin or carbaryl-based products are labeled for caterpillars on brassicas. Follow label directions and pre-harvest intervals.",
+   "treatment_organic": "Bt (Bacillus thuringiensis) sprayed on foliage \u2014 caterpillars stop feeding within a day or two and it spares beneficials. Handpick larger ones into soapy water.",
+   "type": "insect"
+  },
+  {
+   "hosts": [
+    "tomato",
+    "pepper",
+    "potato",
+    "eggplant"
+   ],
+   "name": "Tomato hornworm",
+   "prevention": "Till soil in fall to expose overwintering pupae; plant dill or basil nearby to attract parasitic wasps.",
+   "signs": "A fat green caterpillar (up to 4 inches) with a tail 'horn' and white V-stripes, stripping tomato foliage fast. Dark pellet frass on leaves below is the tell. Missing leaflets with stems left bare.",
+   "slug": "tomato-hornworm",
+   "sources": [
+    "K-State Extension",
+    "MU Extension"
+   ],
+   "treatment_conventional": "Carbaryl or permethrin sprays work; usually unnecessary \u2014 handpicking handles most infestations. Follow label directions.",
+   "treatment_organic": "Handpick (a blacklight at night makes them glow). Bt spray for small ones. Leave any hornworm covered in white rice-like cocoons \u2014 those are parasitic wasp larvae that will kill it and breed more wasps.",
+   "type": "insect"
+  },
+  {
+   "hosts": [
+    "squash",
+    "pumpkin",
+    "zucchini"
+   ],
+   "name": "Squash bugs",
+   "prevention": "Floating row covers until flowering; clear crop debris in fall where adults overwinter; plant early-maturing varieties to beat peak pressure.",
+   "signs": "Flat gray-brown shield-shaped adults and clusters of bronze eggs on leaf undersides. Leaves wilt, yellow, and crisp from the edges as nymphs suck sap. Whole runners can collapse.",
+   "slug": "squash-bugs",
+   "sources": [
+    "K-State Extension",
+    "Iowa State Extension"
+   ],
+   "treatment_conventional": "Permethrin or carbaryl applied to leaf undersides where nymphs cluster. Adults are tough \u2014 target the young gray nymphs. Follow label directions.",
+   "treatment_organic": "Scrape egg masses off leaf undersides into soapy water; handpick nymphs and adults in the cool morning when they're slow. Neem oil deters feeding on young plants.",
+   "type": "insect"
+  },
+  {
+   "hosts": [
+    "squash",
+    "pumpkin",
+    "zucchini"
+   ],
+   "name": "Squash vine borer",
+   "prevention": "Row covers until bloom (remove for pollination); bury stem nodes with soil so they root independently; choose resistant varieties like butternut.",
+   "signs": "Sudden wilting of a single runner on an otherwise healthy plant. Look for a sawdust-like frass pile at a stem crack near the base \u2014 the white grub is inside the stem.",
+   "slug": "squash-vine-borer",
+   "sources": [
+    "Cornell Extension",
+    "K-State Extension"
+   ],
+   "treatment_conventional": "Preventive permethrin sprays on the lower stem during egg-laying (late June\u2013July in Kansas). Once inside, sprays can't reach the larva. Follow label directions.",
+   "treatment_organic": "Slit the stem lengthwise at the frass pile, remove the grub, bury the wounded stem in soil \u2014 it often reroots. Injecting Bt into the stem is an option for prized plants.",
+   "type": "insect"
+  },
+  {
+   "hosts": [
+    "cucumber",
+    "squash",
+    "melon",
+    "pumpkin"
+   ],
+   "name": "Cucumber beetles (striped & spotted)",
+   "prevention": "Row covers until flowering; delay planting slightly so seedlings miss the first beetle wave; mulch to deny egg-laying sites.",
+   "signs": "Yellow-green beetles with black stripes (or black spots) chewing holes in leaves, blossoms, and fruit rinds. Seedlings can be defoliated overnight. They also spread bacterial wilt.",
+   "slug": "cucumber-beetles",
+   "sources": [
+    "K-State Extension",
+    "Iowa State Extension"
+   ],
+   "treatment_conventional": "Carbaryl or permethrin on seedlings when beetles first appear. Follow label directions; protect pollinators by spraying in the evening.",
+   "treatment_organic": "Neem oil or kaolin clay on foliage; yellow sticky traps to monitor. Handpick in the morning. Trap crops of Blue Hubbard squash lure them away from cucumbers.",
+   "type": "insect"
+  },
+  {
+   "hosts": [
+    "eggplant",
+    "radish",
+    "cabbage",
+    "kale",
+    "arugula",
+    "potato"
+   ],
+   "name": "Flea beetles",
+   "prevention": "Row covers on seedlings and transplants \u2014 the single most effective step; plant trap crops of radish nearby.",
+   "signs": "Tiny black jumping beetles leaving 'shot-hole' pitting in leaves. Seedlings and young transplants suffer most; eggplant leaves can look like lace.",
+   "slug": "flea-beetles",
+   "sources": [
+    "Cornell Extension",
+    "UC IPM"
+   ],
+   "treatment_conventional": "Carbaryl or permethrin dusts/sprays on young plants. Follow label directions.",
+   "treatment_organic": "Neem oil or spinosad on foliage; diatomaceous earth around the base. Healthy transplants outgrow damage once they're established.",
+   "type": "insect"
+  },
+  {
+   "hosts": [
+    "tomato",
+    "pepper",
+    "cabbage",
+    "lettuce",
+    "beans",
+    "seedlings"
+   ],
+   "name": "Cutworms",
+   "prevention": "Cardboard or foil collars around seedling stems at transplant; clear weeds near beds where moths lay eggs; till in fall.",
+   "signs": "Seedlings severed cleanly at the soil line overnight, sometimes dragged slightly. The plump gray-brown caterpillar curls into a C when disturbed \u2014 dig an inch down near the victim.",
+   "slug": "cutworms",
+   "sources": [
+    "K-State Extension",
+    "MU Extension"
+   ],
+   "treatment_conventional": "Carbaryl or permethrin granules around the base of transplants. Follow label directions.",
+   "treatment_organic": "Collars are the fix \u2014 a 3-inch cardboard ring sunk an inch into the soil. Handpick at night with a flashlight; Bt applied to soil surface helps with young larvae.",
+   "type": "insect"
+  },
+  {
+   "hosts": [
+    "lettuce",
+    "seedlings",
+    "strawberry",
+    "beans",
+    "hosta"
+   ],
+   "name": "Slugs & snails",
+   "prevention": "Water in the morning so surfaces dry by night; remove boards, dense mulch, and debris they hide under; copper tape around raised beds.",
+   "signs": "Irregular holes with smooth edges in leaves, silvery slime trails, and seedlings vanishing overnight. They feed after dark and in damp weather.",
+   "slug": "slugs-snails",
+   "sources": [
+    "Cornell Extension",
+    "UC IPM"
+   ],
+   "treatment_conventional": "Metaldehyde baits work but are toxic to pets and wildlife \u2014 iron phosphate baits are the safer choice and still effective. Follow label directions.",
+   "treatment_organic": "Iron phosphate bait (pet-safe) scattered near damage; beer traps sunk to soil level; handpick at night. Diatomaceous earth rings deter crawling.",
+   "type": "mollusk"
+  },
+  {
+   "hosts": [
+    "tomato",
+    "beans",
+    "cucumber",
+    "eggplant",
+    "pepper",
+    "strawberry"
+   ],
+   "name": "Two-spotted spider mites",
+   "prevention": "Avoid broad-spectrum insecticides that kill mite predators; keep plants watered in hot dry spells; hose foliage periodically.",
+   "signs": "Fine stippling (tiny yellow dots) on leaves, bronzing, and delicate webbing on leaf undersides in hot dry weather. Shake a leaf over white paper \u2014 moving specks confirm mites.",
+   "slug": "spider-mites",
+   "sources": [
+    "K-State Extension",
+    "UC IPM"
+   ],
+   "treatment_conventional": "Miticides (abamectin, bifenthrin) for severe cases. Follow label directions; rotate modes of action \u2014 mites develop resistance fast.",
+   "treatment_organic": "Strong water blast to leaf undersides every few days; insecticidal soap or neem oil with thorough coverage. Release predatory mites for greenhouse or high-value plants.",
+   "type": "mite"
+  },
+  {
+   "hosts": [
+    "tomato",
+    "pepper",
+    "cucumber",
+    "beans"
+   ],
+   "name": "Whiteflies",
+   "prevention": "Reflective silver mulch repels them; check transplants (especially greenhouse-grown) before planting; remove weeds that host them.",
+   "signs": "Clouds of tiny white flies rising when you brush the plant; sticky honeydew, sooty mold, and yellowing lower leaves. Nymphs are flat translucent scales on leaf undersides.",
+   "slug": "whiteflies",
+   "sources": [
+    "UC IPM",
+    "Cornell Extension"
+   ],
+   "treatment_conventional": "Imidacloprid soil drenches or pyrethrin sprays for heavy pressure. Follow label directions; avoid spraying blooms.",
+   "treatment_organic": "Yellow sticky traps to monitor and thin adults; insecticidal soap or neem oil on leaf undersides weekly. Vacuum adults off foliage in the cool morning.",
+   "type": "insect"
+  },
+  {
+   "hosts": [
+    "onion",
+    "tomato",
+    "pepper",
+    "beans"
+   ],
+   "name": "Thrips",
+   "prevention": "Reflective mulch; remove weeds and spent plants they overwinter in; blue sticky traps for monitoring.",
+   "signs": "Silvery-white streaks and stippling on leaves, distorted new growth, and black specks of frass. Flowers may brown and drop. They also spread tomato spotted wilt virus.",
+   "slug": "thrips",
+   "sources": [
+    "K-State Extension",
+    "UC IPM"
+   ],
+   "treatment_conventional": "Spinosad or pyrethrin sprays; thrips hide in buds so coverage matters. Follow label directions.",
+   "treatment_organic": "Insecticidal soap or neem oil, aimed into buds and new growth; blue sticky traps. Predatory mites help in enclosed spaces.",
+   "type": "insect"
+  },
+  {
+   "hosts": [
+    "potato",
+    "eggplant",
+    "tomato",
+    "pepper"
+   ],
+   "name": "Colorado potato beetle",
+   "prevention": "Rotate potatoes to new ground yearly; mulch heavily with straw; plant early so plants are vigorous before beetles peak.",
+   "signs": "Yellow-orange beetles with black stripes and clusters of orange eggs on leaf undersides. Red humpbacked larvae defoliate plants fast \u2014 potatoes can be stripped in days.",
+   "slug": "colorado-potato-beetle",
+   "sources": [
+    "Cornell Extension",
+    "K-State Extension"
+   ],
+   "treatment_conventional": "Spinosad is very effective and relatively soft on beneficials; carbaryl as a backup. Rotate products \u2014 resistance is common. Follow label directions.",
+   "treatment_organic": "Handpick beetles, larvae, and egg masses into soapy water \u2014 practical on garden scale. Spinosad or Bt tenebrionis (the beetle-specific Bt strain) on young larvae.",
+   "type": "insect"
+  },
+  {
+   "hosts": [
+    "beans",
+    "soybean"
+   ],
+   "name": "Mexican bean beetle",
+   "prevention": "Row covers until flowering; plant early-maturing varieties; till under bean residue in fall.",
+   "signs": "Copper-colored ladybug-like beetles and yellow spiny larvae skeletonizing bean leaves (veins left, tissue eaten). Pods may be scarred.",
+   "slug": "mexican-bean-beetle",
+   "sources": [
+    "MU Extension",
+    "Cornell Extension"
+   ],
+   "treatment_conventional": "Carbaryl or permethrin on foliage when larvae appear. Follow label directions and pre-harvest intervals.",
+   "treatment_organic": "Handpick beetles and crush yellow egg masses on leaf undersides. Neem oil deters feeding; the parasitic wasp Pediobius is an established biocontrol in many regions.",
+   "type": "insect"
+  },
+  {
+   "slug": "corn-earworm",
+   "name": "Corn earworm (tomato fruitworm)",
+   "type": "insect",
+   "hosts": [
+    "corn",
+    "tomato",
+    "pepper"
+   ],
+   "signs": "Worms feeding at corn ear tips under the husk; on tomatoes, a single hole bored into nearly-ripe fruit with frass around it. The same moth's larvae attack both crops.",
+   "treatment_organic": "A few drops of mineral oil on corn silks after pollination; Bt spray on tomato foliage when moths are active. Pick off and destroy bored fruit.",
+   "treatment_conventional": "Permethrin or carbaryl on corn silks at early silk stage; on tomatoes, spinosad. Follow label directions.",
+   "prevention": "Plant early-maturing corn; choose varieties with tight husks; till in fall to destroy overwintering pupae.",
+   "sources": [
+    "K-State Extension",
+    "MU Extension"
+   ]
+  },
+  {
+   "slug": "stink-bugs",
+   "name": "Stink bugs (incl. brown marmorated)",
+   "type": "insect",
+   "hosts": [
+    "tomato",
+    "pepper",
+    "beans",
+    "corn",
+    "peach"
+   ],
+   "signs": "Shield-shaped brown or green bugs; tomatoes develop cloudy white or yellow spots under the skin (white cores) and catfacing. Beans get shriveled seeds in the pod.",
+   "treatment_organic": "Handpick into soapy water in the cool morning. Neem oil deters feeding. Trap crops of sunflower or millet lure them away from vegetables.",
+   "treatment_conventional": "Pyrethrin or bifenthrin sprays for heavy pressure; adults are hard to kill, so target nymphs. Follow label directions.",
+   "prevention": "Row covers on young plants; clear weeds and debris where they overwinter; seal garden-adjacent sheds and houses in fall.",
+   "sources": [
+    "K-State Extension",
+    "Cornell Extension"
+   ]
+  },
+  {
+   "slug": "leafhoppers",
+   "name": "Leafhoppers (incl. potato leafhopper)",
+   "type": "insect",
+   "hosts": [
+    "potato",
+    "beans",
+    "eggplant",
+    "tomato"
+   ],
+   "signs": "Tiny wedge-shaped insects that hop when disturbed; leaf edges yellow, curl, and brown ('hopperburn'), starting at the tip. Stunted plants in bad years.",
+   "treatment_organic": "Insecticidal soap or neem oil with thorough underside coverage. Row covers on beans and potatoes until flowering.",
+   "treatment_conventional": "Carbaryl or pyrethrin sprays when hopperburn first appears. Follow label directions.",
+   "prevention": "Plant after the main spring migration; control nearby alfalfa and weeds that host them; choose resistant potato varieties.",
+   "sources": [
+    "Iowa State Extension",
+    "K-State Extension"
+   ]
+  },
+  {
+   "slug": "japanese-beetles",
+   "name": "Japanese beetles",
+   "type": "insect",
+   "hosts": [
+    "beans",
+    "corn",
+    "raspberry",
+    "roses",
+    "basil",
+    "grapes"
+   ],
+   "signs": "Metallic green-and-copper beetles skeletonizing leaves (veins left behind) from late June through August. They feed in groups and release aggregation scent, so a few become a swarm.",
+   "treatment_organic": "Handpick into soapy water in the cool morning when they're sluggish. Neem oil deters feeding. Do NOT hang bag traps near the garden \u2014 they attract more beetles than they catch.",
+   "treatment_conventional": "Carbaryl or pyrethrin sprays for severe defoliation. Milky spore or beneficial nematodes target the lawn grubs. Follow label directions.",
+   "prevention": "Row covers over beans and raspberries during peak flight; reduce lawn irrigation in summer (dry soil deters egg-laying).",
+   "sources": [
+    "K-State Extension",
+    "MU Extension"
+   ]
+  },
+  {
+   "slug": "asparagus-beetle",
+   "name": "Asparagus beetle",
+   "type": "insect",
+   "hosts": [
+    "asparagus"
+   ],
+   "signs": "Blue-black beetles with cream spots (common) or orange-red (spotted) chewing spear tips into a 'shepherd's crook' shape; dark eggs in rows on spears and ferns.",
+   "treatment_organic": "Handpick beetles and wipe off egg rows during harvest. Neem oil on ferns after harvest ends. Let chickens patrol the patch if you keep them.",
+   "treatment_conventional": "Carbaryl or permethrin on ferns after harvest; avoid spraying during harvest season. Follow label directions.",
+   "prevention": "Cut and destroy old ferns in late fall to remove overwintering shelter; harvest spears promptly so eggs don't hatch on them.",
+   "sources": [
+    "Cornell Extension",
+    "Iowa State Extension"
+   ]
+  },
+  {
+   "slug": "earwigs",
+   "name": "Earwigs",
+   "type": "insect",
+   "hosts": [
+    "lettuce",
+    "seedlings",
+    "corn",
+    "strawberry"
+   ],
+   "signs": "Ragged holes in soft leaves and seedlings chewed overnight; the pincered insects hide in damp crevices by day. Corn silks clipped.",
+   "treatment_organic": "Rolled-up damp newspaper traps (collect and shake into soapy water each morning); shallow oil-and-soy-sauce traps; diatomaceous earth around seedlings.",
+   "treatment_conventional": "Carbaryl bait or diatomaceous-earth-based products around bed edges. Follow label directions.",
+   "prevention": "Clear boards, dense mulch, and debris near beds; water in the morning so the surface dries by night.",
+   "sources": [
+    "UC IPM",
+    "Cornell Extension"
+   ]
+  },
+  {
+   "slug": "grasshoppers",
+   "name": "Grasshoppers",
+   "type": "insect",
+   "hosts": [
+    "beans",
+    "corn",
+    "lettuce",
+    "carrot",
+    "pepper"
+   ],
+   "signs": "Ragged chewing on leaf edges, worst in hot dry summers and near weedy borders. Nymphs (wingless, smaller) do most garden damage before you notice the adults.",
+   "treatment_organic": "Row covers are the reliable fix. Neem oil deters nymphs; Nosema locustae bait works on young nymphs in surrounding grass. Chickens and guineas are enthusiastic control.",
+   "treatment_conventional": "Carbaryl bait for severe outbreaks, applied to borders rather than the beds. Follow label directions.",
+   "prevention": "Mow weedy borders; till in fall to expose egg pods; row covers on vulnerable crops in outbreak years.",
+   "sources": [
+    "K-State Extension",
+    "Iowa State Extension"
+   ]
+  },
+  {
+   "slug": "onion-maggot",
+   "name": "Onion maggot",
+   "type": "insect",
+   "hosts": [
+    "onion",
+    "garlic",
+    "leek",
+    "shallot"
+   ],
+   "signs": "Seedlings wilt and die in patches; white legless maggots tunnel in the bulb base of pulled plants. Damage is worst in cool wet springs.",
+   "treatment_organic": "Row covers from planting until bulbing \u2014 the most effective control. Remove and destroy infested plants; diatomaceous earth around stems deters egg-laying flies.",
+   "treatment_conventional": "Diazinon is no longer widely available for home gardens; spinosad soil drenches show some effect. Follow label directions.",
+   "prevention": "Rotate alliums to new ground yearly; avoid fresh manure (it attracts the egg-laying flies); plant sets rather than seeds for a head start.",
+   "sources": [
+    "Cornell Extension",
+    "Iowa State Extension"
+   ]
+  },
+  {
+   "slug": "carrot-rust-fly",
+   "name": "Carrot rust fly",
+   "type": "insect",
+   "hosts": [
+    "carrot",
+    "parsnip",
+    "celery"
+   ],
+   "signs": "Rusty tunnels in carrot roots; foliage reddens and wilts. The tiny black flies find carrots by scent, especially after thinning crushes foliage.",
+   "treatment_organic": "Floating row covers from sowing on \u2014 near-total control. Thin in the evening and remove thinnings from the bed so the scent doesn't summon flies.",
+   "treatment_conventional": "Few home-garden products are labeled; exclusion with row covers is the recommended approach. Follow label directions on anything you use.",
+   "prevention": "Rotate carrots yearly; delay sowing to dodge the spring fly generation; choose resistant varieties like 'Flyaway'.",
+   "sources": [
+    "Cornell Extension",
+    "UC IPM"
+   ]
+  },
+  {
+   "slug": "leaf-miners",
+   "name": "Leaf miners (spinach/leafminer flies)",
+   "type": "insect",
+   "hosts": [
+    "spinach",
+    "chard",
+    "beets",
+    "lettuce"
+   ],
+   "signs": "Pale winding trails or blotches inside leaves where larvae tunnel between the surfaces. Damage is cosmetic on chard but ruins spinach leaves.",
+   "treatment_organic": "Pinch off and destroy mined leaves before larvae pupate; neem oil deters egg-laying. Row covers from emergence keep the flies off entirely.",
+   "treatment_conventional": "Spinosad sprayed when mines first appear. Follow label directions.",
+   "prevention": "Row covers on spinach and chard; till under infested residue in fall; rotate greens to new beds.",
+   "sources": [
+    "Cornell Extension",
+    "UC IPM"
+   ]
+  },
+  {
+   "slug": "powdery-mildew",
+   "name": "Powdery mildew",
+   "type": "disease",
+   "hosts": [
+    "squash",
+    "cucumber",
+    "melon",
+    "pumpkin",
+    "zucchini",
+    "peas"
+   ],
+   "signs": "White powdery coating on leaf tops, starting on older leaves in warm humid weather. Leaves yellow and dry out; fruit is usually fine but undersized.",
+   "treatment_organic": "Neem oil or potassium bicarbonate sprays at first sign, coating both leaf surfaces. A 1:10 milk-to-water spray is a well-known home remedy with real trial backing.",
+   "treatment_conventional": "Chlorothalonil or myclobutanil fungicides. Follow label directions and pre-harvest intervals.",
+   "prevention": "Space for airflow; water at the base, not overhead; choose resistant varieties (look for 'PM' on the tag); remove infected leaves promptly.",
+   "sources": [
+    "K-State Extension",
+    "Cornell Extension"
+   ]
+  },
+  {
+   "slug": "downy-mildew",
+   "name": "Downy mildew",
+   "type": "disease",
+   "hosts": [
+    "cucumber",
+    "squash",
+    "melon",
+    "pumpkin"
+   ],
+   "signs": "Yellow angular spots on leaf tops with fuzzy gray-purple growth underneath in humid weather. Leaves brown and die fast; it can defoliate cucumbers in a week.",
+   "treatment_organic": "Copper fungicide at first sign (one of the few organic options that works); remove badly infected leaves. Act early \u2014 it moves fast.",
+   "treatment_conventional": "Chlorothalonil or mancozeb fungicides on a preventive schedule. Follow label directions.",
+   "prevention": "Resistant cucumber varieties are the best defense; space for airflow; avoid evening overhead watering; destroy infected vines at season end.",
+   "sources": [
+    "Cornell Extension",
+    "K-State Extension"
+   ]
+  },
+  {
+   "slug": "early-blight",
+   "name": "Early blight (tomato/potato)",
+   "type": "disease",
+   "hosts": [
+    "tomato",
+    "potato"
+   ],
+   "signs": "Dark concentric-ring 'target' spots on lower leaves, yellowing around them; defoliation climbs the plant. Fruit gets dark leathery spots at the stem end.",
+   "treatment_organic": "Copper fungicide slows it; strip infected lower leaves (don't compost). Mulch stops soil splash, which is how it spreads.",
+   "treatment_conventional": "Chlorothalonil or mancozeb on a 7\u201310 day schedule once spotted. Follow label directions.",
+   "prevention": "Rotate tomatoes/potatoes on a 3-year cycle; mulch; water at the base; give plants full sun and airflow; choose tolerant varieties.",
+   "sources": [
+    "K-State Extension",
+    "Cornell Extension"
+   ]
+  },
+  {
+   "slug": "late-blight",
+   "name": "Late blight (tomato/potato)",
+   "type": "disease",
+   "hosts": [
+    "tomato",
+    "potato"
+   ],
+   "signs": "Water-soaked gray-green spots that turn brown-black fast, with white fuzzy mold underneath in humid weather. Whole plants can collapse in days; fruit rots with greasy brown patches. The Irish-potato-famine pathogen.",
+   "treatment_organic": "Little cures it \u2014 pull and bag (do not compost) infected plants immediately to protect neighbors. Copper sprays only help preventively before it arrives.",
+   "treatment_conventional": "Chlorothalonil or mancozeb applied preventively when conditions are wet and cool. Once established, removal beats spraying. Follow label directions.",
+   "prevention": "Resistant varieties (look for 'LB' or 'Ph' resistance); space for airflow; water at the base; destroy volunteer potatoes and nightshade weeds.",
+   "sources": [
+    "Cornell Extension",
+    "K-State Extension"
+   ]
+  },
+  {
+   "slug": "septoria-leaf-spot",
+   "name": "Septoria leaf spot (tomato)",
+   "type": "disease",
+   "hosts": [
+    "tomato"
+   ],
+   "signs": "Small circular spots with gray centers and dark borders on lower leaves; leaves yellow and drop from the bottom up. Spreads upward in wet weather.",
+   "treatment_organic": "Strip infected lower leaves (don't compost); copper fungicide slows spread. Mulch to block soil splash.",
+   "treatment_conventional": "Chlorothalonil or mancozeb on a preventive schedule. Follow label directions.",
+   "prevention": "Rotate tomatoes 3 years; mulch; water at the base; space for airflow; stake to keep foliage off the soil.",
+   "sources": [
+    "Cornell Extension",
+    "K-State Extension"
+   ]
+  },
+  {
+   "slug": "blossom-end-rot",
+   "name": "Blossom end rot",
+   "type": "physiological",
+   "hosts": [
+    "tomato",
+    "pepper",
+    "squash",
+    "watermelon"
+   ],
+   "signs": "Dark sunken leathery spot on the blossom end of fruit. Not a disease \u2014 it's a calcium-uptake failure, usually from uneven watering, not calcium-poor soil.",
+   "treatment_organic": "Even, consistent watering is the cure \u2014 mulch heavily to hold soil moisture. Remove affected fruit so the plant redirects energy. A soil test beats guessing at calcium sprays.",
+   "treatment_conventional": "Calcium chloride foliar sprays are labeled for it but rarely fix the underlying watering issue. Follow label directions.",
+   "prevention": "Mulch and water deeply on a steady schedule; avoid excess nitrogen that pushes fast leafy growth; don't damage roots with close hoeing.",
+   "sources": [
+    "K-State Extension",
+    "MU Extension"
+   ]
+  },
+  {
+   "slug": "fusarium-wilt",
+   "name": "Fusarium wilt (tomato)",
+   "type": "disease",
+   "hosts": [
+    "tomato"
+   ],
+   "signs": "One-sided yellowing and wilting \u2014 often one branch or one side of the plant first \u2014 on warm days. Cut a stem: brown streaks in the vascular ring confirm it. No cure once inside.",
+   "treatment_organic": "No cure \u2014 pull, bag, and trash infected plants (do not compost). Solarize the bed with clear plastic for 4\u20136 hot weeks to knock back the fungus.",
+   "treatment_conventional": "No effective home-garden fungicide; management is varietal resistance and rotation. Follow label directions on anything you try.",
+   "prevention": "Plant resistant varieties (the 'F' on the label \u2014 F1/F2/F3 races); rotate tomatoes 4+ years; don't move soil from infected beds on tools.",
+   "sources": [
+    "Cornell Extension",
+    "K-State Extension"
+   ]
+  },
+  {
+   "slug": "verticillium-wilt",
+   "name": "Verticillium wilt",
+   "type": "disease",
+   "hosts": [
+    "tomato",
+    "eggplant",
+    "potato",
+    "pepper"
+   ],
+   "signs": "V-shaped yellowing on leaf edges, wilting in cool weather (unlike fusarium's heat). Brown vascular streaks in cut stems. Progresses slower than fusarium.",
+   "treatment_organic": "No cure \u2014 remove and trash infected plants. Solarize soil; boost plant vigor with compost so plants outrun mild infections.",
+   "treatment_conventional": "No effective cure; fumigants are commercial-scale only. Follow label directions on anything you try.",
+   "prevention": "Resistant varieties (the 'V' on the label); long rotations; avoid planting where potatoes, eggplant, or strawberries grew recently.",
+   "sources": [
+    "Cornell Extension",
+    "UC IPM"
+   ]
+  },
+  {
+   "slug": "damping-off",
+   "name": "Damping off (seedlings)",
+   "type": "disease",
+   "hosts": [
+    "seedlings"
+   ],
+   "signs": "Seedlings emerge then collapse at the soil line, stems pinched and water-soaked. Whole trays can go overnight in cool, wet, still air.",
+   "treatment_organic": "No saving collapsed seedlings \u2014 start over with fresh mix. Cinnamon dusted on the surface and chamomile tea drenches are folk options with some antifungal basis.",
+   "treatment_conventional": "Captan-treated seed or fungicide drenches are commercial practice; for home trays, prevention beats treatment. Follow label directions.",
+   "prevention": "Sterile seed-starting mix (not garden soil); bottom-water; a small fan for airflow; don't overwater; clean trays with 10% bleach between uses.",
+   "sources": [
+    "K-State Extension",
+    "Cornell Extension"
+   ]
+  },
+  {
+   "slug": "gray-mold",
+   "name": "Gray mold (botrytis)",
+   "type": "disease",
+   "hosts": [
+    "tomato",
+    "strawberry",
+    "lettuce",
+    "grapes"
+   ],
+   "signs": "Fuzzy gray mold on fruit, blossoms, and dying leaves, worst in cool damp weather. Strawberries rot with a gray felt; tomato stems get tan cankers.",
+   "treatment_organic": "Remove affected fruit and leaves immediately (don't compost); improve airflow. Copper or Bacillus subtilis sprays help preventively.",
+   "treatment_conventional": "Chlorothalonil or captan on strawberries per label; on tomatoes, sanitation plus airflow usually suffices. Follow label directions.",
+   "prevention": "Space for airflow; water at the base; pick ripe fruit promptly; mulch strawberries so fruit never touches soil.",
+   "sources": [
+    "Cornell Extension",
+    "K-State Extension"
+   ]
+  },
+  {
+   "slug": "bacterial-wilt",
+   "name": "Bacterial wilt (cucumber/squash)",
+   "type": "disease",
+   "hosts": [
+    "cucumber",
+    "squash",
+    "melon",
+    "pumpkin"
+   ],
+   "signs": "Rapid wilting of individual runners or whole young plants in hot weather \u2014 leaves stay green while wilting, unlike dry wilt. Cut a stem: sticky bacterial ooze strings out. Spread by cucumber beetles.",
+   "treatment_organic": "No cure \u2014 pull and trash infected plants immediately. Controlling cucumber beetles (row covers, neem) is the real control, since they're the vector.",
+   "treatment_conventional": "No cure; insecticides targeting the beetle vector are the conventional play. Follow label directions.",
+   "prevention": "Row covers until flowering to exclude beetles; choose resistant cucumber varieties; rotate cucurbits.",
+   "sources": [
+    "Iowa State Extension",
+    "K-State Extension"
+   ]
+  },
+  {
+   "slug": "cucumber-mosaic-virus",
+   "name": "Cucumber mosaic virus",
+   "type": "virus",
+   "hosts": [
+    "cucumber",
+    "tomato",
+    "pepper",
+    "squash"
+   ],
+   "signs": "Mottled yellow-green mosaic on leaves, stunted twisted new growth, and bumpy discolored fruit. Spread by aphids probing plant to plant \u2014 no cure.",
+   "treatment_organic": "No cure \u2014 pull and trash infected plants (do not compost). Control aphids to slow spread; disinfect tools and hands between plants.",
+   "treatment_conventional": "No cure; management is aphid control and resistant varieties. Follow label directions on insecticides.",
+   "prevention": "Resistant varieties are the best defense; control aphids early; pull weeds that host the virus; use reflective mulch.",
+   "sources": [
+    "Cornell Extension",
+    "UC IPM"
+   ]
+  },
+  {
+   "slug": "anthracnose",
+   "name": "Anthracnose",
+   "type": "disease",
+   "hosts": [
+    "tomato",
+    "pepper",
+    "beans"
+   ],
+   "signs": "Sunken dark circular spots on ripe tomato and pepper fruit, sometimes with pinkish spore masses in the center. Bean pods get brown sunken lesions; seeds carry it.",
+   "treatment_organic": "Remove infected fruit; copper fungicide preventively. Don't work plants when wet \u2014 that's when spores spread.",
+   "treatment_conventional": "Chlorothalonil or mancozeb on a preventive schedule. Follow label directions.",
+   "prevention": "Rotate 3 years; use clean or treated seed; mulch; water at the base; choose resistant varieties.",
+   "sources": [
+    "Cornell Extension",
+    "K-State Extension"
+   ]
+  },
+  {
+   "slug": "sunscald",
+   "name": "Sunscald (fruit)",
+   "type": "physiological",
+   "hosts": [
+    "tomato",
+    "pepper"
+   ],
+   "signs": "White or yellow papery patches on the sun-facing side of fruit, later turning gray and leathery. Follows defoliation (disease, hornworms) or over-pruning that exposes fruit.",
+   "treatment_organic": "No fix for scalded fruit \u2014 pick and use unaffected parts. Shade cloth over exposed plants in heat waves protects the rest.",
+   "treatment_conventional": "Not a pest or pathogen \u2014 no spray applies.",
+   "prevention": "Keep enough foliage to shade fruit (go easy on tomato pruning); control the leaf diseases that defoliate plants; maintain even watering so plants stay leafy.",
+   "sources": [
+    "K-State Extension",
+    "MU Extension"
+   ]
+  },
+  {
+   "slug": "root-knot-nematodes",
+   "name": "Root-knot nematodes",
+   "type": "nematode",
+   "hosts": [
+    "tomato",
+    "carrot",
+    "okra",
+    "pepper"
+   ],
+   "signs": "Stunted, wilt-in-midday plants despite water; pull one up and the roots are knotted with galls. Carrots fork and stub. Worst in sandy soils.",
+   "treatment_organic": "No quick cure \u2014 solarize beds with clear plastic for 6 hot weeks; plant French marigolds as a cover crop (they suppress nematodes); add compost to boost plant vigor.",
+   "treatment_conventional": "No home-garden nematicides are practical or labeled; management is rotation, resistance, and solarization. Follow label directions on anything you try.",
+   "prevention": "Resistant varieties (the 'N' on tomato labels); rotate with grasses or marigolds; don't transplant infested soil on tools; solarize new beds.",
+   "sources": [
+    "K-State Extension",
+    "UC IPM"
+   ]
+  },
+  {
+   "slug": "corn-rust",
+   "name": "Common rust (corn)",
+   "type": "disease",
+   "hosts": [
+    "corn"
+   ],
+   "signs": "Small reddish-brown powdery pustules on both leaf surfaces that rub off on your fingers. Heavy infections yellow the leaves and shrink ears, but light rust is mostly cosmetic on sweet corn.",
+   "treatment_organic": "Rarely worth treating on garden scale \u2014 remove badly infected lower leaves. Sulfur or neem sprays slow it if caught early.",
+   "treatment_conventional": "Mancozeb or chlorothalonil for severe cases. Follow label directions.",
+   "prevention": "Resistant varieties (most modern sweet corn has some resistance); space for airflow; avoid overhead watering; rotate corn yearly.",
+   "sources": [
+    "Iowa State Extension",
+    "K-State Extension"
+   ]
+  }
+ ]
+}
