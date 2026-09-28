@@ -5,4 +5,4 @@ Bump here with every change:
 - x.y.Z  -> bug fix / small change
 """
 
-__version__ = "2.35.1"
+__version__ = "2.36.0"

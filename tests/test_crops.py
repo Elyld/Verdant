@@ -132,9 +132,59 @@ def test_search_finds_seed_stash():
 
 
 def test_every_crop_has_plantable_fields():
-    """The database must carry the fields the form auto-fills."""
+    """The database must carry the fields the form auto-fills.
+
+    Curated entries carry the full set. OpenPlantDB entries carry what
+    OpenPlantDB tracks (it has no sowing-depth data) — the form simply
+    leaves depth blank for those.
+    """
     for crop in crops_mod._crops():
         assert crop["sun"], crop["key"]
         assert crop["spacing_in"], crop["key"]
-        assert crop["sowing_depth_in"], crop["key"]
         assert crop["days_to_maturity"], crop["key"]
+        if crop.get("source") != "OpenPlantDB":
+            assert crop["sowing_depth_in"], crop["key"]
+
+
+def test_openplantdb_layer_present():
+    """The OpenPlantDB edible subset is bundled behind the curated crops."""
+    crops = crops_mod._crops()
+    curated = [c for c in crops if c.get("source") != "OpenPlantDB"]
+    opdb = [c for c in crops if c.get("source") == "OpenPlantDB"]
+    assert len(curated) == 30
+    assert len(opdb) > 8000
+    # curated entries keep their original order at the front
+    assert crops[0]["key"] == curated[0]["key"]
+
+
+def test_search_finds_fatalii():
+    r = client.get("/api/crops", params={"q": "fatalii"})
+    guide = r.json()["guide"]
+    match = next(c for c in guide if c["key"] == "fatalii-pepper")
+    assert match["name"] == "Fatalii Pepper (Yellow Fatalii)"
+    assert match["days_to_maturity"] == 100  # midpoint of 90-110
+
+
+def test_openplantdb_detail_source():
+    r = client.get("/api/crops/fatalii-pepper")
+    assert r.status_code == 200
+    crop = r.json()["crop"]
+    assert crop["source"] == "OpenPlantDB"
+    assert crop["sun"] == "Full Sun"
+    assert crop["spacing_in"] == "18–24"
+    assert "Matures in 90–110 days from transplant." in crop["description"]
+
+
+def test_curated_entry_wins_slug_collision():
+    """'tomato' exists in OpenPlantDB too — the curated entry (with
+    varieties + Growstuff mapping) must win."""
+    r = client.get("/api/crops/tomato")
+    crop = r.json()["crop"]
+    assert crop["source"] == "Built-in crop guide"
+    assert any(v["name"] == "Cherokee Purple" for v in crop["varieties"])
+
+
+def test_search_matches_scientific_name():
+    r = client.get("/api/crops", params={"q": "capsicum chinense 'fatalii"})
+    keys = [c["key"] for c in r.json()["guide"]]
+    assert "fatalii-pepper" in keys

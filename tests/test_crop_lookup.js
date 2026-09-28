@@ -105,6 +105,15 @@ const PACKET = {
   quantity: '1 packet', notes: 'packet notes',
 };
 
+// OpenPlantDB-style entry: no sowing-depth data.
+const FATALII = {
+  key: 'fatalii-pepper', name: 'Fatalii Pepper (Yellow Fatalii)', family: '',
+  sun: 'Full Sun', spacing_in: '18–24', sowing_depth_in: '',
+  days_to_germination: '10–21', days_to_maturity: 100,
+  description: 'Germinate seeds at 85°F on a heat mat. Matures in 90–110 days from transplant.',
+  source: 'OpenPlantDB', varieties: [],
+};
+
 const apiCalls = [];
 const api = {
   get: async (url) => {
@@ -119,12 +128,17 @@ const api = {
         kind: 'variety', key: 'tomato', name: 'Cherokee Purple', crop_name: 'Tomato',
         family: 'Nightshade (Solanaceae)', sun: 'Full Sun', days_to_maturity: 80,
         note: 'Indeterminate heirloom beefsteak.' });
+      if ('fatalii pepper (yellow fatalii)'.includes(q)) guide.push({
+        kind: 'crop', key: 'fatalii-pepper', name: 'Fatalii Pepper (Yellow Fatalii)',
+        crop_name: 'Fatalii Pepper (Yellow Fatalii)', family: '', sun: 'Full Sun',
+        days_to_maturity: 100, note: '' });
       const stash = q.includes('cherokee') ? [{
         kind: 'packet', packet_id: 7, variety_name: 'Cherokee Purple',
         species_type: 'Tomato', vendor_name: 'Territorial', year_acquired: 2025 }] : [];
       return { ok: true, guide, stash };
     }
     if (url === '/api/crops/tomato') return { ok: true, crop: TOMATO };
+    if (url === '/api/crops/fatalii-pepper') return { ok: true, crop: FATALII };
     if (url === '/api/seed-packets/7') return PACKET;
     if (url.startsWith('/api/crops/sow-by')) return {
       ok: true, days_to_maturity: 75, buffer_days: 14,
@@ -302,6 +316,30 @@ async function main() {
   check('packet variety filled', named['#plant-name'].value === 'Cherokee Purple');
   check('packet species filled', named['#plant-species'].value === 'Tomato');
   check('packet notes mention stash', named['#plant-notes'].value.includes('From seed stash'));
+
+  // 7b. OpenPlantDB crop without sowing depth: no stray inch mark, source labeled.
+  named['#plant-name'].value = '';
+  named['#plant-species'].value = '';
+  named['#plant-maturity'].value = '';
+  named['#plant-notes'].value = '';
+  named['#crop-lookup-btn'].click();
+  await tick(20);
+  const q5 = modal._kids['#crop-q'];
+  q5.value = 'fatalii';
+  q5.fire('keydown', { key: 'Enter', preventDefault: () => {} });
+  await tick(50);
+  const fatBtn = resultsBox._buttons().find((b) => b.dataset.key === 'fatalii-pepper');
+  check('fatalii button found', !!fatBtn);
+  fatBtn.click();
+  await tick(50);
+  check('openplantdb source shown', detailBox.innerHTML.includes('Source: OpenPlantDB'));
+  check('empty sow depth renders as dash, not a stray inch mark',
+    detailBox.innerHTML.includes('Sow depth</dt><dd class="text-navy-800">—</dd>'));
+  detailBox.querySelector('#crop-use').click();
+  await tick(20);
+  check('notes block skips missing sow depth',
+    !named['#plant-notes'].value.includes('sow " deep'));
+  check('notes block keeps spacing', named['#plant-notes'].value.includes('space 18–24" apart;'));
 
   // 8. Escape closes the modal.
   named['#crop-lookup-btn'].click();
