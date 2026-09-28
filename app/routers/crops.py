@@ -19,6 +19,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, or_, select
 
+from app import growstuff
 from app.database import get_session
 from app.models import SeedPacket
 
@@ -37,6 +38,20 @@ def _crops() -> list[dict]:
 
 
 def _guide_summary(crop: dict, variety: dict | None = None) -> dict:
+    bundled = (variety.get("days_to_maturity") if variety else None) or crop[
+        "days_to_maturity"
+    ]
+    # Growstuff community medians (real gardens) win over the bundled
+    # packet-claim numbers when cached data is available.
+    community = growstuff.get(crop.get("key", ""))
+    maturity = bundled
+    community_info = None
+    if community:
+        maturity = int(community["median_days_to_first_harvest"])
+        community_info = {
+            "median_days_to_first_harvest": maturity,
+            "gardens": community.get("plantings_count"),
+        }
     if variety:
         return {
             "kind": "variety",
@@ -45,7 +60,9 @@ def _guide_summary(crop: dict, variety: dict | None = None) -> dict:
             "crop_name": crop["name"],
             "family": crop["family"],
             "sun": crop["sun"],
-            "days_to_maturity": variety.get("days_to_maturity") or crop["days_to_maturity"],
+            "days_to_maturity": maturity,
+            "maturity_source": "community" if community_info else "guide",
+            "community": community_info,
             "note": variety.get("note", ""),
         }
     return {
@@ -55,7 +72,9 @@ def _guide_summary(crop: dict, variety: dict | None = None) -> dict:
         "crop_name": crop["name"],
         "family": crop["family"],
         "sun": crop["sun"],
-        "days_to_maturity": crop["days_to_maturity"],
+        "days_to_maturity": maturity,
+        "maturity_source": "community" if community_info else "guide",
+        "community": community_info,
         "note": "",
     }
 
@@ -71,6 +90,10 @@ def search_crops(q: str = "", session: Session = Depends(get_session)) -> dict:
     needle = (q or "").strip().lower()
     if not needle:
         return {"ok": True, "guide": [], "stash": []}
+
+    # Kick off a background Growstuff refresh when the cache is stale; the
+    # search itself always serves instantly from cache/disk.
+    growstuff.refresh_if_stale()
 
     guide: list[dict] = []
     for c in _crops():
@@ -156,5 +179,16 @@ def crop_detail(key: str) -> dict:
     """Full growing info for one crop, including its varieties and source."""
     for crop in _crops():
         if crop["key"] == key:
-            return {"ok": True, "crop": {**crop, "source": GUIDE_SOURCE}}
+            community = growstuff.get(crop.get("key", ""))
+            detail = {**crop, "source": GUIDE_SOURCE}
+            if community:
+                detail["community"] = {
+                    "median_days_to_first_harvest": community[
+                        "median_days_to_first_harvest"
+                    ],
+                    "median_lifespan": community.get("median_lifespan"),
+                    "gardens": community.get("plantings_count"),
+                    "harvests": community.get("harvests_count"),
+                }
+            return {"ok": True, "crop": detail}
     raise HTTPException(404, f"Unknown crop {key!r}.")

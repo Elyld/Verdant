@@ -1,0 +1,34 @@
+{
+ "labels": [
+  "10a",
+  "10b",
+  "11a",
+  "11b",
+  "12a",
+  "12b",
+  "13a",
+  "13b",
+  "2a",
+  "2b",
+  "3a",
+  "3b",
+  "4a",
+  "4b",
+  "5a",
+  "5b",
+  "6a",
+  "6b",
+  "7a",
+  "7b",
+  "8a",
+  "8b",
+  "9a",
+  "9b"
+ ],
+ "records": 29628,
+ "vintage": "2023",
+ "sources": [
+  "PRISM Climate Group, Oregon State University (phzm 2023)",
+  "waldoj/frostline zipcodes.csv (MIT)"
+ ]
+}

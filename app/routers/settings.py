@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from sqlmodel import Session
 
 from app import frost as frost_mod
+from app import hardiness
 from app.database import get_session
 from app.routers.digest import effective_digest_config
 
@@ -109,6 +110,7 @@ class SettingsUpdate(BaseModel):
     local_ai_enabled: bool = False  # "Tell Verdant what you did" card on Quick Log
     local_ai_base_url: str = "http://localhost:11434"  # Ollama-compatible server
     local_ai_model: str = "qwen3:4b"  # small model name, plain text
+    plantnet_api_key: str = ""  # PlantNet plant-ID key (free at my.plantnet.org); "" = off
 
 
 def _validate(payload: SettingsUpdate) -> None:
@@ -199,6 +201,7 @@ def current_settings(session: Session) -> dict:
         "local_ai_enabled": (frost_mod.get_setting(session, "local_ai_enabled") or "false") == "true",
         "local_ai_base_url": frost_mod.get_setting(session, "local_ai_base_url") or "http://localhost:11434",
         "local_ai_model": frost_mod.get_setting(session, "local_ai_model") or "qwen3:4b",
+        "plantnet_api_key": frost_mod.get_setting(session, "plantnet_api_key") or "",
         "digest_enabled": digest.enabled,
         "discord_webhook_url": digest.webhook_url,
         "digest_time": digest.time,
@@ -207,6 +210,21 @@ def current_settings(session: Session) -> dict:
             "last": _frost_preview(session, "last"),
         },
     }
+
+
+@router.get("/detect-zone")
+def detect_zone(lat: str = "", lon: str = "") -> dict:
+    """USDA hardiness zone for coordinates, via the vendored PRISM/frostline
+    ZIP-centroid dataset. Returns the half-zone ("6b") plus the whole-zone
+    value ("6") the zone setting accepts. Never raises: unknowable → ok False.
+    """
+    try:
+        half = hardiness.detect_zone(float(lat), float(lon))
+    except (TypeError, ValueError):
+        half = None
+    if not half:
+        return {"ok": False, "reason": "unknown-location"}
+    return {"ok": True, "zone": half, "zone_setting": hardiness.major_zone(half)}
 
 
 @router.get("")
@@ -235,6 +253,7 @@ def save_settings(payload: SettingsUpdate, session: Session = Depends(get_sessio
     frost_mod.set_setting(session, "local_ai_enabled", "true" if payload.local_ai_enabled else "false")
     frost_mod.set_setting(session, "local_ai_base_url", (payload.local_ai_base_url or "").strip() or "http://localhost:11434")
     frost_mod.set_setting(session, "local_ai_model", (payload.local_ai_model or "").strip() or "qwen3:4b")
+    frost_mod.set_setting(session, "plantnet_api_key", (payload.plantnet_api_key or "").strip())
     session.commit()
     if _reschedule_digest is not None and payload.digest_time.strip() != old_time:
         _reschedule_digest()

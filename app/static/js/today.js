@@ -4,7 +4,7 @@
 
   const { $, esc, api, fmtDate, toast } = globalThis.Verdant;
 
-  function initToday() {
+  async function initToday() {
     if (!$('#today-due')) return;
 
     $('#today-date').textContent = new Date().toLocaleDateString(undefined, {
@@ -14,7 +14,7 @@
     const greet = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
     $('#today-greeting').textContent = `☀️ ${greet}`;
 
-    loadWeather().catch(() => {});
+    try { await loadWeather(); } catch { /* not configured — stay quiet */ }
     loadAlerts().catch(() => {});
     loadToday().catch((error) => toast(`Could not load Today: ${error.message}`, 'err'));
   }
@@ -39,7 +39,8 @@
           <span>☀️ Tomorrow ${t(tomorrow.tmax_c ?? tomorrow.tmax_f)}</span>
           <span>💧 ${tomorrow.precip_prob != null ? `${tomorrow.precip_prob}%` : '—'}</span>
         </div>
-      </div>`;
+      </div>
+      <p id="today-et" class="mt-3 hidden border-t border-beige-200 pt-2 text-sm text-navy-600"></p>`;
   }
 
   async function loadAlerts() {
@@ -92,6 +93,13 @@
       ? `❄️ <strong class="text-navy-800">${frost.days_until}d</strong> until the first frost
          (<span title="${esc(frost.label || '')}">${fmtDate(frost.first_frost_date)}</span>)`
       : 'No frost date configured — <a class="underline decoration-sage-400 text-navy-700" href="/settings">set it in Settings</a> for the countdown and planting math.';
+
+    const etHost = $('#today-et');
+    const advice = data.watering_advice;
+    if (etHost && advice && advice.line) {
+      etHost.textContent = advice.line;
+      etHost.classList.remove('hidden');
+    }
   }
 
   globalThis.Verdant.onBoot(initToday);
