@@ -46,8 +46,7 @@ def _clean_growstuff():
 
 
 def _wipe_growstuff_cache():
-    growstuff._mem["at"] = 0.0
-    growstuff._mem["data"] = {}
+    growstuff._invalidate()
     try:
         growstuff.CACHE_FILE.unlink()
     except OSError:
@@ -59,8 +58,7 @@ def _seed_growstuff_cache(**entries):
     cache_file = growstuff.CACHE_FILE
     cache_file.parent.mkdir(parents=True, exist_ok=True)
     cache_file.write_text(json.dumps(entries), encoding="utf-8")
-    growstuff._mem["at"] = 0.0
-    growstuff._mem["data"] = {}
+    growstuff._invalidate()
 
 
 def test_growstuff_slug_map_spot_checks():

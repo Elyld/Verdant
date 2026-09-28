@@ -14,12 +14,25 @@ os.environ.setdefault("GARDEN_UPLOAD_DIR", str(TMP / "uploads"))
 
 from fastapi.testclient import TestClient  # noqa: E402
 
+import pytest  # noqa: E402
+
+from app import growstuff  # noqa: E402
 from app.database import init_db  # noqa: E402
 from app.main import app  # noqa: E402
 from app.routers import crops as crops_mod  # noqa: E402
 
 init_db()
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _no_growstuff_refresh(monkeypatch):
+    """The crops endpoints kick off a background Growstuff refresh thread.
+    It must never hit the network in tests — a leaked thread fetching real
+    data can write into the shared cache mid-suite and flake unrelated
+    tests (it did: real tomato data landing inside the offline-fallback
+    test's 0.2s window)."""
+    monkeypatch.setattr(growstuff, "refresh_if_stale", lambda: None)
 
 
 def test_search_matches_name():
