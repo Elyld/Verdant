@@ -668,6 +668,11 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.35.1** — **🔧 Growstuff cache reliability fix.** The community-data
+  cache used `0.0` as its "stale" marker against `time.monotonic()`, which
+  starts near zero on a freshly booted machine — so the first minutes of a
+  fresh server could silently ignore cached community data. The marker is
+  now a proper invalidation instead.
 - **2.35.0** — **🌍 Community growing data, zone auto-detect, plant ID, and
   a smarter weather card.** The crop guide now blends in **Growstuff
   community data**: when real gardeners' results exist for a crop, the

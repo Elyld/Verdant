@@ -68,9 +68,21 @@ TRIM_FIELDS = (
     "sun_requirements",
 )
 
-_mem = {"at": 0.0, "data": {}}
+_mem = {"at": float("-inf"), "data": {}}
 _refresh_running = False
 _refresh_lock = threading.Lock()
+
+
+def _invalidate() -> None:
+    """Force the next _cached() call to re-read the disk file.
+
+    The in-memory cache is keyed on time.monotonic(), which starts near 0
+    on a freshly booted machine — so 0.0 must NOT be used as the "stale"
+    sentinel, or a CI runner booted minutes ago will serve an empty cache
+    for the first 5 minutes of its life.
+    """
+    _mem["at"] = float("-inf")
+    _mem["data"] = {}
 
 
 def _read_disk() -> dict:
@@ -149,7 +161,7 @@ def _refresh_all() -> None:
         tmp = CACHE_FILE.with_suffix(".tmp")
         tmp.write_text(json.dumps(data), encoding="utf-8")
         tmp.replace(CACHE_FILE)
-        _mem["at"] = 0.0  # force re-read
+        _invalidate()  # force re-read
     except Exception:
         pass
     finally:
