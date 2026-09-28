@@ -9,6 +9,7 @@ raises a stack trace at the caller.
 from __future__ import annotations
 
 import json
+import urllib.error
 import urllib.request
 from typing import Optional
 
@@ -204,10 +205,21 @@ def interpret(payload: InterpretRequest, session: Session = Depends(get_session)
             timeout=60,
         )
         content = ((body.get("message") or {}).get("content")) or ""
-    except Exception:
+    except Exception as e:
+        # Surface what the model server actually said (e.g. Ollama's
+        # {"error": "model 'qwen3:4b' not found"}) instead of a generic 502 —
+        # otherwise a wrong model name looks exactly like a dead server.
+        detail = f"{type(e).__name__}: {e}".strip()
+        if isinstance(e, urllib.error.HTTPError):
+            try:
+                said = e.read().decode("utf-8", "replace").strip()[:300]
+                if said:
+                    detail += f" — server said: {said}"
+            except Exception:
+                pass
         raise HTTPException(
             502,
-            f"Couldn't reach the model at {cfg['base_url']}. "
+            f"Couldn't reach the model at {cfg['base_url']} ({detail}). "
             "Is it running, and is the base URL right?",
         )
     items = _extract_json_array(content)

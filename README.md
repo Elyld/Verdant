@@ -678,6 +678,9 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.38.3** — **The interpret step shows the real error too.** When the model
+  call failed it just said "couldn't reach the model," hiding e.g. Ollama's
+  `model not found`. The toast now includes what the server actually said.
 - **2.38.2** — **Local AI test actually connects now.** The status check was
   POSTing to Ollama's `/api/tags`, which is GET-only — every test failed with
   405 even when Ollama was fine. It uses GET now (the error-detail line from

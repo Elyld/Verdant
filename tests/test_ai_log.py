@@ -193,6 +193,17 @@ def test_status_unreachable_includes_error_detail(ai_on, monkeypatch):
     assert "Connection refused" in body["error"]
 
 
+def test_interpret_surfaces_server_error(ai_on, monkeypatch):
+    import io
+    from urllib.error import HTTPError
+    said = json.dumps({"error": 'model "qwen3:4b" not found'}).encode("utf-8")
+    err = HTTPError("http://x/api/chat", 404, "Not Found", {}, io.BytesIO(said))
+    _stub_ollama(monkeypatch, error=err)
+    r = client.post("/api/ai/interpret", json={"text": "watered the tomatoes"})
+    assert r.status_code == 502
+    assert "not found" in r.json()["detail"]
+
+
 # --------------------------------------------------------------------------- #
 # /api/ai/interpret
 # --------------------------------------------------------------------------- #
