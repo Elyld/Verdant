@@ -22,7 +22,7 @@ from app.database import UPLOAD_DIR, init_db
 from app.models import GardenTag, utcnow
 from app.security import RateLimitMiddleware, SecurityHeadersMiddleware, docs_enabled
 from app.routers import albums, backup, containers, digest, expenses, fertilizations, immich, import_csv, invoices, observations, order_assistant, pests, posts, seed_packets, settings as settings_router, stats, tags, weather, wishlist
-from app.routers import ai_log, crops
+from app.routers import ai_log, crops, today
 from app.routers.tags import tag_destination
 from app.version import __version__
 
@@ -144,6 +144,7 @@ app.include_router(containers.router)
 app.include_router(weather.router)
 app.include_router(ai_log.router)
 app.include_router(crops.router)
+app.include_router(today.router)
 app.include_router(order_assistant.router)
 app.include_router(wishlist.router)
 
@@ -164,6 +165,12 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.get("/", include_in_schema=False)
+def today_home(request: Request) -> HTMLResponse:
+    """Today view: the morning-glance landing page."""
+    return templates.TemplateResponse(request, "today.html", {"__version__": __version__})
+
+
+@app.get("/blog", include_in_schema=False)
 def blog_home(request: Request) -> HTMLResponse:
     """ Blog & stories homepage with post creation form. """
     return templates.TemplateResponse(request, "blog.html", {"__version__": __version__})

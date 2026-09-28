@@ -19,10 +19,39 @@
       refreshToday();
     }
 
+    // Toast with an Undo button (~8s). undoFn should delete whatever was
+    // just created; failures surface as an error toast.
+    function undoToast(message, undoFn) {
+      const host = $('#toasts');
+      if (!host) { toast(message, 'ok'); return; }
+      const el = document.createElement('div');
+      el.className = 'pointer-events-auto flex items-center justify-between gap-3 rounded-xl bg-sage-700 px-4 py-3 text-sm text-beige-50 shadow-botanical ring-1 ring-sage-500';
+      const label = document.createElement('span');
+      label.textContent = message;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'shrink-0 rounded-lg bg-beige-50/20 px-3 py-1.5 text-sm font-semibold text-beige-50 ring-1 ring-beige-50/40 active:bg-beige-50/30';
+      btn.textContent = '↩ Undo';
+      el.append(label, btn);
+      host.append(el);
+      const timer = setTimeout(() => el.remove(), 8000);
+      btn.addEventListener('click', async () => {
+        clearTimeout(timer);
+        btn.disabled = true;
+        btn.textContent = '…';
+        try {
+          await undoFn();
+          toast('Undone.', 'info');
+        } catch (error) { toast(`Could not undo: ${error.message}`, 'err'); }
+        el.remove();
+        refreshToday();
+      });
+    }
+
     async function waterPlant(plant, btn) {
       try {
-        await api.post('/api/watering-logs/', { plant_id: plant.id, location_id: plant.location_id || null, date: today });
-        toast('Watered 💧', 'ok');
+        const created = await api.post('/api/watering-logs/', { plant_id: plant.id, location_id: plant.location_id || null, date: today });
+        undoToast('Watered 💧', () => api.del(`/api/watering-logs/${created.id}`));
         flash(btn);
       } catch (error) { toast(`Could not log watering: ${error.message}`, 'err'); }
     }
@@ -32,25 +61,27 @@
         const settings = await getSettings();
         if (settings.confirm_water_all !== false
             && !window.confirm(`Water all ${plants.length} plants in this location?`)) return;
-        await Promise.all(plants.map((p) => api.post('/api/watering-logs/', { plant_id: p.id, location_id: p.location_id || null, date: today })));
-        toast(`Watered ${plants.length} plants 💧`, 'ok');
+        const created = await Promise.all(plants.map((p) => api.post('/api/watering-logs/', { plant_id: p.id, location_id: p.location_id || null, date: today })));
+        const ids = created.map((c) => c.id).filter((id) => id != null);
+        undoToast(`Watered ${plants.length} plants 💧`, () => Promise.all(ids.map((id) => api.del(`/api/watering-logs/${id}`))));
         flash(btn);
       } catch (error) { toast(`Could not log watering: ${error.message}`, 'err'); }
     }
 
     async function logHarvest(plantId, qty, weight, weightUnit, btn) {
       try {
-        await api.post('/api/harvests/', { plant_id: plantId, date: today, quantity: qty,
+        const created = await api.post('/api/harvests/', { plant_id: plantId, date: today, quantity: qty,
           weight: weight, weight_unit: weightUnit });
-        toast(weight != null ? `Harvested ${qty} 🧺 · ${weight} ${weightUnit}` : `Harvested ${qty} 🧺`, 'ok');
+        undoToast(weight != null ? `Harvested ${qty} 🧺 · ${weight} ${weightUnit}` : `Harvested ${qty} 🧺`,
+          () => api.del(`/api/harvests/${created.id}`));
         flash(btn);
       } catch (error) { toast(`Could not log harvest: ${error.message}`, 'err'); }
     }
 
     async function logNote(plant, text, btn) {
       try {
-        await api.post('/api/observations', { plant_id: plant.id, plant_name: plant.variety_name, date: today, notes: text, health_scale: 7 });
-        toast('Note logged 📝', 'ok');
+        const created = await api.post('/api/observations', { plant_id: plant.id, plant_name: plant.variety_name, date: today, notes: text, health_scale: 7 });
+        undoToast('Note logged 📝', () => api.del(`/api/observations/${created.id}`));
         flash(btn);
       } catch (error) { toast(`Could not log note: ${error.message}`, 'err'); }
     }

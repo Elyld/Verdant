@@ -42,10 +42,11 @@ function makeEl() {
     querySelector: () => makeEl(),
     querySelectorAll: () => [],
     appendChild: (c) => { el._children.push(c); return c; },
-    append: () => {},
+    append: (...kids) => { kids.forEach((k) => el._children.push(k)); },
     prepend: () => {},
     closest: () => null,
     scrollIntoView: () => { el.scrolled = true; },
+    remove: () => { el._removed = true; },
     focus: () => {},
     reset: () => {},
     textContent: '',
@@ -71,6 +72,7 @@ function makeCard() {
 }
 
 const posts = [];
+const dels = [];
 const plant = { id: 7, variety_name: 'Test Pepper', status: 'Growing', location_id: 1 };
 const api = {
   get: async (url) => {
@@ -79,6 +81,7 @@ const api = {
     return [];
   },
   post: async (url, body) => { posts.push({ url, body }); return { id: 1 }; },
+  del: async (url) => { dels.push(url); return null; },
 };
 
 const bootFns = [];
@@ -92,6 +95,7 @@ const named = {
   '#quick-groups': hostEl,
   '#quick-today': makeEl(),
   '#quick-today-log': makeEl(),
+  '#toasts': makeEl(),
 };
 
 globalThis.Verdant = {
@@ -185,6 +189,18 @@ async function main() {
   check('NFC harvest spotlight scrolls into view', spotEl.scrolled === true);
   check('NFC harvest spotlight adds ring classes',
     spotClasses.has('ring-4') && spotClasses.has('ring-sage-300'));
+
+  // Undo toast: appears after the harvest save, Undo button DELETEs it.
+  const toastsEl = named['#toasts'];
+  const toastEl = toastsEl._children.find(
+    (c) => (c._children || []).some((k) => k.textContent === '↩ Undo'));
+  check('undo toast shown after harvest save', !!toastEl);
+  if (toastEl) {
+    const undoBtn = toastEl._children.find((k) => k.textContent === '↩ Undo');
+    (undoBtn._listeners.click || []).forEach((fn) => fn());
+    await tick(50);
+    check('Undo DELETEs the created harvest', dels.includes('/api/harvests/1'));
+  }
 
   if (failures) { console.log(`\n${failures} FAILURE(S)`); process.exit(1); }
   console.log('\nAll quick-log weight checks passed.');

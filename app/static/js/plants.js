@@ -484,7 +484,7 @@
 (() => {
   'use strict';
 
-  const { $, esc, api, toast } = globalThis.Verdant;
+  const { $, esc, api, toast, fmtDate } = globalThis.Verdant;
 
   const SUN_OPTIONS = ['Full Sun', 'Part Sun', 'Part Shade', 'Full Shade'];
 
@@ -626,12 +626,47 @@
           </dl>
           ${v && v.note ? `<p class="mt-2 text-sm text-navy-600">${esc(v.note)}</p>` : ''}
           <p class="mt-2 text-sm text-navy-600">${esc(crop.description)}</p>
+          <div id="crop-sowby" class="mt-2"></div>
           <p class="mt-2 text-xs text-navy-400">Source: ${esc(crop.source || 'built-in crop guide')}${v ? ' · variety notes' : ''}</p>
           <button type="button" id="crop-use" class="btn-primary mt-3 text-sm">Use this info → fill the form</button>
         </div>`;
+      fillSowBy(maturity);
       detail.querySelector('#crop-use').addEventListener('click', () =>
         applyCrop(crop, v ? { ...v, days_to_maturity: maturity } : null));
     } catch { detail.innerHTML = '<p class="text-sm text-red-600">Could not load that entry.</p>'; }
+  }
+
+  // 🌱 Planting calculator: "can I still plant this?" — last safe sow date
+  // from the frost date in Settings, shown inside the crop detail panel.
+  async function fillSowBy(maturity) {
+    const box = $('#crop-sowby');
+    if (!box || !maturity) return;
+    box.innerHTML = '<p class="text-xs text-navy-400">Checking the planting window…</p>';
+    let res;
+    try {
+      res = await api.get(`/api/crops/sow-by?days_to_maturity=${encodeURIComponent(maturity)}`);
+    } catch { box.innerHTML = ''; return; }
+    if (!res || !res.ok) { box.innerHTML = ''; return; }
+    if (res.verdict === 'no_frost_date' || !res.sow_by) {
+      box.innerHTML = `
+        <div class="rounded-xl bg-beige-100 px-3 py-2 ring-1 ring-beige-300">
+          <p class="text-sm text-navy-600">🌱 <a href="/settings" class="font-semibold text-navy-700 underline decoration-sage-400">Set your first frost date in Settings</a> to see if there's still time to sow.</p>
+        </div>`;
+      return;
+    }
+    const verdicts = {
+      still_time: `✅ still time <span class="text-navy-400">(${res.days_left}d left)</span>`,
+      close: `⚠️ cutting it close <span class="text-navy-400">(${res.days_left}d left)</span>`,
+      too_late: '❌ too late for a fall harvest',
+    };
+    const tone = res.verdict === 'still_time'
+      ? 'bg-sage-50 ring-sage-200'
+      : res.verdict === 'close' ? 'bg-amber-50 ring-amber-200' : 'bg-red-50 ring-red-200';
+    box.innerHTML = `
+      <div class="rounded-xl px-3 py-2 ring-1 ${tone}">
+        <p class="text-sm text-navy-700">🌱 Sow by <strong>${fmtDate(res.sow_by)}</strong> — ${verdicts[res.verdict] || ''}</p>
+        <p class="mt-0.5 text-xs text-navy-400">First frost ~${fmtDate(res.frost_date)} − ${res.days_to_maturity}d to mature − ${res.buffer_days}d buffer</p>
+      </div>`;
   }
 
   function applyCrop(crop, variety) {
