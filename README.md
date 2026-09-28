@@ -1,4 +1,4 @@
-# 🌿 Verdant — Self-Hosted Garden Journal (v2.28.0)
+# 🌿 Verdant — Self-Hosted Garden Journal (v2.31.0)
 
 Your garden, logged. Plant profiles with care reminders, a daily observation log
 with a calendar heatmap, photo albums with slideshows, a seed stash and seedling
@@ -50,6 +50,8 @@ Adding a plant? Hit **🔎 Look up growing info** on the form — search the
 built-in crop guide, pick your crop, and sun, days to maturity, spacing,
 sowing depth, and germination timing fill themselves in (only the empty
 fields; your typing is never overwritten).
+
+![Crop lookup](docs/screenshots/crop-lookup.png)
 
 ![Plant profiles](docs/screenshots/plants.png)
 
@@ -209,6 +211,8 @@ through forms: **🤖 “Tell Verdant what you did”** — type a sentence like
 *your own machine* drafts the log entries for you to confirm. Nothing leaves
 your server; opt-in on the Settings page.
 
+![Tell Verdant what you did](docs/screenshots/ai-log.png)
+
 ![Quick Log](docs/screenshots/quick.png)
 
 ### 💰 Costs — was it worth growing?
@@ -262,7 +266,12 @@ all on one page. Your **garden coordinates** live here too (with a
 back to a one-time city-level lookup) — they power the Planner's weather
 strip and stamp new observations with the current conditions. The frost
 dates drive the "days to first frost" countdown in the header and tune the
-seed-starting calendar on the Plants page.
+seed-starting calendar on the Plants page. The site-wide weather ribbon
+also watches the National Weather Service for your garden point: when there's
+an active alert, a severity-tinted ⚠️ pill appears — click it for
+the timing and details.
+
+![NWS weather alerts](docs/screenshots/noaa-alerts.png)
 
 ![Settings](docs/screenshots/settings.png)
 
