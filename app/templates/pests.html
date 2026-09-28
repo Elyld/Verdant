@@ -7,6 +7,21 @@
         <p class="text-sm text-navy-500">What showed up, what you did about it, whether it worked.</p>
       </header>
 
+      <section class="card space-y-3">
+        <h3 class="font-display text-lg font-semibold text-navy-800">🐛 Pest &amp; disease guide</h3>
+        <p class="text-sm text-navy-500">
+          40 common garden pests and diseases — what they look like, what works
+          against them, how to keep them away. Compiled from university
+          extension guidance; works offline.
+        </p>
+        <div class="flex gap-2">
+          <input id="guide-q" type="text" class="inp" maxlength="80"
+            placeholder="Search — try “aphids” or “tomato”" />
+          <button type="button" id="guide-go" class="btn-primary shrink-0 text-sm">Search</button>
+        </div>
+        <div id="guide-results" class="grid gap-3 md:grid-cols-2"></div>
+      </section>
+
       <form id="pest-form" class="card space-y-3">
         <h3 class="font-display text-lg font-semibold text-navy-800">Log a sighting</h3>
         <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -15,6 +30,10 @@
           <label class="block"><span class="lbl">Plant (optional)</span><select id="pest-plant" class="inp"><option value="">—</option></select></label>
           <label class="block"><span class="lbl">Treatment</span><input id="pest-treatment" type="text" class="inp" placeholder="Neem oil spray" /></label>
           <label class="block"><span class="lbl">Notes</span><input id="pest-notes" type="text" class="inp" placeholder="optional" /></label>
+        </div>
+        <div id="pest-common" class="hidden text-sm">
+          <span class="font-semibold text-navy-700">Common issues for this plant:</span>
+          <span id="pest-common-chips" class="ml-1 inline-flex flex-wrap gap-1"></span>
         </div>
         <button type="submit" class="btn-primary">Log it</button>
       </form>

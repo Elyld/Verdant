@@ -23,6 +23,7 @@ from app.models import GardenTag, utcnow
 from app.security import RateLimitMiddleware, SecurityHeadersMiddleware, docs_enabled
 from app.routers import albums, backup, containers, digest, expenses, fertilizations, immich, import_csv, invoices, observations, order_assistant, pests, posts, seed_packets, settings as settings_router, stats, tags, weather, wishlist
 from app.routers import ai_log, crops, today
+from app.routers import pest_guide as pest_guide_router
 from app.routers import identify as identify_router
 from app.routers.tags import tag_destination
 from app.version import __version__
@@ -144,6 +145,7 @@ app.include_router(tags.router)
 app.include_router(containers.router)
 app.include_router(weather.router)
 app.include_router(ai_log.router)
+app.include_router(pest_guide_router.router)
 app.include_router(crops.router)
 app.include_router(today.router)
 app.include_router(identify_router.router)

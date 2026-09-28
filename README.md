@@ -282,7 +282,12 @@ order text), so the Order assistant knows exactly what came from where.
 
 ### 🐛 Pests — the treatment log
 What showed up, what you sprayed or squashed, and whether it worked — a
-running log per pest so next year's battle plan writes itself.
+running log per pest so next year's battle plan writes itself. It now opens
+with a **pest & disease guide**: 40 common garden pests and diseases with ID
+signs, organic and conventional treatments, and prevention, compiled from
+university extension guidance and working fully offline. Search it by pest or
+by plant (“tomato”), tap “Log a sighting” to start a log entry, and picking a
+plant in the log form surfaces its common issues as quick-pick chips.
 
 ![Pests](docs/screenshots/pests.png)
 
@@ -673,6 +678,13 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.38.0** — **🐛 Pest & disease guide.** The Pests page opens with a built-in
+  guide: 40 common vegetable-garden pests and diseases — ID signs, organic and
+  conventional treatments, prevention — compiled from university extension
+  guidance, fully offline, no API key. Search by pest or by plant, tap “Log a
+  sighting” to pre-fill a log entry, and picking a plant in the log form shows
+  its common issues as quick-pick chips.
+  ![Pest & disease guide](docs/screenshots/pest-guide.png)
 - **2.37.0** — **🎤 Voice input for Quick Log.** The “Tell Verdant what you did”
   card grew a **Talk** button for dirty-hands garden sessions: tap it, narrate
   what you did, tap Stop, and your words land in the box ready for the local
