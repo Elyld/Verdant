@@ -278,6 +278,7 @@
       $('#plant-submit').textContent = plant ? 'Save changes' : 'Add plant';
       $('#plant-name').value = plant?.variety_name || '';
       $('#plant-species').value = plant?.species_type || '';
+      $('#plant-light').value = plant?.light || 'Full Sun';
       $('#plant-status').value = plant?.status || 'Growing';
       $('#plant-location').value = plant?.location_id ? String(plant.location_id) : '';
       $('#plant-planted').value = (plant?.date_planted || '').slice(0, 10);
@@ -314,6 +315,7 @@
         const payload = {
           variety_name: $('#plant-name').value.trim(),
           species_type: $('#plant-species').value.trim(),
+          light: $('#plant-light').value,
           status: $('#plant-status').value,
           location_id: $('#plant-location').value ? Number($('#plant-location').value) : null,
           date_planted: $('#plant-planted').value || null,
@@ -476,4 +478,138 @@
   }
 
   globalThis.Verdant.onBoot(initPlants);
+})();
+
+/* 🔎 Crop lookup — search the bundled crop database and auto-fill the form. */
+(() => {
+  'use strict';
+
+  const { $, esc, api, toast } = globalThis.Verdant;
+
+  const SUN_OPTIONS = ['Full Sun', 'Part Sun', 'Part Shade', 'Full Shade'];
+
+  function openModal() {
+    const modal = $('#crop-modal');
+    if (!modal) return;
+    const seed = $('#plant-species').value.trim() || $('#plant-name').value.trim();
+    modal.innerHTML = `<div class="modal-backdrop" data-close></div>
+      <div class="modal-card card" role="dialog" aria-modal="true" aria-label="Look up growing info">
+        <div class="flex items-center justify-between gap-2">
+          <h3 class="font-display text-lg font-semibold text-navy-800">🔎 Look up growing info</h3>
+          <button type="button" data-close class="btn-ghost px-2 py-1 text-sm">✕</button>
+        </div>
+        <p class="mt-1 text-sm text-navy-500">Search the built-in crop guide — pick a crop to fill in sun, spacing, sowing depth, and timing.</p>
+        <input id="crop-q" class="inp mt-3" placeholder="e.g. tomato, basil, carrot…" value="${esc(seed)}" maxlength="60" />
+        <div id="crop-results" class="mt-3 max-h-64 space-y-1 overflow-y-auto"></div>
+        <div id="crop-detail" class="mt-3"></div>
+      </div>`;
+    modal.classList.remove('hidden');
+    modal.classList.add('modal-open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    modal.querySelectorAll('[data-close]').forEach((b) =>
+      b.addEventListener('click', closeModal));
+    const q = modal.querySelector('#crop-q');
+    let timer = null;
+    q.addEventListener('input', () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => search(q.value.trim()), 250);
+    });
+    q.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); search(q.value.trim()); } });
+    search(seed);
+    setTimeout(() => q.focus(), 50);
+  }
+
+  function closeModal() {
+    const modal = $('#crop-modal');
+    if (!modal || modal.classList.contains('hidden')) return;
+    modal.classList.add('hidden');
+    modal.classList.remove('modal-open');
+    modal.setAttribute('aria-hidden', 'true');
+    modal.innerHTML = '';
+    document.body.style.overflow = '';
+  }
+
+  async function search(term) {
+    const box = $('#crop-results');
+    const detail = $('#crop-detail');
+    if (!box) return;
+    detail.innerHTML = '';
+    if (!term) { box.innerHTML = '<p class="text-sm text-navy-400">Type to search the crop guide.</p>'; return; }
+    box.innerHTML = '<p class="text-sm text-navy-400">Searching…</p>';
+    let crops = [];
+    try {
+      const res = await api.get(`/api/crops?q=${encodeURIComponent(term)}`);
+      crops = res.crops || [];
+    } catch { box.innerHTML = '<p class="text-sm text-red-600">Search failed — try again.</p>'; return; }
+    if (!crops.length) {
+      box.innerHTML = `<p class="text-sm text-navy-400">No crops match “${esc(term)}”. Try a simpler name, like “bean” or “pepper”.</p>`;
+      return;
+    }
+    box.innerHTML = crops.map((c) =>
+      `<button type="button" data-key="${esc(c.key)}"
+        class="flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-sm ring-1 ring-beige-300 hover:bg-beige-100">
+        <span><strong class="text-navy-800">${esc(c.name)}</strong>
+        <span class="text-navy-400"> · ${esc(c.family)}</span></span>
+        <span class="text-xs text-navy-400">${esc(c.sun)} · ~${c.days_to_maturity}d</span>
+      </button>`).join('');
+    box.querySelectorAll('[data-key]').forEach((b) =>
+      b.addEventListener('click', () => showDetail(b.dataset.key)));
+  }
+
+  async function showDetail(key) {
+    const detail = $('#crop-detail');
+    let crop;
+    try {
+      crop = (await api.get(`/api/crops/${encodeURIComponent(key)}`)).crop;
+    } catch { detail.innerHTML = '<p class="text-sm text-red-600">Could not load that crop.</p>'; return; }
+    if (!crop) return;
+    detail.innerHTML = `
+      <div class="rounded-xl bg-beige-100 p-3 ring-1 ring-beige-300">
+        <div class="flex items-center justify-between gap-2">
+          <strong class="text-navy-800">${esc(crop.name)}</strong>
+          <span class="text-xs text-navy-400">${esc(crop.family)}</span>
+        </div>
+        <dl class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+          <div><dt class="lbl">Sun</dt><dd class="text-navy-800">${esc(crop.sun)}</dd></div>
+          <div><dt class="lbl">Spacing</dt><dd class="text-navy-800">${esc(crop.spacing_in)}&Prime;</dd></div>
+          <div><dt class="lbl">Sow depth</dt><dd class="text-navy-800">${esc(crop.sowing_depth_in)}&Prime;</dd></div>
+          <div><dt class="lbl">Germinates</dt><dd class="text-navy-800">${esc(crop.days_to_germination)} days</dd></div>
+          <div><dt class="lbl">Matures</dt><dd class="text-navy-800">~${crop.days_to_maturity} days</dd></div>
+        </dl>
+        <p class="mt-2 text-sm text-navy-600">${esc(crop.description)}</p>
+        <button type="button" id="crop-use" class="btn-primary mt-3 text-sm">Use this info → fill the form</button>
+      </div>`;
+    detail.querySelector('#crop-use').addEventListener('click', () => applyCrop(crop));
+  }
+
+  function applyCrop(crop) {
+    // Fill only what's empty — never clobber what the user already typed.
+    const species = $('#plant-species');
+    if (species && !species.value.trim()) species.value = crop.name;
+    const light = $('#plant-light');
+    if (light && SUN_OPTIONS.includes(crop.sun)) light.value = crop.sun;
+    const maturity = $('#plant-maturity');
+    if (maturity && !maturity.value && crop.days_to_maturity) maturity.value = crop.days_to_maturity;
+    const notes = $('#plant-notes');
+    if (notes) {
+      const block = `🌱 Growing info (${crop.name}): ${crop.sun}; space ${crop.spacing_in}" apart; sow ${crop.sowing_depth_in}" deep; germinates in ${crop.days_to_germination} days. ${crop.description}`;
+      if (!notes.value.includes(`Growing info (${crop.name})`)) {
+        notes.value = notes.value.trim() ? `${notes.value.trim()}\n\n${block}` : block;
+      }
+    }
+    closeModal();
+    toast(`Filled in growing info for ${crop.name} 🌱`, 'ok');
+  }
+
+  function initCropLookup() {
+    const btn = $('#crop-lookup-btn');
+    if (!btn) return;
+    btn.addEventListener('click', openModal);
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeModal();
+    });
+  }
+
+  globalThis.Verdant.onBoot(initCropLookup);
 })();

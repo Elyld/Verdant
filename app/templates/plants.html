@@ -25,10 +25,15 @@
 
       <!-- Add / edit plant form -->
       <form id="plant-form" class="card hidden space-y-4" autocomplete="off">
-        <h3 class="font-display text-lg font-semibold" id="plant-form-title">Add a plant</h3>
+        <div class="flex items-center justify-between gap-2">
+          <h3 class="font-display text-lg font-semibold" id="plant-form-title">Add a plant</h3>
+          <button type="button" id="crop-lookup-btn" class="btn-ghost text-sm">🔎 Look up growing info</button>
+        </div>
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div><label class="lbl" for="plant-name">Variety name *</label><input id="plant-name" class="inp" required maxlength="120" placeholder="Cherokee Purple" /></div>
           <div><label class="lbl" for="plant-species">Species</label><input id="plant-species" class="inp" maxlength="120" placeholder="Tomato" /></div>
+          <div><label class="lbl" for="plant-light">Sun</label>
+            <select id="plant-light" class="inp"><option>Full Sun</option><option>Part Sun</option><option>Part Shade</option><option>Full Shade</option></select></div>
           <div><label class="lbl" for="plant-status">Status</label>
             <select id="plant-status" class="inp"><option>Growing</option><option>Harvested</option><option>Dead</option><option>Planned</option></select></div>
           <div><label class="lbl" for="plant-location">Location</label><select id="plant-location" class="inp"><option value="">— none —</option></select></div>
@@ -51,6 +56,7 @@
 {% endblock %}
 {% block overlays %}
 <div id="plant-modal" class="modal hidden" aria-hidden="true"></div>
+<div id="crop-modal" class="modal hidden" aria-hidden="true"></div>
 
 
 <div id="lightbox" class="fixed inset-0 z-50 hidden items-center justify-center bg-navy-900/80 p-4">
