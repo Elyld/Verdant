@@ -252,9 +252,12 @@ watering from the garden? One tap takes it back. Watering, harvests, and
 notes can all be undone.
 NFC tags can drop you straight here. And when your hands are too dirty to tap
 through forms: **🤖 “Tell Verdant what you did”** — type a sentence like
-“watered the tomatoes and harvested 3 peppers” and a small model running on
-*your own machine* drafts the log entries for you to confirm. Nothing leaves
-your server; opt-in on the Settings page.
+“watered the tomatoes and harvested 3 peppers”, or tap 🎤 **Talk** and just
+say it with dirty hands — the browser transcribes as you talk and keeps
+listening through pauses until you tap Stop. A small model running on
+*your own machine* then drafts the log entries for you to confirm. Nothing leaves
+your server; opt-in on the Settings page. (Voice needs a secure https
+connection, so on the LAN it works through the Cloudflare tunnel.)
 
 ![Tell Verdant what you did](docs/screenshots/ai-log.png)
 
@@ -670,6 +673,15 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.37.0** — **🎤 Voice input for Quick Log.** The “Tell Verdant what you did”
+  card grew a **Talk** button for dirty-hands garden sessions: tap it, narrate
+  what you did, tap Stop, and your words land in the box ready for the local
+  model to turn into draft entries. It uses the browser's built-in speech
+  recognition — nothing is sent anywhere but your own browser — and it keeps
+  listening through pauses until you stop it. One caveat: browsers only allow
+  it over a secure (https) connection, so on the LAN it works through the
+  Cloudflare tunnel, not plain http.
+  ![Voice input on Quick Log](docs/screenshots/voice-quicklog.png)
 - **2.36.0** — **🌶️ 8,200-crop guide + calmer nav ferns.** The crop guide's
   backbone is now **OpenPlantDB** (public domain): 8,204 edible plants —
   vegetables, herbs, berries, and fruit — with variety-level detail, so

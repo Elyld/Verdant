@@ -72,6 +72,17 @@
 }
 .btn-ghost:hover { background-color: #f8f2e6; }
 
+/* Voice-input mic: soft red pulse while listening. */
+@keyframes mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(164, 25, 25, 0.35); }
+  50% { box-shadow: 0 0 0 7px rgba(164, 25, 25, 0); }
+}
+.mic-live {
+  animation: mic-pulse 1.6s ease-in-out infinite;
+  border-color: #a41919 !important;
+  color: #a41919 !important;
+}
+
 .pill {
   display: inline-flex;
   align-items: center;
