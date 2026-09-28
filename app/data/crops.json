@@ -1,1 +1,723 @@
-[{"aliases":["tomatoes","cherry tomato","beefsteak"],"days_to_germination":"5–10","days_to_maturity":75,"description":"Start indoors 6–8 weeks before last frost. Transplant deep — buried stems grow extra roots. Cage or stake early; mulch once soil warms.","family":"Nightshade (Solanaceae)","key":"tomato","name":"Tomato","sowing_depth_in":"¼","spacing_in":"24–36","sun":"Full Sun"},{"aliases":["bell pepper","bell peppers","sweet pepper"],"days_to_germination":"7–14","days_to_maturity":70,"description":"Needs warm soil (75–85°F) to germinate — a heat mat helps a lot. Transplant only after nights stay above 55°F.","family":"Nightshade (Solanaceae)","key":"pepper-bell","name":"Pepper (Bell)","sowing_depth_in":"¼","spacing_in":"18","sun":"Full Sun"},{"aliases":["hot pepper","chili","chile","habanero","jalapeno","jalapeño"],"days_to_germination":"7–14","days_to_maturity":75,"description":"Super-hots can take 3+ weeks to sprout — be patient. Slight stress (less water) once fruiting boosts heat.","family":"Nightshade (Solanaceae)","key":"pepper-hot","name":"Pepper (Hot)","sowing_depth_in":"¼","spacing_in":"18","sun":"Full Sun"},{"aliases":["cucumbers","cuke"],"days_to_germination":"3–10","days_to_maturity":55,"description":"Direct-sow after frost; hates transplanting. Trellis to save space and keep fruit straight. Pick often — big cukes slow the vine.","family":"Cucurbit (Cucurbitaceae)","key":"cucumber","name":"Cucumber","sowing_depth_in":"1","spacing_in":"12","sun":"Full Sun"},{"aliases":["summer squash","yellow squash"],"days_to_germination":"3–10","days_to_maturity":50,"description":"One plant feeds a neighborhood. Harvest at 6–8 inches; oversized fruit signals the plant to quit.","family":"Cucurbit (Cucurbitaceae)","key":"zucchini","name":"Zucchini","sowing_depth_in":"1","spacing_in":"36","sun":"Full Sun"},{"aliases":["butternut","acorn squash","pumpkin"],"days_to_germination":"5–10","days_to_maturity":90,"description":"Give vines room to roam. Cure harvested fruit in sun 1–2 weeks for thicker skin and sweeter flesh.","family":"Cucurbit (Cucurbitaceae)","key":"winter-squash","name":"Winter Squash","sowing_depth_in":"1","spacing_in":"48","sun":"Full Sun"},{"aliases":["genovese basil","sweet basil","thai basil"],"days_to_germination":"5–10","days_to_maturity":65,"description":"Pinch flower buds relentlessly — flowering turns leaves bitter. Harvest from the top to force bushy growth.","family":"Mint (Lamiaceae)","key":"basil","name":"Basil","sowing_depth_in":"¼","spacing_in":"12","sun":"Full Sun"},{"aliases":["salad greens","romaine","butterhead"],"days_to_germination":"2–10","days_to_maturity":45,"description":"Cool-season crop; bolts in heat. Sow every 2 weeks for continuous harvest. Shade cloth extends the season.","family":"Aster (Asteraceae)","key":"lettuce","name":"Lettuce","sowing_depth_in":"¼","spacing_in":"8","sun":"Part Shade"},{"aliases":[],"days_to_germination":"5–10","days_to_maturity":40,"description":"Sow as soon as soil can be worked in spring, again in late summer for fall. Bolts fast once days lengthen.","family":"Amaranth (Amaranthaceae)","key":"spinach","name":"Spinach","sowing_depth_in":"½","spacing_in":"6","sun":"Part Shade"},{"aliases":["dinosaur kale","lacinato"],"days_to_germination":"5–10","days_to_maturity":55,"description":"Sweetens after frost. Harvest outer leaves; the center keeps producing. Watch for cabbage worms.","family":"Brassica (Brassicaceae)","key":"kale","name":"Kale","sowing_depth_in":"¼","spacing_in":"18","sun":"Full Sun"},{"aliases":["carrots"],"days_to_germination":"10–21","days_to_maturity":70,"description":"Keep the seedbed evenly moist until sprouts show — a board over the row helps. Thin ruthlessly or roots fork.","family":"Carrot (Apiaceae)","key":"carrot","name":"Carrot","sowing_depth_in":"¼","spacing_in":"3","sun":"Full Sun"},{"aliases":["radishes"],"days_to_germination":"3–7","days_to_maturity":28,"description":"Fastest payoff in the garden. Sow with slow carrots to mark the row. Gets pithy if left too long.","family":"Brassica (Brassicaceae)","key":"radish","name":"Radish","sowing_depth_in":"½","spacing_in":"2","sun":"Full Sun"},{"aliases":["beets","beetroot"],"days_to_germination":"5–10","days_to_maturity":55,"description":"Each 'seed' is a cluster — thin to one. Greens are edible too. Steady water prevents woody roots.","family":"Amaranth (Amaranthaceae)","key":"beet","name":"Beet","sowing_depth_in":"½","spacing_in":"4","sun":"Full Sun"},{"aliases":["green bean","green beans","bush beans"],"days_to_germination":"5–10","days_to_maturity":50,"description":"Direct-sow after frost; seeds rot in cold wet soil. Pick every couple days to keep pods coming.","family":"Legume (Fabaceae)","key":"bush-bean","name":"Bean (Bush)","sowing_depth_in":"1","spacing_in":"4","sun":"Full Sun"},{"aliases":["pole beans","runner bean"],"days_to_germination":"5–10","days_to_maturity":60,"description":"Needs a sturdy trellis before sowing. Produces longer than bush types from the same footprint.","family":"Legume (Fabaceae)","key":"pole-bean","name":"Bean (Pole)","sowing_depth_in":"1","spacing_in":"6","sun":"Full Sun"},{"aliases":["peas","snap pea","snow pea"],"days_to_germination":"5–10","days_to_maturity":60,"description":"Sow 4–6 weeks before last frost. Fades in summer heat — plan a fall round too.","family":"Legume (Fabaceae)","key":"pea","name":"Pea","sowing_depth_in":"1","spacing_in":"3","sun":"Full Sun"},{"aliases":["onions","shallot"],"days_to_germination":"7–14","days_to_maturity":90,"description":"Plant sets pointy-end-up as soon as soil is workable. Stop watering when tops fall over; cure before storing.","family":"Amaryllis (Amaryllidaceae)","key":"onion","name":"Onion (from sets)","sowing_depth_in":"1","spacing_in":"4","sun":"Full Sun"},{"aliases":[],"days_to_germination":"7–14","days_to_maturity":240,"description":"Plant cloves in late October, mulch heavily, harvest early summer when lower leaves brown. Hardneck suits cold zones.","family":"Amaryllis (Amaryllidaceae)","key":"garlic","name":"Garlic","sowing_depth_in":"2","spacing_in":"6","sun":"Full Sun"},{"aliases":["potatoes"],"days_to_germination":"14–21","days_to_maturity":80,"description":"Plant certified seed potatoes, eyes up. Hill soil over stems as they grow — light turns tubers green and bitter.","family":"Nightshade (Solanaceae)","key":"potato","name":"Potato","sowing_depth_in":"4","spacing_in":"12","sun":"Full Sun"},{"aliases":["sweet potatoes"],"days_to_germination":"—","days_to_maturity":100,"description":"Grown from slips, not seeds — plant after soil is warm. Needs a long season; black plastic mulch helps up north.","family":"Morning Glory (Convolvulaceae)","key":"sweet-potato","name":"Sweet Potato","sowing_depth_in":"3 (slips)","spacing_in":"12","sun":"Full Sun"},{"aliases":["sweet corn"],"days_to_germination":"5–10","days_to_maturity":75,"description":"Plant in blocks, not single rows, for pollination. Heavy feeder — side-dress when knee-high.","family":"Grass (Poaceae)","key":"corn","name":"Corn","sowing_depth_in":"1½","spacing_in":"12","sun":"Full Sun"},{"aliases":["aubergine"],"days_to_germination":"7–14","days_to_maturity":75,"description":"Loves heat — transplant late, mulch with black plastic. Flea beetles love seedlings; row cover early.","family":"Nightshade (Solanaceae)","key":"eggplant","name":"Eggplant","sowing_depth_in":"¼","spacing_in":"24","sun":"Full Sun"},{"aliases":[],"days_to_germination":"7–14","days_to_maturity":55,"description":"Soak seeds overnight to speed sprouting. Pick pods at 3–4 inches daily — they go woody fast.","family":"Mallow (Malvaceae)","key":"okra","name":"Okra","sowing_depth_in":"½","spacing_in":"12","sun":"Full Sun"},{"aliases":["coriander"],"days_to_germination":"5–10","days_to_maturity":50,"description":"Bolts at the first hint of heat. Succession-sow every 2–3 weeks; let one plant go to seed for coriander.","family":"Carrot (Apiaceae)","key":"cilantro","name":"Cilantro","sowing_depth_in":"¼","spacing_in":"8","sun":"Part Shade"},{"aliases":[],"days_to_germination":"7–14","days_to_maturity":40,"description":"Direct-sow where it will live — taproot hates moving. Self-sows freely; great for beneficial insects.","family":"Carrot (Apiaceae)","key":"dill","name":"Dill","sowing_depth_in":"¼","spacing_in":"12","sun":"Full Sun"},{"aliases":[],"days_to_germination":"14–28","days_to_maturity":75,"description":"Slow to sprout — pour hot (not boiling) water over the row to hurry it. Biennial; overwinters in mild zones.","family":"Carrot (Apiaceae)","key":"parsley","name":"Parsley","sowing_depth_in":"¼","spacing_in":"8","sun":"Part Shade"},{"aliases":[],"days_to_germination":"7–14","days_to_maturity":80,"description":"Perennial — plant once, snip for years. Divide clumps every 3–4 years. Pretty purple flowers are edible.","family":"Amaryllis (Amaryllidaceae)","key":"chives","name":"Chives","sowing_depth_in":"¼","spacing_in":"8","sun":"Full Sun"},{"aliases":[],"days_to_germination":"14–28","days_to_maturity":85,"description":"Perennial that demands sharp drainage — sandy soil or a pot. Shear after flowering to keep it compact.","family":"Mint (Lamiaceae)","key":"thyme","name":"Thyme","sowing_depth_in":"surface","spacing_in":"9","sun":"Full Sun"},{"aliases":[],"days_to_germination":"7–14","days_to_maturity":80,"description":"Perennial; flavor peaks just before flowers open. Spreads — give it its own corner or a container.","family":"Mint (Lamiaceae)","key":"oregano","name":"Oregano","sowing_depth_in":"surface","spacing_in":"12","sun":"Full Sun"},{"aliases":[],"days_to_germination":"14–28","days_to_maturity":90,"description":"Slow from seed — a nursery start saves a season. Overwinters outdoors only in mild zones; otherwise pot it and bring in.","family":"Mint (Lamiaceae)","key":"rosemary","name":"Rosemary","sowing_depth_in":"surface","spacing_in":"24","sun":"Full Sun"}]
+[
+  {
+    "aliases": [
+      "tomatoes",
+      "cherry tomato",
+      "beefsteak"
+    ],
+    "days_to_germination": "5–10",
+    "days_to_maturity": 75,
+    "description": "Start indoors 6–8 weeks before last frost. Transplant deep — buried stems grow extra roots. Cage or stake early; mulch once soil warms.",
+    "family": "Nightshade (Solanaceae)",
+    "key": "tomato",
+    "name": "Tomato",
+    "sowing_depth_in": "¼",
+    "spacing_in": "24–36",
+    "sun": "Full Sun",
+    "varieties": [
+      {
+        "name": "Cherokee Purple",
+        "days_to_maturity": 80,
+        "note": "Indeterminate heirloom beefsteak; dusky rose-purple fruit."
+      },
+      {
+        "name": "Brandywine",
+        "days_to_maturity": 85,
+        "note": "Indeterminate heirloom; large pink beefsteak, rich flavor."
+      },
+      {
+        "name": "Roma",
+        "days_to_maturity": 75,
+        "note": "Determinate paste tomato; meaty, few seeds — for sauce."
+      },
+      {
+        "name": "Sungold",
+        "days_to_maturity": 57,
+        "note": "Indeterminate cherry; exceptionally sweet orange fruit."
+      },
+      {
+        "name": "Celebrity",
+        "days_to_maturity": 70,
+        "note": "Determinate; disease-resistant all-rounder."
+      },
+      {
+        "name": "Early Girl",
+        "days_to_maturity": 52,
+        "note": "Indeterminate; one of the earliest slicers."
+      }
+    ]
+  },
+  {
+    "aliases": [
+      "bell pepper",
+      "bell peppers",
+      "sweet pepper"
+    ],
+    "days_to_germination": "7–14",
+    "days_to_maturity": 70,
+    "description": "Needs warm soil (75–85°F) to germinate — a heat mat helps a lot. Transplant only after nights stay above 55°F.",
+    "family": "Nightshade (Solanaceae)",
+    "key": "pepper-bell",
+    "name": "Pepper (Bell)",
+    "sowing_depth_in": "¼",
+    "spacing_in": "18",
+    "sun": "Full Sun",
+    "varieties": [
+      {
+        "name": "California Wonder",
+        "days_to_maturity": 75,
+        "note": "Classic blocky bell; green to red."
+      },
+      {
+        "name": "King of the North",
+        "days_to_maturity": 70,
+        "note": "Short-season bell; ripens reliably in cool summers."
+      }
+    ]
+  },
+  {
+    "aliases": [
+      "hot pepper",
+      "chili",
+      "chile",
+      "habanero",
+      "jalapeno",
+      "jalapeño"
+    ],
+    "days_to_germination": "7–14",
+    "days_to_maturity": 75,
+    "description": "Super-hots can take 3+ weeks to sprout — be patient. Slight stress (less water) once fruiting boosts heat.",
+    "family": "Nightshade (Solanaceae)",
+    "key": "pepper-hot",
+    "name": "Pepper (Hot)",
+    "sowing_depth_in": "¼",
+    "spacing_in": "18",
+    "sun": "Full Sun",
+    "varieties": [
+      {
+        "name": "Jalapeño",
+        "days_to_maturity": 75,
+        "note": "Medium heat; pick green or let ripen red."
+      },
+      {
+        "name": "Serrano",
+        "days_to_maturity": 80,
+        "note": "Hotter than jalapeño; great for salsa."
+      },
+      {
+        "name": "Cayenne",
+        "days_to_maturity": 72,
+        "note": "Hot; thin-walled — dries well."
+      },
+      {
+        "name": "Habanero",
+        "days_to_maturity": 90,
+        "note": "Very hot; needs a long warm season."
+      }
+    ]
+  },
+  {
+    "aliases": [
+      "cucumbers",
+      "cuke"
+    ],
+    "days_to_germination": "3–10",
+    "days_to_maturity": 55,
+    "description": "Direct-sow after frost; hates transplanting. Trellis to save space and keep fruit straight. Pick often — big cukes slow the vine.",
+    "family": "Cucurbit (Cucurbitaceae)",
+    "key": "cucumber",
+    "name": "Cucumber",
+    "sowing_depth_in": "1",
+    "spacing_in": "12",
+    "sun": "Full Sun",
+    "varieties": [
+      {
+        "name": "Marketmore 76",
+        "days_to_maturity": 67,
+        "note": "Disease-resistant slicer."
+      },
+      {
+        "name": "Boston Pickling",
+        "days_to_maturity": 55,
+        "note": "Compact pickling cucumber."
+      },
+      {
+        "name": "Lemon",
+        "days_to_maturity": 65,
+        "note": "Round yellow heirloom; mild, never bitter."
+      }
+    ]
+  },
+  {
+    "aliases": [
+      "summer squash",
+      "yellow squash"
+    ],
+    "days_to_germination": "3–10",
+    "days_to_maturity": 50,
+    "description": "One plant feeds a neighborhood. Harvest at 6–8 inches; oversized fruit signals the plant to quit.",
+    "family": "Cucurbit (Cucurbitaceae)",
+    "key": "zucchini",
+    "name": "Zucchini",
+    "sowing_depth_in": "1",
+    "spacing_in": "36",
+    "sun": "Full Sun",
+    "varieties": [
+      {
+        "name": "Black Beauty",
+        "days_to_maturity": 50,
+        "note": "Classic dark-green zucchini; very productive."
+      },
+      {
+        "name": "Costata Romanesco",
+        "days_to_maturity": 55,
+        "note": "Ribbed Italian heirloom; superb flavor."
+      }
+    ]
+  },
+  {
+    "aliases": [
+      "butternut",
+      "acorn squash",
+      "pumpkin"
+    ],
+    "days_to_germination": "5–10",
+    "days_to_maturity": 90,
+    "description": "Give vines room to roam. Cure harvested fruit in sun 1–2 weeks for thicker skin and sweeter flesh.",
+    "family": "Cucurbit (Cucurbitaceae)",
+    "key": "winter-squash",
+    "name": "Winter Squash",
+    "sowing_depth_in": "1",
+    "spacing_in": "48",
+    "sun": "Full Sun",
+    "varieties": [
+      {
+        "name": "Waltham Butternut",
+        "days_to_maturity": 105,
+        "note": "Tan butternut; stores for months."
+      },
+      {
+        "name": "Table Queen Acorn",
+        "days_to_maturity": 85,
+        "note": "Compact acorn squash for small spaces."
+      }
+    ]
+  },
+  {
+    "aliases": [
+      "genovese basil",
+      "sweet basil",
+      "thai basil"
+    ],
+    "days_to_germination": "5–10",
+    "days_to_maturity": 65,
+    "description": "Pinch flower buds relentlessly — flowering turns leaves bitter. Harvest from the top to force bushy growth.",
+    "family": "Mint (Lamiaceae)",
+    "key": "basil",
+    "name": "Basil",
+    "sowing_depth_in": "¼",
+    "spacing_in": "12",
+    "sun": "Full Sun",
+    "varieties": [
+      {
+        "name": "Genovese",
+        "days_to_maturity": 68,
+        "note": "Classic pesto basil; large tender leaves."
+      },
+      {
+        "name": "Thai",
+        "days_to_maturity": 70,
+        "note": "Anise-clove scent; holds up in heat."
+      }
+    ]
+  },
+  {
+    "aliases": [
+      "salad greens",
+      "romaine",
+      "butterhead"
+    ],
+    "days_to_germination": "2–10",
+    "days_to_maturity": 45,
+    "description": "Cool-season crop; bolts in heat. Sow every 2 weeks for continuous harvest. Shade cloth extends the season.",
+    "family": "Aster (Asteraceae)",
+    "key": "lettuce",
+    "name": "Lettuce",
+    "sowing_depth_in": "¼",
+    "spacing_in": "8",
+    "sun": "Part Shade",
+    "varieties": [
+      {
+        "name": "Buttercrunch",
+        "days_to_maturity": 55,
+        "note": "Butterhead; heat-tolerant for a lettuce."
+      },
+      {
+        "name": "Parris Island",
+        "days_to_maturity": 70,
+        "note": "Romaine; crisp upright heads."
+      },
+      {
+        "name": "Black Seeded Simpson",
+        "days_to_maturity": 45,
+        "note": "Looseleaf; cut-and-come-again."
+      }
+    ]
+  },
+  {
+    "aliases": [],
+    "days_to_germination": "5–10",
+    "days_to_maturity": 40,
+    "description": "Sow as soon as soil can be worked in spring, again in late summer for fall. Bolts fast once days lengthen.",
+    "family": "Amaranth (Amaranthaceae)",
+    "key": "spinach",
+    "name": "Spinach",
+    "sowing_depth_in": "½",
+    "spacing_in": "6",
+    "sun": "Part Shade",
+    "varieties": [
+      {
+        "name": "Bloomsdale",
+        "days_to_maturity": 45,
+        "note": "Savoyed heirloom; slow to bolt."
+      }
+    ]
+  },
+  {
+    "aliases": [
+      "dinosaur kale",
+      "lacinato"
+    ],
+    "days_to_germination": "5–10",
+    "days_to_maturity": 55,
+    "description": "Sweetens after frost. Harvest outer leaves; the center keeps producing. Watch for cabbage worms.",
+    "family": "Brassica (Brassicaceae)",
+    "key": "kale",
+    "name": "Kale",
+    "sowing_depth_in": "¼",
+    "spacing_in": "18",
+    "sun": "Full Sun",
+    "varieties": [
+      {
+        "name": "Lacinato",
+        "days_to_maturity": 60,
+        "note": "Tuscan/dinosaur kale; sweetens after frost."
+      },
+      {
+        "name": "Red Russian",
+        "days_to_maturity": 55,
+        "note": "Tender flat leaves; very cold-hardy."
+      }
+    ]
+  },
+  {
+    "aliases": [
+      "carrots"
+    ],
+    "days_to_germination": "10–21",
+    "days_to_maturity": 70,
+    "description": "Keep the seedbed evenly moist until sprouts show — a board over the row helps. Thin ruthlessly or roots fork.",
+    "family": "Carrot (Apiaceae)",
+    "key": "carrot",
+    "name": "Carrot",
+    "sowing_depth_in": "¼",
+    "spacing_in": "3",
+    "sun": "Full Sun",
+    "varieties": [
+      {
+        "name": "Danvers",
+        "days_to_maturity": 75,
+        "note": "Classic orange storage carrot."
+      },
+      {
+        "name": "Nantes",
+        "days_to_maturity": 70,
+        "note": "Sweet, blunt-tipped; good fresh eating."
+      },
+      {
+        "name": "Cosmic Purple",
+        "days_to_maturity": 70,
+        "note": "Purple outside, orange inside; striking."
+      }
+    ]
+  },
+  {
+    "aliases": [
+      "radishes"
+    ],
+    "days_to_germination": "3–7",
+    "days_to_maturity": 28,
+    "description": "Fastest payoff in the garden. Sow with slow carrots to mark the row. Gets pithy if left too long.",
+    "family": "Brassica (Brassicaceae)",
+    "key": "radish",
+    "name": "Radish",
+    "sowing_depth_in": "½",
+    "spacing_in": "2",
+    "sun": "Full Sun",
+    "varieties": [
+      {
+        "name": "Cherry Belle",
+        "days_to_maturity": 25,
+        "note": "Fast round red radish."
+      },
+      {
+        "name": "French Breakfast",
+        "days_to_maturity": 28,
+        "note": "Mild oblong heirloom."
+      }
+    ]
+  },
+  {
+    "aliases": [
+      "beets",
+      "beetroot"
+    ],
+    "days_to_germination": "5–10",
+    "days_to_maturity": 55,
+    "description": "Each 'seed' is a cluster — thin to one. Greens are edible too. Steady water prevents woody roots.",
+    "family": "Amaranth (Amaranthaceae)",
+    "key": "beet",
+    "name": "Beet",
+    "sowing_depth_in": "½",
+    "spacing_in": "4",
+    "sun": "Full Sun",
+    "varieties": [
+      {
+        "name": "Detroit Dark Red",
+        "days_to_maturity": 60,
+        "note": "Classic globe beet; greens edible too."
+      }
+    ]
+  },
+  {
+    "aliases": [
+      "green bean",
+      "green beans",
+      "bush beans"
+    ],
+    "days_to_germination": "5–10",
+    "days_to_maturity": 50,
+    "description": "Direct-sow after frost; seeds rot in cold wet soil. Pick every couple days to keep pods coming.",
+    "family": "Legume (Fabaceae)",
+    "key": "bush-bean",
+    "name": "Bean (Bush)",
+    "sowing_depth_in": "1",
+    "spacing_in": "4",
+    "sun": "Full Sun",
+    "varieties": [
+      {
+        "name": "Blue Lake",
+        "days_to_maturity": 55,
+        "note": "Stringless snap bean; canning favorite."
+      },
+      {
+        "name": "Provider",
+        "days_to_maturity": 50,
+        "note": "Early and reliable; tolerates cool soil."
+      }
+    ]
+  },
+  {
+    "aliases": [
+      "pole beans",
+      "runner bean"
+    ],
+    "days_to_germination": "5–10",
+    "days_to_maturity": 60,
+    "description": "Needs a sturdy trellis before sowing. Produces longer than bush types from the same footprint.",
+    "family": "Legume (Fabaceae)",
+    "key": "pole-bean",
+    "name": "Bean (Pole)",
+    "sowing_depth_in": "1",
+    "spacing_in": "6",
+    "sun": "Full Sun",
+    "varieties": [
+      {
+        "name": "Kentucky Wonder",
+        "days_to_maturity": 65,
+        "note": "Classic pole snap bean; heavy yields."
+      }
+    ]
+  },
+  {
+    "aliases": [
+      "peas",
+      "snap pea",
+      "snow pea"
+    ],
+    "days_to_germination": "5–10",
+    "days_to_maturity": 60,
+    "description": "Sow 4–6 weeks before last frost. Fades in summer heat — plan a fall round too.",
+    "family": "Legume (Fabaceae)",
+    "key": "pea",
+    "name": "Pea",
+    "sowing_depth_in": "1",
+    "spacing_in": "3",
+    "sun": "Full Sun",
+    "varieties": [
+      {
+        "name": "Sugar Snap",
+        "days_to_maturity": 62,
+        "note": "Edible-pod snap pea; very sweet."
+      },
+      {
+        "name": "Wando",
+        "days_to_maturity": 70,
+        "note": "Shelling pea; tolerates heat better than most."
+      }
+    ]
+  },
+  {
+    "aliases": [
+      "onions",
+      "shallot"
+    ],
+    "days_to_germination": "7–14",
+    "days_to_maturity": 90,
+    "description": "Plant sets pointy-end-up as soon as soil is workable. Stop watering when tops fall over; cure before storing.",
+    "family": "Amaryllis (Amaryllidaceae)",
+    "key": "onion",
+    "name": "Onion (from sets)",
+    "sowing_depth_in": "1",
+    "spacing_in": "4",
+    "sun": "Full Sun",
+    "varieties": [
+      {
+        "name": "Walla Walla",
+        "days_to_maturity": 110,
+        "note": "Sweet onion; best grown from transplants."
+      }
+    ]
+  },
+  {
+    "aliases": [],
+    "days_to_germination": "7–14",
+    "days_to_maturity": 240,
+    "description": "Plant cloves in late October, mulch heavily, harvest early summer when lower leaves brown. Hardneck suits cold zones.",
+    "family": "Amaryllis (Amaryllidaceae)",
+    "key": "garlic",
+    "name": "Garlic",
+    "sowing_depth_in": "2",
+    "spacing_in": "6",
+    "sun": "Full Sun",
+    "varieties": []
+  },
+  {
+    "aliases": [
+      "potatoes"
+    ],
+    "days_to_germination": "14–21",
+    "days_to_maturity": 80,
+    "description": "Plant certified seed potatoes, eyes up. Hill soil over stems as they grow — light turns tubers green and bitter.",
+    "family": "Nightshade (Solanaceae)",
+    "key": "potato",
+    "name": "Potato",
+    "sowing_depth_in": "4",
+    "spacing_in": "12",
+    "sun": "Full Sun",
+    "varieties": [
+      {
+        "name": "Yukon Gold",
+        "days_to_maturity": 80,
+        "note": "Yellow flesh; great all-rounder."
+      },
+      {
+        "name": "Red Norland",
+        "days_to_maturity": 70,
+        "note": "Early red; good boiling potato."
+      }
+    ]
+  },
+  {
+    "aliases": [
+      "sweet potatoes"
+    ],
+    "days_to_germination": "—",
+    "days_to_maturity": 100,
+    "description": "Grown from slips, not seeds — plant after soil is warm. Needs a long season; black plastic mulch helps up north.",
+    "family": "Morning Glory (Convolvulaceae)",
+    "key": "sweet-potato",
+    "name": "Sweet Potato",
+    "sowing_depth_in": "3 (slips)",
+    "spacing_in": "12",
+    "sun": "Full Sun",
+    "varieties": []
+  },
+  {
+    "aliases": [
+      "sweet corn"
+    ],
+    "days_to_germination": "5–10",
+    "days_to_maturity": 75,
+    "description": "Plant in blocks, not single rows, for pollination. Heavy feeder — side-dress when knee-high.",
+    "family": "Grass (Poaceae)",
+    "key": "corn",
+    "name": "Corn",
+    "sowing_depth_in": "1½",
+    "spacing_in": "12",
+    "sun": "Full Sun",
+    "varieties": [
+      {
+        "name": "Silver Queen",
+        "days_to_maturity": 92,
+        "note": "White sweet corn; classic."
+      },
+      {
+        "name": "Peaches and Cream",
+        "days_to_maturity": 83,
+        "note": "Bicolor; tender and sweet."
+      }
+    ]
+  },
+  {
+    "aliases": [
+      "aubergine"
+    ],
+    "days_to_germination": "7–14",
+    "days_to_maturity": 75,
+    "description": "Loves heat — transplant late, mulch with black plastic. Flea beetles love seedlings; row cover early.",
+    "family": "Nightshade (Solanaceae)",
+    "key": "eggplant",
+    "name": "Eggplant",
+    "sowing_depth_in": "¼",
+    "spacing_in": "24",
+    "sun": "Full Sun",
+    "varieties": [
+      {
+        "name": "Black Beauty",
+        "days_to_maturity": 80,
+        "note": "Classic large purple eggplant."
+      }
+    ]
+  },
+  {
+    "aliases": [],
+    "days_to_germination": "7–14",
+    "days_to_maturity": 55,
+    "description": "Soak seeds overnight to speed sprouting. Pick pods at 3–4 inches daily — they go woody fast.",
+    "family": "Mallow (Malvaceae)",
+    "key": "okra",
+    "name": "Okra",
+    "sowing_depth_in": "½",
+    "spacing_in": "12",
+    "sun": "Full Sun",
+    "varieties": [
+      {
+        "name": "Clemson Spineless",
+        "days_to_maturity": 55,
+        "note": "Spineless pods; easy picking."
+      }
+    ]
+  },
+  {
+    "aliases": [
+      "coriander"
+    ],
+    "days_to_germination": "5–10",
+    "days_to_maturity": 50,
+    "description": "Bolts at the first hint of heat. Succession-sow every 2–3 weeks; let one plant go to seed for coriander.",
+    "family": "Carrot (Apiaceae)",
+    "key": "cilantro",
+    "name": "Cilantro",
+    "sowing_depth_in": "¼",
+    "spacing_in": "8",
+    "sun": "Part Shade",
+    "varieties": [
+      {
+        "name": "Slow Bolt",
+        "days_to_maturity": 50,
+        "note": "Bred to resist bolting longer."
+      }
+    ]
+  },
+  {
+    "aliases": [],
+    "days_to_germination": "7–14",
+    "days_to_maturity": 40,
+    "description": "Direct-sow where it will live — taproot hates moving. Self-sows freely; great for beneficial insects.",
+    "family": "Carrot (Apiaceae)",
+    "key": "dill",
+    "name": "Dill",
+    "sowing_depth_in": "¼",
+    "spacing_in": "12",
+    "sun": "Full Sun",
+    "varieties": [
+      {
+        "name": "Bouquet",
+        "days_to_maturity": 45,
+        "note": "Compact; good for containers."
+      }
+    ]
+  },
+  {
+    "aliases": [],
+    "days_to_germination": "14–28",
+    "days_to_maturity": 75,
+    "description": "Slow to sprout — pour hot (not boiling) water over the row to hurry it. Biennial; overwinters in mild zones.",
+    "family": "Carrot (Apiaceae)",
+    "key": "parsley",
+    "name": "Parsley",
+    "sowing_depth_in": "¼",
+    "spacing_in": "8",
+    "sun": "Part Shade",
+    "varieties": [
+      {
+        "name": "Italian Flat Leaf",
+        "days_to_maturity": 75,
+        "note": "Stronger flavor than curly types."
+      }
+    ]
+  },
+  {
+    "aliases": [],
+    "days_to_germination": "7–14",
+    "days_to_maturity": 80,
+    "description": "Perennial — plant once, snip for years. Divide clumps every 3–4 years. Pretty purple flowers are edible.",
+    "family": "Amaryllis (Amaryllidaceae)",
+    "key": "chives",
+    "name": "Chives",
+    "sowing_depth_in": "¼",
+    "spacing_in": "8",
+    "sun": "Full Sun",
+    "varieties": []
+  },
+  {
+    "aliases": [],
+    "days_to_germination": "14–28",
+    "days_to_maturity": 85,
+    "description": "Perennial that demands sharp drainage — sandy soil or a pot. Shear after flowering to keep it compact.",
+    "family": "Mint (Lamiaceae)",
+    "key": "thyme",
+    "name": "Thyme",
+    "sowing_depth_in": "surface",
+    "spacing_in": "9",
+    "sun": "Full Sun",
+    "varieties": []
+  },
+  {
+    "aliases": [],
+    "days_to_germination": "7–14",
+    "days_to_maturity": 80,
+    "description": "Perennial; flavor peaks just before flowers open. Spreads — give it its own corner or a container.",
+    "family": "Mint (Lamiaceae)",
+    "key": "oregano",
+    "name": "Oregano",
+    "sowing_depth_in": "surface",
+    "spacing_in": "12",
+    "sun": "Full Sun",
+    "varieties": []
+  },
+  {
+    "aliases": [],
+    "days_to_germination": "14–28",
+    "days_to_maturity": 90,
+    "description": "Slow from seed — a nursery start saves a season. Overwinters outdoors only in mild zones; otherwise pot it and bring in.",
+    "family": "Mint (Lamiaceae)",
+    "key": "rosemary",
+    "name": "Rosemary",
+    "sowing_depth_in": "surface",
+    "spacing_in": "24",
+    "sun": "Full Sun",
+    "varieties": []
+  }
+]

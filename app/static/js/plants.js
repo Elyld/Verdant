@@ -498,7 +498,7 @@
           <h3 class="font-display text-lg font-semibold text-navy-800">🔎 Look up growing info</h3>
           <button type="button" data-close class="btn-ghost px-2 py-1 text-sm">✕</button>
         </div>
-        <p class="mt-1 text-sm text-navy-500">Search the built-in crop guide — pick a crop to fill in sun, spacing, sowing depth, and timing.</p>
+        <p class="mt-1 text-sm text-navy-500">Search the crop guide and your seed stash — pick a crop or variety to fill in sun, spacing, sowing depth, and timing.</p>
         <input id="crop-q" class="inp mt-3" placeholder="e.g. tomato, basil, carrot…" value="${esc(seed)}" maxlength="60" />
         <div id="crop-results" class="mt-3 max-h-64 space-y-1 overflow-y-auto"></div>
         <div id="crop-detail" class="mt-3"></div>
@@ -535,71 +535,144 @@
     const detail = $('#crop-detail');
     if (!box) return;
     detail.innerHTML = '';
-    if (!term) { box.innerHTML = '<p class="text-sm text-navy-400">Type to search the crop guide.</p>'; return; }
+    if (!term) { box.innerHTML = '<p class="text-sm text-navy-400">Type to search — the crop guide and your seed stash.</p>'; return; }
     box.innerHTML = '<p class="text-sm text-navy-400">Searching…</p>';
-    let crops = [];
+    let guide = [], stash = [];
     try {
       const res = await api.get(`/api/crops?q=${encodeURIComponent(term)}`);
-      crops = res.crops || [];
+      guide = res.guide || [];
+      stash = res.stash || [];
     } catch { box.innerHTML = '<p class="text-sm text-red-600">Search failed — try again.</p>'; return; }
-    if (!crops.length) {
-      box.innerHTML = `<p class="text-sm text-navy-400">No crops match “${esc(term)}”. Try a simpler name, like “bean” or “pepper”.</p>`;
+    if (!guide.length && !stash.length) {
+      box.innerHTML = `<p class="text-sm text-navy-400">Nothing matches “${esc(term)}”. Try a simpler name, like “bean” or “pepper”.</p>`;
       return;
     }
-    box.innerHTML = crops.map((c) =>
-      `<button type="button" data-key="${esc(c.key)}"
+    const btn = (attrs, title, sub, meta) =>
+      `<button type="button" ${attrs}
         class="flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-sm ring-1 ring-beige-300 hover:bg-beige-100">
-        <span><strong class="text-navy-800">${esc(c.name)}</strong>
-        <span class="text-navy-400"> · ${esc(c.family)}</span></span>
-        <span class="text-xs text-navy-400">${esc(c.sun)} · ~${c.days_to_maturity}d</span>
-      </button>`).join('');
-    box.querySelectorAll('[data-key]').forEach((b) =>
-      b.addEventListener('click', () => showDetail(b.dataset.key)));
+        <span><strong class="text-navy-800">${title}</strong>
+        <span class="text-navy-400"> · ${sub}</span></span>
+        <span class="text-xs text-navy-400">${meta}</span>
+      </button>`;
+    let html = '';
+    if (stash.length) {
+      html += '<p class="pt-1 text-xs font-semibold uppercase tracking-wide text-navy-400">🌱 Your seed stash</p>';
+      html += stash.map((p) =>
+        btn(`data-kind="packet" data-packet="${p.packet_id}"`,
+          esc(p.variety_name),
+          esc([p.species_type, p.vendor_name].filter(Boolean).join(' · ') || 'seed packet'),
+          esc(p.year_acquired ? String(p.year_acquired) : ''))).join('');
+    }
+    if (guide.length) {
+      html += '<p class="pt-1 text-xs font-semibold uppercase tracking-wide text-navy-400">📖 Crop guide</p>';
+      html += guide.map((c) => {
+        const isVar = c.kind === 'variety';
+        return btn(`data-kind="${c.kind}" data-key="${esc(c.key)}" data-variety="${esc(isVar ? c.name : '')}"`,
+          esc(c.name) + (isVar ? ' <span class="text-xs font-normal text-sage-600">variety</span>' : ''),
+          esc(isVar ? c.crop_name : c.family),
+          esc(`${c.sun} · ~${c.days_to_maturity}d`));
+      }).join('');
+    }
+    box.innerHTML = html;
+    box.querySelectorAll('[data-kind]').forEach((b) =>
+      b.addEventListener('click', () => showDetail(b.dataset)));
   }
 
-  async function showDetail(key) {
+  async function showDetail(ds) {
     const detail = $('#crop-detail');
-    let crop;
+    if (!detail) return;
+    detail.innerHTML = '<p class="text-sm text-navy-400">Loading…</p>';
     try {
-      crop = (await api.get(`/api/crops/${encodeURIComponent(key)}`)).crop;
-    } catch { detail.innerHTML = '<p class="text-sm text-red-600">Could not load that crop.</p>'; return; }
-    if (!crop) return;
-    detail.innerHTML = `
-      <div class="rounded-xl bg-beige-100 p-3 ring-1 ring-beige-300">
-        <div class="flex items-center justify-between gap-2">
-          <strong class="text-navy-800">${esc(crop.name)}</strong>
-          <span class="text-xs text-navy-400">${esc(crop.family)}</span>
-        </div>
-        <dl class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-          <div><dt class="lbl">Sun</dt><dd class="text-navy-800">${esc(crop.sun)}</dd></div>
-          <div><dt class="lbl">Spacing</dt><dd class="text-navy-800">${esc(crop.spacing_in)}&Prime;</dd></div>
-          <div><dt class="lbl">Sow depth</dt><dd class="text-navy-800">${esc(crop.sowing_depth_in)}&Prime;</dd></div>
-          <div><dt class="lbl">Germinates</dt><dd class="text-navy-800">${esc(crop.days_to_germination)} days</dd></div>
-          <div><dt class="lbl">Matures</dt><dd class="text-navy-800">~${crop.days_to_maturity} days</dd></div>
-        </dl>
-        <p class="mt-2 text-sm text-navy-600">${esc(crop.description)}</p>
-        <button type="button" id="crop-use" class="btn-primary mt-3 text-sm">Use this info → fill the form</button>
-      </div>`;
-    detail.querySelector('#crop-use').addEventListener('click', () => applyCrop(crop));
+      if (ds.kind === 'packet') {
+        const p = await api.get(`/api/seed-packets/${encodeURIComponent(ds.packet)}`);
+        const bits = [
+          p.species_type ? `Species: ${esc(p.species_type)}` : '',
+          p.vendor_name ? `Vendor: ${esc(p.vendor_name)}` : '',
+          p.year_acquired ? `Year: ${esc(p.year_acquired)}` : '',
+          p.quantity ? `Quantity: ${esc(p.quantity)}` : '',
+        ].filter(Boolean).join(' · ');
+        detail.innerHTML = `
+          <div class="rounded-xl bg-beige-100 p-3 ring-1 ring-beige-300">
+            <div class="flex items-center justify-between gap-2">
+              <strong class="text-navy-800">🌱 ${esc(p.variety_name)}</strong>
+              ${p.vendor_url ? `<a class="text-xs text-sage-700 underline" href="${esc(p.vendor_url)}" target="_blank" rel="noopener">vendor page ↗</a>` : ''}
+            </div>
+            ${bits ? `<p class="mt-1 text-sm text-navy-600">${bits}</p>` : ''}
+            ${p.notes ? `<p class="mt-1 text-sm text-navy-600">${esc(p.notes)}</p>` : ''}
+            <p class="mt-2 text-xs text-navy-400">Source: your seed stash${p.vendor_name ? ` · ${esc(p.vendor_name)}` : ''}</p>
+            <button type="button" id="crop-use" class="btn-primary mt-3 text-sm">Use this info → fill the form</button>
+          </div>`;
+        detail.querySelector('#crop-use').addEventListener('click', () => applyPacket(p));
+        return;
+      }
+      const crop = (await api.get(`/api/crops/${encodeURIComponent(ds.key)}`)).crop;
+      if (!crop) return;
+      const v = ds.kind === 'variety'
+        ? (crop.varieties || []).find((x) => x.name === ds.variety) : null;
+      const title = v ? v.name : crop.name;
+      const maturity = (v && v.days_to_maturity) || crop.days_to_maturity;
+      detail.innerHTML = `
+        <div class="rounded-xl bg-beige-100 p-3 ring-1 ring-beige-300">
+          <div class="flex items-center justify-between gap-2">
+            <strong class="text-navy-800">${esc(title)}${v ? ' <span class="text-xs font-normal text-sage-600">variety</span>' : ''}</strong>
+            <span class="text-xs text-navy-400">${esc(crop.family)}</span>
+          </div>
+          <dl class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+            <div><dt class="lbl">Sun</dt><dd class="text-navy-800">${esc(crop.sun)}</dd></div>
+            <div><dt class="lbl">Spacing</dt><dd class="text-navy-800">${esc(crop.spacing_in)}&Prime;</dd></div>
+            <div><dt class="lbl">Sow depth</dt><dd class="text-navy-800">${esc(crop.sowing_depth_in)}&Prime;</dd></div>
+            <div><dt class="lbl">Germinates</dt><dd class="text-navy-800">${esc(crop.days_to_germination)} days</dd></div>
+            <div><dt class="lbl">Matures</dt><dd class="text-navy-800">~${maturity} days</dd></div>
+          </dl>
+          ${v && v.note ? `<p class="mt-2 text-sm text-navy-600">${esc(v.note)}</p>` : ''}
+          <p class="mt-2 text-sm text-navy-600">${esc(crop.description)}</p>
+          <p class="mt-2 text-xs text-navy-400">Source: ${esc(crop.source || 'built-in crop guide')}${v ? ' · variety notes' : ''}</p>
+          <button type="button" id="crop-use" class="btn-primary mt-3 text-sm">Use this info → fill the form</button>
+        </div>`;
+      detail.querySelector('#crop-use').addEventListener('click', () =>
+        applyCrop(crop, v ? { ...v, days_to_maturity: maturity } : null));
+    } catch { detail.innerHTML = '<p class="text-sm text-red-600">Could not load that entry.</p>'; }
   }
 
-  function applyCrop(crop) {
+  function applyCrop(crop, variety) {
     // Fill only what's empty — never clobber what the user already typed.
+    const name = $('#plant-name');
+    if (name && !name.value.trim() && variety) name.value = variety.name;
     const species = $('#plant-species');
     if (species && !species.value.trim()) species.value = crop.name;
     const light = $('#plant-light');
     if (light && SUN_OPTIONS.includes(crop.sun)) light.value = crop.sun;
-    const maturity = $('#plant-maturity');
-    if (maturity && !maturity.value && crop.days_to_maturity) maturity.value = crop.days_to_maturity;
+    const maturity = (variety && variety.days_to_maturity) || crop.days_to_maturity;
+    const mat = $('#plant-maturity');
+    if (mat && !mat.value && maturity) mat.value = maturity;
     const notes = $('#plant-notes');
     if (notes) {
-      const block = `🌱 Growing info (${crop.name}): ${crop.sun}; space ${crop.spacing_in}" apart; sow ${crop.sowing_depth_in}" deep; germinates in ${crop.days_to_germination} days. ${crop.description}`;
-      if (!notes.value.includes(`Growing info (${crop.name})`)) {
+      const label = variety ? `${variety.name} (${crop.name})` : crop.name;
+      const block = `🌱 Growing info (${label}): ${crop.sun}; space ${crop.spacing_in}" apart; sow ${crop.sowing_depth_in}" deep; germinates in ${crop.days_to_germination} days.${variety && variety.note ? ` ${variety.note}` : ''} ${crop.description}`;
+      if (!notes.value.includes(`Growing info (${label})`)) {
         notes.value = notes.value.trim() ? `${notes.value.trim()}\n\n${block}` : block;
       }
     }
     closeModal();
-    toast(`Filled in growing info for ${crop.name} 🌱`, 'ok');
+    toast(`Filled in growing info for ${variety ? variety.name : crop.name} 🌱`, 'ok');
+  }
+
+  function applyPacket(p) {
+    // Fill only what's empty — never clobber what the user already typed.
+    const name = $('#plant-name');
+    if (name && !name.value.trim() && p.variety_name) name.value = p.variety_name;
+    const species = $('#plant-species');
+    if (species && !species.value.trim() && p.species_type) species.value = p.species_type;
+    const notes = $('#plant-notes');
+    if (notes) {
+      const bits = [p.vendor_name, p.year_acquired ? String(p.year_acquired) : ''].filter(Boolean).join(', ');
+      const block = `🌱 From seed stash: ${p.variety_name}${bits ? ` (${bits})` : ''}.`;
+      if (!notes.value.includes(block)) {
+        notes.value = notes.value.trim() ? `${notes.value.trim()}\n\n${block}` : block;
+      }
+    }
+    closeModal();
+    toast(`Filled in ${p.variety_name} from your seed stash 🌱`, 'ok');
   }
 
   function initCropLookup() {

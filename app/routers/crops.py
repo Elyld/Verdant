@@ -4,6 +4,11 @@ A bundled, offline crop database with the planting guidance a gardener
 actually needs when adding a plant: sun, spacing, sowing depth,
 germination and maturity timing, plus a short how-to. Instant, private,
 no API key, no network.
+
+v2.33.0: variety-level entries (curated popular varieties per crop, with
+their own maturity timing) and seed-stash matching, so a search for
+"Cherokee Purple" finds the variety — and your own seed packets.
+Every result carries its source: the built-in guide or your seed stash.
 """
 from __future__ import annotations
 
@@ -11,11 +16,18 @@ import json
 from functools import lru_cache
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from sqlmodel import Session, or_, select
+
+from app.database import get_session
+from app.models import SeedPacket
 
 router = APIRouter(prefix="/api/crops", tags=["crops"])
 
 DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "crops.json"
+
+GUIDE_SOURCE = "Built-in crop guide"
+STASH_SOURCE = "Your seed stash"
 
 
 @lru_cache(maxsize=1)
@@ -24,36 +36,84 @@ def _crops() -> list[dict]:
         return json.load(f)
 
 
-def _summary(crop: dict) -> dict:
+def _guide_summary(crop: dict, variety: dict | None = None) -> dict:
+    if variety:
+        return {
+            "kind": "variety",
+            "key": crop["key"],
+            "name": variety["name"],
+            "crop_name": crop["name"],
+            "family": crop["family"],
+            "sun": crop["sun"],
+            "days_to_maturity": variety.get("days_to_maturity") or crop["days_to_maturity"],
+            "note": variety.get("note", ""),
+        }
     return {
+        "kind": "crop",
         "key": crop["key"],
         "name": crop["name"],
+        "crop_name": crop["name"],
         "family": crop["family"],
         "sun": crop["sun"],
         "days_to_maturity": crop["days_to_maturity"],
+        "note": "",
     }
 
 
+def _escape_like(needle: str) -> str:
+    return needle.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 @router.get("")
-def search_crops(q: str = "") -> dict:
-    """Substring search over crop names + aliases. Empty query → []."""
+def search_crops(q: str = "", session: Session = Depends(get_session)) -> dict:
+    """Substring search over crop names, aliases, and variety names, plus the
+    user's own seed packets. Empty query → empty lists."""
     needle = (q or "").strip().lower()
     if not needle:
-        return {"ok": True, "crops": []}
-    matches = [
-        c for c in _crops()
-        if needle in c["name"].lower()
-        or any(needle in a.lower() for a in c.get("aliases", []))
+        return {"ok": True, "guide": [], "stash": []}
+
+    guide: list[dict] = []
+    for c in _crops():
+        if needle in c["name"].lower() or any(needle in a.lower() for a in c.get("aliases", [])):
+            guide.append(_guide_summary(c))
+        for v in c.get("varieties", []):
+            if needle in v["name"].lower():
+                guide.append(_guide_summary(c, v))
+    # variety/crop name matches first, then alphabetical
+    guide.sort(key=lambda e: (0 if e["name"].lower().startswith(needle) else 1, e["name"]))
+    guide = guide[:20]
+
+    like = f"%{_escape_like(needle)}%"
+    packets = session.exec(
+        select(SeedPacket)
+        .where(
+            or_(
+                SeedPacket.variety_name.ilike(like),
+                SeedPacket.species_type.ilike(like),
+                SeedPacket.category.ilike(like),
+            )
+        )
+        .order_by(SeedPacket.variety_name)
+        .limit(10)
+    ).all()
+    stash = [
+        {
+            "kind": "packet",
+            "packet_id": p.id,
+            "variety_name": p.variety_name,
+            "species_type": p.species_type or "",
+            "vendor_name": p.vendor_name or "",
+            "year_acquired": p.year_acquired,
+        }
+        for p in packets
     ]
-    # exact name matches first, then alphabetical
-    matches.sort(key=lambda c: (0 if c["name"].lower().startswith(needle) else 1, c["name"]))
-    return {"ok": True, "crops": [_summary(c) for c in matches[:20]]}
+    return {"ok": True, "guide": guide, "stash": stash}
 
 
 @router.get("/{key}")
 def crop_detail(key: str) -> dict:
-    """Full growing info for one crop."""
+    """Full growing info for one crop, including its varieties and source."""
     for crop in _crops():
         if crop["key"] == key:
-            return {"ok": True, "crop": crop}
+            return {"ok": True, "crop": {**crop, "source": GUIDE_SOURCE}}
     raise HTTPException(404, f"Unknown crop {key!r}.")
