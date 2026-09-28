@@ -86,7 +86,7 @@ const tick = (ms) => new Promise((r) => setTimeout(r, ms));
 const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev || { preventDefault: () => {} }));
 
 (async () => {
-  require(path.join('/home/hatch/workspace/verdant/app/static/js/backup.js'));
+  require(path.join(__dirname, '..', 'app/static/js/backup.js'));
   await tick(20);
   const btn = named['#backup-download'];
 

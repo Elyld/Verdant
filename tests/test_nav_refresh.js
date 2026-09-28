@@ -5,6 +5,7 @@
    - Settings chip picker: toggles with max-4 enforcement, order numbers, PUT saves
 */
 'use strict';
+const path = require('path');
 const fs = require('fs');
 
 let failures = 0;
@@ -61,7 +62,7 @@ function parseLinks(html, ns) {
   return out;
 }
 
-const BASE = '/home/hatch/workspace/verdant';
+const BASE = path.join(__dirname, '..');
 const CORE = BASE + '/app/static/js/core.js';
 const SETTINGS_JS = BASE + '/app/static/js/settings.js';
 const baseHtml = fs.readFileSync(BASE + '/app/templates/base.html', 'utf8');

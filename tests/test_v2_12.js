@@ -99,7 +99,7 @@ globalThis.Verdant = {
 
 const tick = (ms) => new Promise((r) => setTimeout(r, ms));
 const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev || { preventDefault: () => {} }));
-const JS = (f) => path.join('/home/hatch/workspace/verdant/app/static/js', f);
+const JS = (f) => path.join(__dirname, '..', 'app/static/js', f);
 
 (async () => {
   require(JS('seedlings.js'));
