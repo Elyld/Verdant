@@ -78,6 +78,7 @@ const api = {
   get: async (url) => {
     if (url === '/api/plants/') return [plant];
     if (url === '/api/locations/') return [{ id: 1, name: 'Patio' }];
+    if (url === '/api/ai/status') return { enabled: true, reachable: true, model: 'qwen3:4b' };
     return [];
   },
   post: async (url, body) => { posts.push({ url, body }); return { id: 1 }; },
@@ -96,6 +97,16 @@ const named = {
   '#quick-today': makeEl(),
   '#quick-today-log': makeEl(),
   '#toasts': makeEl(),
+  '#ai-log-card': makeEl(),
+  '#ai-log-off': makeEl(),
+  '#ai-log-form': makeEl(),
+  '#ai-log-text': makeEl(),
+  '#ai-log-go': makeEl(),
+  '#ai-log-mic': makeEl(),
+  '#ai-log-drafts': makeEl(),
+  '#ai-log-actions': makeEl(),
+  '#ai-log-cancel': makeEl(),
+  '#ai-log-confirm': makeEl(),
 };
 
 globalThis.Verdant = {
@@ -124,6 +135,18 @@ global.document = {
 };
 global.window = {};
 global.location = { search: '' };
+
+// Mock Web Speech API: records instances, lets the test emit results.
+const srInstances = [];
+global.window.webkitSpeechRecognition = class {
+  constructor() { this.started = false; this.onresult = null; this.onend = null; this.onerror = null; srInstances.push(this); }
+  start() { this.started = true; }
+  stop() { this.started = false; if (this.onend) this.onend(); }
+  emitResult(transcript, isFinal) {
+    const results = [{ 0: { transcript }, isFinal, length: 1 }];
+    if (this.onresult) this.onresult({ results, resultIndex: 0 });
+  }
+};
 
 async function main() {
   const src = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'js', 'quick.js'), 'utf8');
@@ -177,6 +200,22 @@ async function main() {
   await tick(50);
   const unweighed = posts.slice(before2).find((p) => p.url === '/api/harvests/');
   check('empty weight posts weight: null', !!unweighed && unweighed.body.weight === null);
+
+  // Voice input: mic toggles listening and dictated text lands in the textarea.
+  const micBtn = named['#ai-log-mic'];
+  const aiText = named['#ai-log-text'];
+  check('mic button wired', (micBtn._listeners.click || []).length > 0);
+  check('mic starts in idle state', !micBtn.classList.contains('mic-live'));
+  (micBtn._listeners.click || []).forEach((fn) => fn());
+  check('mic shows listening state', micBtn.classList.contains('mic-live'));
+  check('mic label flips to Stop', micBtn.innerHTML === '⏹ Stop');
+  check('recognition started', srInstances.length === 1 && srInstances[0].started === true);
+  srInstances[0].emitResult('watered the tomatoes', true);
+  srInstances[0].emitResult('and harvested', false);
+  check('dictation fills textarea', aiText.value === 'watered the tomatoes and harvested');
+  (micBtn._listeners.click || []).forEach((fn) => fn());
+  check('mic stops listening', !micBtn.classList.contains('mic-live'));
+  check('mic label flips back to Talk', micBtn.innerHTML === '🎤 Talk');
 
   // NFC spotlight flow: ?plant=7&action=harvest spotlights the harvest button.
   global.location = { search: '?plant=7&action=harvest' };

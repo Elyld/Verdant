@@ -24,7 +24,11 @@
         <div id="ai-log-form" class="flex flex-col gap-2">
           <textarea id="ai-log-text" rows="2" class="inp" maxlength="2000"
             placeholder="What did you do out there?"></textarea>
-          <button type="button" id="ai-log-go" class="btn-primary self-start text-sm">Interpret → drafts</button>
+          <div class="flex gap-2">
+            <button type="button" id="ai-log-go" class="btn-primary self-start text-sm">Interpret → drafts</button>
+            <button type="button" id="ai-log-mic" class="btn-ghost self-start text-sm"
+              title="Dictate instead of typing — keeps listening until you tap Stop">🎤 Talk</button>
+          </div>
         </div>
         <div id="ai-log-drafts" class="space-y-2"></div>
         <div id="ai-log-actions" class="hidden flex gap-2">

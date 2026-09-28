@@ -422,6 +422,94 @@
     });
     $('#ai-log-confirm').addEventListener('click', confirm);
 
+    // ---- Voice input: dictate into the textarea (Web Speech API — the
+    // browser transcribes on-device/in-browser, nothing is sent to Verdant).
+    // Toggle: tap 🎤 Talk, keep talking, tap ⏹ Stop. Sessions auto-restart
+    // on pauses so it keeps listening until you stop it.
+    const micBtn = $('#ai-log-mic');
+    if (micBtn) {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) {
+        // e.g. plain http on the LAN is not a secure context — explain on
+        // tap instead of nagging.
+        micBtn.classList.add('opacity-50');
+        micBtn.addEventListener('click', () => toast(
+          'Voice input needs a secure (https) connection — it works through the Cloudflare tunnel, not plain LAN http.', 'err'));
+      } else {
+        let rec = null;
+        let listening = false;
+        let prefix = '';
+        let sessionFinal = '';
+        let lastStart = 0;
+        const setMicUI = () => {
+          micBtn.innerHTML = listening ? '⏹ Stop' : '🎤 Talk';
+          micBtn.classList.toggle('mic-live', listening);
+          micBtn.setAttribute('aria-pressed', listening ? 'true' : 'false');
+        };
+        const renderText = (interim) => {
+          textEl.value = [prefix, sessionFinal, interim]
+            .filter((s) => s && s.trim()).join(' ').replace(/\s+/g, ' ');
+        };
+        const stopListening = () => {
+          listening = false;
+          try { if (rec) rec.stop(); } catch (e) { /* already stopped */ }
+          rec = null;
+          setMicUI();
+        };
+        const startRec = () => {
+          rec = new SR();
+          rec.lang = 'en-US';
+          rec.interimResults = true;
+          rec.continuous = true;
+          rec.onresult = (e) => {
+            let interim = '';
+            for (let i = e.resultIndex; i < e.results.length; i++) {
+              const t = e.results[i][0].transcript;
+              if (e.results[i].isFinal) sessionFinal += t;
+              else interim += t;
+            }
+            renderText(interim);
+          };
+          rec.onerror = (e) => {
+            const err = (e && e.error) || '';
+            if (err === 'not-allowed' || err === 'service-not-allowed') {
+              stopListening();
+              toast('Microphone blocked — allow mic access for this site and try again.', 'err');
+            } else if (err === 'audio-capture') {
+              stopListening();
+              toast('No microphone found on this device.', 'err');
+            }
+            // 'no-speech', 'network', 'aborted': onend restarts quietly.
+          };
+          rec.onend = () => {
+            if (!listening) return;
+            // Browsers end sessions on pauses even with continuous=true —
+            // restart, but bail on a hot error loop.
+            if (Date.now() - lastStart < 300) { stopListening(); return; }
+            lastStart = Date.now();
+            try { rec.start(); } catch (e) { stopListening(); }
+          };
+          lastStart = Date.now();
+          try {
+            rec.start();
+          } catch (e) {
+            stopListening();
+            toast('Could not start voice input.', 'err');
+          }
+        };
+        micBtn.addEventListener('click', () => {
+          if (listening) { stopListening(); return; }
+          prefix = textEl.value.trim();
+          sessionFinal = '';
+          listening = true;
+          setMicUI();
+          startRec();
+          if (listening) toast('Listening… tap ⏹ Stop when you are done.', 'ok');
+        });
+        setMicUI();
+      }
+    }
+
     boot();
   }
 
