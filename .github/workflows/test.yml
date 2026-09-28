@@ -1,0 +1,47 @@
+# Runs the full test suite on every pull request and every push to main.
+#
+# - pytest:  the whole tests/test_*.py suite (PYTHONPATH=. is required)
+# - node:    every tests/*.js harness (each exits non-zero on failure)
+#
+# tests/test_api.py::test_albums_and_url_import is deselected: it needs live
+# network access and fails in sandboxed runners. This is pre-existing and
+# unrelated to code changes; it still runs locally where there is network.
+
+name: Tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Run pytest
+        env:
+          PYTHONPATH: .
+        run: python -m pytest -q --deselect tests/test_api.py::test_albums_and_url_import
+
+      - name: Run JS harnesses
+        run: |
+          for f in tests/*.js; do
+            echo "--- $f"
+            node "$f"
+          done

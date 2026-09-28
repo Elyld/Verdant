@@ -40,7 +40,7 @@ named['#backup-download'].textContent = '⬇ Download backup';
 
 let exportMode = 'ok'; // 'ok' | 'fail'
 global.fetch = async (url, options) => {
-  if (url === '/api/backup/export') {
+  if (String(url).startsWith('/api/backup/export')) {
     if (exportMode === 'fail') {
       return { ok: false, status: 500, headers: { get: () => '' }, json: async () => ({ detail: 'boom' }) };
     }

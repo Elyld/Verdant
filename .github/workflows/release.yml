@@ -1,0 +1,68 @@
+# Tags and releases automatically when a version bump lands on main.
+#
+# On every push to main: read app/version.py; if tag v<version> does not
+# exist yet, create it, push it, and open a GitHub release. The tag push
+# triggers docker-publish.yml, which builds and publishes the
+# ghcr.io/elyld/verdant:v<version> image — no changes needed there.
+#
+# Release notes come from the README changelog entry for the version,
+# falling back to the merged PR numbers since the previous tag.
+# Notes are kept plain: no personal names, no authorship mentions.
+
+name: Auto-release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Tag and release on version bump
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION=$(grep -oP '__version__\s*=\s*"\K[^"]+' app/version.py)
+          TAG="v$VERSION"
+          echo "version=$VERSION tag=$TAG"
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists; nothing to do."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "$TAG"
+          git push origin "$TAG"
+
+          # Release notes: prefer the README changelog entry for this version.
+          NOTES=$(awk -v v="$VERSION" '
+            $0 ~ "^- \\*\\*" v "\\*\\* " {found=1; print; next}
+            found && /^- \*\*/ {exit}
+            found {print}
+          ' README.md)
+
+          if [ -z "$NOTES" ]; then
+            PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)
+            if [ -n "$PREV_TAG" ]; then
+              NOTES=$(git log "$PREV_TAG"..HEAD --merges --pretty=format:'- %s' \
+                | sed -E 's/Merge pull request #([0-9]+) from [^ ]+/PR #\1/')
+            fi
+            [ -z "$NOTES" ] && NOTES="Release $TAG."
+          fi
+
+          printf '%s\n' "$NOTES" > /tmp/release-notes.md
+          gh release create "$TAG" --title "$TAG" \
+            --notes-file /tmp/release-notes.md \
+            --repo "${{ github.repository }}"
