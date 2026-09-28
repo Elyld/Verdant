@@ -554,6 +554,15 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.25.0** — **🛒 Winter seed-order assistant.** New tab on the Seeds page
+  that pulls ordering season together: a ratings table for the stash (how old
+  each packet is, one-tap "grow again?" ratings — 👎 Skip, 👍 Grow again,
+  ⭐ Favorite — also editable from the packet form and shown as badges on the
+  stash cards), last year's seed spend grouped by vendor from your invoices,
+  and a winter wishlist. Each wishlist row shows the last vendor and date the
+  variety was ordered (resolved from past invoices) and has a checkbox; ticked
+  items roll up into an order list. Ratings are stored on the packet; the
+  wishlist is its own list with add/edit/delete.
 - **2.24.0** — **⚖️ Weight in Quick Log harvest.** The Quick Log harvest
   stepper now has a weight input + unit selector (prefilled from your
   Preferences, like the Plants page form), so the fastest way to log a

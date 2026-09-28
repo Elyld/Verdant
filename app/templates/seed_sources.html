@@ -11,6 +11,7 @@
           <div class="flex rounded-lg bg-beige-200/60 p-0.5 text-sm" role="tablist" aria-label="Seeds views">
             <button type="button" id="seed-tabbtn-sources" class="rounded-md px-3 py-1.5 font-semibold" role="tab">Sources</button>
             <button type="button" id="seed-tabbtn-catalog" class="rounded-md px-3 py-1.5 font-semibold" role="tab">🌱 My seed stash</button>
+            <button type="button" id="seed-tabbtn-assistant" class="rounded-md px-3 py-1.5 font-semibold" role="tab">🛒 Order assistant</button>
           </div>
           <label class="sr-only" for="seed-vendor-filter">Filter by vendor</label>
           <select id="seed-vendor-filter" class="inp text-sm"><option value="">All vendors</option></select>
@@ -67,6 +68,48 @@
         <p id="catalog-empty" class="card hidden text-center text-navy-500">No packets catalogued yet. Add your first above.</p>
       </div>
 
+      <div id="seed-tab-assistant" class="hidden space-y-6">
+        <p class="text-sm text-navy-500">Winter ordering, planned: rate last season's varieties, see what you spent per vendor, and tick off the wishlist.</p>
+
+        <div class="card space-y-3">
+          <h3 class="font-display text-lg font-semibold text-navy-800">💰 Last year's seed spend</h3>
+          <div id="oa-spend" class="flex flex-wrap gap-3"></div>
+          <p id="oa-spend-empty" class="hidden text-sm text-navy-500">No seed invoices for <span id="oa-spend-year"></span> yet — add them on the Costs page.</p>
+        </div>
+
+        <div class="card space-y-3">
+          <h3 class="font-display text-lg font-semibold text-navy-800">🌱 Rate your stash — grow again?</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+              <thead>
+                <tr class="text-xs uppercase tracking-wide text-navy-400">
+                  <th class="py-2 pr-3 font-semibold">Variety</th>
+                  <th class="py-2 pr-3 font-semibold">Stash age</th>
+                  <th class="py-2 pr-3 font-semibold">Last ordered</th>
+                  <th class="py-2 pr-3 font-semibold">Grow again?</th>
+                  <th class="py-2 font-semibold"><span class="sr-only">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody id="oa-ratings"></tbody>
+            </table>
+          </div>
+          <p id="oa-ratings-empty" class="hidden text-sm text-navy-500">No packets in the stash yet — add some on the 🌱 My seed stash tab.</p>
+        </div>
+
+        <div class="card space-y-3">
+          <h3 class="font-display text-lg font-semibold text-navy-800">🛒 Winter wishlist</h3>
+          <form id="oa-wish-form" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" autocomplete="off">
+            <label class="block"><span class="lbl">Variety *</span><input id="oa-wish-variety" class="inp" required maxlength="120" placeholder="Costoluto Fiorentino" /></label>
+            <label class="block"><span class="lbl">Vendor</span><input id="oa-wish-vendor" class="inp" maxlength="120" placeholder="Territorial Seed" /></label>
+            <label class="block"><span class="lbl">Notes</span><input id="oa-wish-notes" class="inp" maxlength="300" placeholder="for the big bed" /></label>
+            <div class="flex items-end"><button type="submit" class="btn-primary text-sm">+ Add to wishlist</button></div>
+          </form>
+          <div id="oa-wishlist" class="space-y-2"></div>
+          <p id="oa-wishlist-empty" class="hidden text-sm text-navy-500">Wishlist is empty — add varieties you're thinking of ordering.</p>
+          <p id="oa-order-list" class="hidden rounded-xl bg-sage-100 p-3 text-sm text-sage-800"></p>
+        </div>
+      </div>
+
       <!-- Packet add/edit modal -->
       <div id="packet-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-navy-900/70 p-4">
         <div class="card max-h-[90vh] w-full max-w-lg space-y-4 overflow-y-auto">
@@ -85,6 +128,12 @@
               <label class="block"><span class="lbl">Vendor link</span><input id="packet-vendor-url" type="url" class="inp" maxlength="300" placeholder="https://…" /></label>
               <label class="block"><span class="lbl">Quantity</span><input id="packet-qty" class="inp" maxlength="60" placeholder="~40 seeds" /></label>
               <label class="block"><span class="lbl">Seed count <span class="font-normal text-navy-400">(number)</span></span><input id="packet-seed-count" type="number" min="0" step="1" class="inp" placeholder="40" /></label>
+              <label class="block"><span class="lbl">Grow again?</span><select id="packet-grow-again" class="inp">
+                <option value="">Not rated</option>
+                <option value="no">👎 Skip it</option>
+                <option value="yes">👍 Grow again</option>
+                <option value="favorite">⭐ Favorite</option>
+              </select></label>
               <label class="block"><span class="lbl">Packet photo</span><input id="packet-photo" type="file" accept="image/*" class="inp text-sm" /></label>
               <label class="block"><span class="lbl">Back of packet <span class="text-navy-400">(growing info)</span></span><input id="packet-photo-back" type="file" accept="image/*" class="inp text-sm" /></label>
             </div>
