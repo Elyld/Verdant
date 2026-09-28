@@ -231,6 +231,10 @@
 #plant-modal { position: fixed; inset: 0; z-index: 50; padding: 1rem; }
 #plant-modal.modal-open { display: flex; align-items: center; justify-content: center; }
 
+/* Crop lookup modal — same treatment as the plant detail modal. */
+#crop-modal { position: fixed; inset: 0; z-index: 50; padding: 1rem; }
+#crop-modal.modal-open { display: flex; align-items: center; justify-content: center; }
+
 /* Minimal markdown typography for rendered post bodies */
 .md { color: #1b3049; line-height: 1.65; }
 .md h1, .md h2, .md h3 {

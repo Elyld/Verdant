@@ -46,6 +46,11 @@ also has a photo timeline and a per-plant timelapse view.
 Photos you assign on the 🎯 Match photos page appear in a **Photos** gallery
 on the plant's profile, with a lightbox on click.
 
+Adding a plant? Hit **🔎 Look up growing info** on the form — search the
+built-in crop guide, pick your crop, and sun, days to maturity, spacing,
+sowing depth, and germination timing fill themselves in (only the empty
+fields; your typing is never overwritten).
+
 ![Plant profiles](docs/screenshots/plants.png)
 
 ![Plant photo gallery](docs/screenshots/plant-photos.png)
@@ -605,6 +610,13 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.31.0** — **🔎 Crop lookup — growing info on tap.** The plant form has a
+  new “Look up growing info” button: search the built-in crop guide (30
+  common garden crops, offline — no API, no key), pick a candidate, and the
+  form fills in sun, days to maturity, spacing, sowing depth, and germination
+  timing. Only empty fields are filled — anything already typed is left
+  alone. The guide lives in `app/data/crops.json`, so it’s easy to extend.
+  ![Crop lookup](docs/screenshots/crop-lookup.png)
 - **2.30.0** — **🤖 “Tell Verdant what you did” — local AI logging (opt-in).**
   New card on Quick Log: type a sentence like “watered the tomatoes and
   harvested 3 peppers” and a small model running on **your own machine**
