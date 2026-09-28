@@ -193,6 +193,40 @@
     } catch { /* the countdown is decorative; never break the page */ }
   }
 
+  async function initWeatherRibbon() {
+    // Slim site-wide weather ribbon below the header; rendered from the
+    // cached forecast endpoint. Stays hidden unless garden coordinates are
+    // configured — no nagging (the ribbon is decorative, never breaks the page).
+    const ribbon = $('#weather-ribbon');
+    const inner = $('#weather-ribbon-inner');
+    if (!ribbon || !inner) return;
+    try {
+      const fc = await api.get('/api/weather/forecast');
+      if (!fc || !fc.ok || !fc.forecast || !fc.forecast.current) return;
+      const unit = fc.temp_unit === 'C' ? 'C' : 'F';
+      const t = (v) => v == null ? '—' : `${Math.round(v)}°${unit}`;
+      const cur = fc.forecast.current;
+      const days = fc.forecast.daily || [];
+      const tonight = days[0] ? t(days[0].tmin_c ?? days[0].tmin_f) : '—';
+      const tm = days[1] || days[0] || {};
+      const rain = tm.precip_prob != null ? `${tm.precip_prob}%` : '—';
+      const gust = tm.gust_mph != null ? `${Math.round(tm.gust_mph)} mph` : '—';
+      let asOf = '';
+      if (fc.forecast.as_of) {
+        const d = new Date(fc.forecast.as_of);
+        if (!Number.isNaN(d.getTime())) asOf = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      }
+      inner.innerHTML =
+        `<span class="font-semibold">🌤️ ${t(cur.temp_c ?? cur.temp_f)} ${esc(cur.summary || '')}</span>` +
+        `<span class="text-beige-300">·</span><span>🌙 Tonight ${tonight}</span>` +
+        `<span class="text-beige-300">·</span><span>☀️ Tomorrow ${t(tm.tmax_c ?? tm.tmax_f)}</span>` +
+        `<span class="text-beige-300">·</span><span>💧 ${rain}</span>` +
+        `<span class="text-beige-300">·</span><span>💨 ${gust}</span>` +
+        (asOf ? `<span class="ml-auto text-beige-300/80">as of ${asOf}</span>` : '');
+      ribbon.classList.remove('hidden');
+    } catch { /* decorative; never break the page */ }
+  }
+
   const inits = [];
   const lateInits = [];
   function onBoot(fn) { inits.push(fn); }
@@ -218,6 +252,7 @@
     for (const fn of inits) Object.assign(reloaders, fn() || {});
     for (const fn of lateInits) fn(reloaders);
     initFrost();
+    initWeatherRibbon();
   }
 
   globalThis.Verdant = {

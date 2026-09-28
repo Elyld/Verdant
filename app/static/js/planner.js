@@ -31,9 +31,6 @@
     let cols = 24, rows = 16;
     let editingId = null;
     let pendingPlantings = [];
-    let forecast = null;
-    let forecastUnconfigured = false;
-    let tempUnit = 'F';
     let wxAlerts = [];
     let companions = [];
     let heatOn = false;
@@ -168,7 +165,7 @@
     }
 
     async function load() {
-      const [cs, g, pl, p, l, ys, rw, fc, al, cp] = await Promise.all([
+      const [cs, g, pl, p, l, ys, rw, al, cp] = await Promise.all([
         api.get(`/api/containers/?year=${year}`).catch(() => []),
         api.get('/api/containers/grid').catch(() => ({ cols: 24, rows: 16 })),
         api.get(`/api/containers/plantings?year=${year}`).catch(() => []),
@@ -176,7 +173,6 @@
         api.get('/api/locations/').catch(() => []),
         api.get('/api/containers/years').catch(() => []),
         api.get(`/api/containers/rotation-warnings?year=${year}`).catch(() => []),
-        api.get('/api/weather/forecast').catch(() => ({ ok: false })),
         api.get('/api/weather/alerts').catch(() => ({ ok: false, alerts: [] })),
         api.get('/static/data/companions.json').catch(() => []),
       ]);
@@ -188,9 +184,6 @@
       locations = Array.isArray(l) ? l : [];
       years = Array.isArray(ys) ? ys : [];
       warnings = Array.isArray(rw) ? rw : [];
-      forecast = fc && fc.ok ? fc.forecast : null;
-      forecastUnconfigured = !!(fc && !fc.ok && fc.reason === 'not-configured');
-      tempUnit = (fc && fc.temp_unit) || 'F';
       wxAlerts = al && al.ok && Array.isArray(al.alerts) ? al.alerts : [];
       companions = Array.isArray(cp) ? cp : [];
       if (!years.includes(year)) years.push(year);
@@ -215,7 +208,6 @@
       $('#container-location').innerHTML = '<option value="">— none —</option>' +
         locations.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
       renderWarnings();
-      renderWeather();
       renderWxAlerts();
       render();
       if (view === '3d' && T) buildScene3D();
@@ -226,58 +218,6 @@
       warn: 'bg-amber-50 ring-amber-300 text-amber-900',
       critical: 'bg-red-50 ring-red-400 text-red-900',
     };
-
-    function fmtTemp(f) {
-      if (f == null) return '—';
-      return `${Math.round(f)}°${tempUnit}`;
-    }
-
-    function fmtTime(iso) {
-      if (!iso) return '';
-      const d = new Date(iso);
-      if (Number.isNaN(d.getTime())) return '';
-      return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    }
-
-    function renderWeather() {
-      const strip = $('#weather-strip');
-      if (!forecast || !forecast.current) {
-        // Unconfigured (no garden coordinates): show a dismissible hint
-        // instead of silently hiding the strip.
-        if (forecastUnconfigured && !localStorage.getItem('verdant.wx-hint-dismissed')) {
-          strip.innerHTML =
-            `<span class="text-xs text-beige-300">🌤️ Weather strip needs garden coordinates — set them in Settings</span>` +
-            `<button type="button" data-wx-dismiss class="ml-auto rounded-lg px-2 py-0.5 text-xs text-beige-300 hover:bg-navy-700" title="Dismiss">✕</button>`;
-          strip.classList.remove('hidden');
-          strip.classList.add('flex');
-          const dismissBtn = strip.querySelector('[data-wx-dismiss]');
-          if (dismissBtn) dismissBtn.addEventListener('click', () => {
-            try { localStorage.setItem('verdant.wx-hint-dismissed', '1'); } catch { /* private mode */ }
-            strip.classList.add('hidden');
-            strip.classList.remove('flex');
-          });
-        } else {
-          strip.classList.add('hidden');
-          strip.classList.remove('flex');
-        }
-        return;
-      }
-      const cur = forecast.current;
-      const days = forecast.daily || [];
-      const tonight = days[0] ? fmtTemp(days[0].tmin_c ?? days[0].tmin_f) : '—';
-      const tm = days[1] || days[0] || {};
-      const rain = tm.precip_prob != null ? `${tm.precip_prob}%` : '—';
-      const gust = tm.gust_mph != null ? `${Math.round(tm.gust_mph)} mph` : '—';
-      strip.innerHTML =
-        `<span class="font-semibold">${fmtTemp(cur.temp_c ?? cur.temp_f)} ${esc(cur.summary || '')}</span>` +
-        `<span class="text-beige-300">·</span><span>🌙 Tonight ${tonight}</span>` +
-        `<span class="text-beige-300">·</span><span>☀️ Tomorrow ${fmtTemp(tm.tmax_c ?? tm.tmax_f)}</span>` +
-        `<span class="text-beige-300">·</span><span>💧 ${rain}</span>` +
-        `<span class="text-beige-300">·</span><span>💨 ${gust}</span>` +
-        `<span class="ml-auto text-xs text-beige-300">as of ${fmtTime(forecast.as_of)}</span>`;
-      strip.classList.remove('hidden');
-      strip.classList.add('flex');
-    }
 
     function renderWxAlerts() {
       const box = $('#weather-alerts');

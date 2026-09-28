@@ -1,4 +1,6 @@
-/* Planner weather strip, garden alerts, yield heatmap, and companion hints. */
+/* Planner: garden alerts, yield heatmap, and companion hints.
+   (The weather strip is global now — see test_weather_ribbon.js. The planner
+   must not fetch the forecast or touch #weather-strip anymore.) */
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -49,7 +51,7 @@ const named = {};
 ['panel-planner', 'planner-canvas', 'planner-3d', 'planner-empty',
  'planner-2d-hint', 'planner-3d-hint',
  'view-2d', 'view-3d', 'heatmap-toggle', 'heatmap-legend',
- 'weather-strip', 'weather-alerts',
+ 'weather-alerts',
  'planner-year', 'planner-copy', 'planner-add',
  'grid-cols', 'grid-rows', 'grid-apply',
  'rotation-banner', 'rotation-list', 'rotation-dismiss',
@@ -65,7 +67,6 @@ const named = {};
 ].forEach((id) => { named[`#${id}`] = makeEl(); });
 named['#planner-3d'].classList.add('hidden');
 named['#planner-3d-hint'].classList.add('hidden');
-named['#weather-strip'].classList.add('hidden');
 named['#heatmap-legend'].classList.add('hidden');
 
 global.document = {
@@ -81,7 +82,10 @@ global.window = { location: { pathname: '/planner', origin: 'http://localhost:31
 global.confirm = () => true;
 global.location = { search: '', origin: 'http://localhost:3119' };
 
+const fetchedUrls = [];
+const queriedSelectors = [];
 global.fetch = async (url, options) => {
+  fetchedUrls.push(url);
   const method = (options && options.method) || 'GET';
   let resp = {};
   if (url === '/api/containers/grid') resp = { cols: 24, rows: 16 };
@@ -97,14 +101,6 @@ global.fetch = async (url, options) => {
   ];
   else if (url === '/api/locations/') resp = [];
   else if (url.startsWith('/api/containers/yield-map')) resp = { year: 2025, unit: 'oz', totals: { 'Tomato Bed': 48.0, 'Side Pot': 6.0 } };
-  else if (url === '/api/weather/forecast') resp = {
-    ok: true, temp_unit: 'F',
-    forecast: {
-      as_of: '2026-09-26T16:50',
-      current: { temp_f: 78, summary: 'Partly cloudy' },
-      hourly: [], daily: [{ date: '2026-09-26', tmin_f: 62 }, { date: '2026-09-27', tmax_f: 88, precip_prob: 20, gust_mph: 18 }],
-    },
-  };
   else if (url === '/api/weather/alerts') resp = {
     ok: true, temp_unit: 'F', as_of: '2026-09-26T16:50',
     alerts: [{ level: 'warn', icon: '🥶', title: 'Frost risk — low of 30°F', detail: 'Cover the peppers.' }],
@@ -122,7 +118,7 @@ global.fetch = async (url, options) => {
 };
 
 globalThis.Verdant = {
-  $: (sel) => named[sel] || makeEl(),
+  $: (sel) => { queriedSelectors.push(sel); return named[sel] || makeEl(); },
   $$: () => [],
   esc: (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])),
   api: {
@@ -141,11 +137,11 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
   require('/home/hatch/workspace/verdant/app/static/js/planner.js');
   await tick(50);
 
-  const strip = named['#weather-strip'];
-  check('weather strip shown when forecast ok', !strip.classList.contains('hidden') && strip.classList.contains('flex'));
-  check('strip shows current temp + summary', strip.innerHTML.includes('78°F') && strip.innerHTML.includes('Partly cloudy'));
-  check('strip shows tonight/tomorrow', strip.innerHTML.includes('Tonight 62°F') && strip.innerHTML.includes('Tomorrow 88°F'));
-  check('strip shows rain + wind', strip.innerHTML.includes('20%') && strip.innerHTML.includes('18 mph'));
+  // The strip moved to the global header (core.js): the planner must not
+  // fetch the forecast or reference #weather-strip anymore.
+  check('planner never fetches /api/weather/forecast',
+    !fetchedUrls.some((u) => u === '/api/weather/forecast'));
+  check('planner never queries #weather-strip', !queriedSelectors.includes('#weather-strip'));
 
   const alertsBox = named['#weather-alerts'];
   check('weather alert card rendered', alertsBox.innerHTML.includes('Frost risk'));
@@ -172,42 +168,6 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
   const hints = named['#companion-hints'].innerHTML;
   check('companion hint shown for tomato x basil', hints.includes('tomato × basil') && hints.includes('🌱'));
   check('no false bad-pair hint', !hints.includes('⚠️'));
-
-  // unconfigured weather (no garden coordinates): hint instead of a silently hidden strip
-  const lsStore = {};
-  global.localStorage = {
-    getItem: (k) => (k in lsStore ? lsStore[k] : null),
-    setItem: (k, v) => { lsStore[k] = String(v); },
-    removeItem: (k) => { delete lsStore[k]; },
-  };
-  const origFetch = global.fetch;
-  global.fetch = async (url, options) => {
-    if (url === '/api/weather/forecast') {
-      return { ok: true, status: 200, json: async () => ({
-        ok: false, reason: 'not-configured',
-        hint: 'Set GARDEN_LAT and GARDEN_LON to enable weather.' }) };
-    }
-    if (url === '/api/weather/alerts') {
-      return { ok: true, status: 200, json: async () => ({ ok: false, reason: 'not-configured', alerts: [] }) };
-    }
-    return origFetch(url, options);
-  };
-  named['#weather-strip'] = makeEl();
-  named['#weather-strip'].classList.add('hidden');
-  const dismissBtn = makeEl();
-  named['[data-wx-dismiss]'] = dismissBtn;
-  delete require.cache[require.resolve('/home/hatch/workspace/verdant/app/static/js/planner.js')];
-  require('/home/hatch/workspace/verdant/app/static/js/planner.js');
-  await tick(80);
-  const strip2 = named['#weather-strip'];
-  check('unconfigured weather shows hint strip (not silently hidden)',
-    !strip2.classList.contains('hidden') && strip2.classList.contains('flex'));
-  check('hint points at Settings', strip2.innerHTML.includes('set them in Settings'));
-  check('hint has dismiss button', strip2.innerHTML.includes('data-wx-dismiss'));
-  fire(dismissBtn, 'click');
-  await tick(20);
-  check('dismiss hides the strip', strip2.classList.contains('hidden'));
-  check('dismiss remembered in localStorage', lsStore['verdant.wx-hint-dismissed'] === '1');
 
   console.log(failures ? `\n${failures} check(s) failed.` : '\nAll checks passed.');
   process.exit(failures ? 1 : 0);
