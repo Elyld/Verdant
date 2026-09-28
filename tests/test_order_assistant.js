@@ -1,5 +1,6 @@
 /* Winter seed-order assistant tab: spend cards, ratings table, wishlist. */
 'use strict';
+const path = require('path');
 const fs = require('fs');
 
 let failures = 0;
@@ -106,7 +107,7 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
 const fakeTarget = (btn) => ({ closest: (sel) => btn });
 
 (async () => {
-  require('/home/hatch/workspace/verdant/app/static/js/order_assistant.js');
+  require(path.join(__dirname, '..', 'app/static/js/order_assistant.js'));
   await tick(50);
 
   const spend = named['#oa-spend'];

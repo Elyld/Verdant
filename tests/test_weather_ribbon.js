@@ -2,6 +2,7 @@
    from the cached forecast endpoint, stays hidden when coordinates are
    unconfigured or the fetch fails. */
 'use strict';
+const path = require('path');
 
 let failures = 0;
 function check(name, ok) {
@@ -50,7 +51,7 @@ global.document = {
 global.window = { location: { pathname: '/' }, addEventListener: () => {} };
 global.fetch = (url, options) => fetchImpl(url, options);
 
-const CORE = '/home/hatch/workspace/verdant/app/static/js/core.js';
+const CORE = path.join(__dirname, '..', 'app/static/js/core.js');
 const tick = (ms) => new Promise((r) => setTimeout(r, ms));
 function bootFresh() {
   delete require.cache[require.resolve(CORE)];

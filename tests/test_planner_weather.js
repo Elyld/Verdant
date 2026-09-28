@@ -134,7 +134,7 @@ const tick = (ms) => new Promise((r) => setTimeout(r, ms));
 const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev || { preventDefault: () => {} }));
 
 (async () => {
-  require('/home/hatch/workspace/verdant/app/static/js/planner.js');
+  require(path.join(__dirname, '..', 'app/static/js/planner.js'));
   await tick(50);
 
   // The strip moved to the global header (core.js): the planner must not
