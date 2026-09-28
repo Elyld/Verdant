@@ -1,8 +1,51 @@
-/* Settings page: garden zone / frost dates + morning digest. */
+/* Settings page: garden zone / frost dates + morning digest + mobile tab bar. */
 (() => {
   'use strict';
 
-  const { $, esc, api, toast } = globalThis.Verdant;
+  const { $, esc, api, toast, NAV_SECTIONS, parseMobileTabs } = globalThis.Verdant;
+
+  // Mobile tab-bar chip picker: up to 4 section keys, in tap order.
+  let mobileTabPicks = [];
+
+  function renderMobileChips() {
+    const host = $('#mobile-tab-chips');
+    if (!host) return;
+    host.innerHTML = NAV_SECTIONS.map((s) => {
+      const idx = mobileTabPicks.indexOf(s.key);
+      const on = idx >= 0;
+      return `<button type="button" class="tab-chip" data-key="${s.key}" aria-pressed="${on}">` +
+        `<span class="tab-chip-order"${on ? '' : ' hidden'}>${on ? idx + 1 : ''}</span>` +
+        `<span aria-hidden="true">${s.icon}</span><span>${esc(s.label)}</span></button>`;
+    }).join('');
+    const count = $('#mobile-tab-count');
+    if (count) {
+      count.textContent = mobileTabPicks.length
+        ? `${mobileTabPicks.length} of 4 tabs picked`
+        : 'No picks yet — the tab bar will use Quick Log, Plants, Calendar, Planner.';
+    }
+  }
+
+  function initMobileChips() {
+    const host = $('#mobile-tab-chips');
+    if (!host || host.dataset.wired) return;
+    host.dataset.wired = '1';
+    host.addEventListener('click', (event) => {
+      const btn = event.target.closest('[data-key]');
+      if (!btn) return;
+      const key = btn.getAttribute('data-key');
+      const at = mobileTabPicks.indexOf(key);
+      if (at >= 0) {
+        mobileTabPicks.splice(at, 1);
+      } else {
+        if (mobileTabPicks.length >= 4) {
+          toast('Up to 4 tabs — remove one first.', 'err');
+          return;
+        }
+        mobileTabPicks.push(key);
+      }
+      renderMobileChips();
+    });
+  }
 
   function renderPreview(preview) {
     const box = $('#frost-preview');
@@ -40,6 +83,9 @@
       $('#set-digest-enabled').checked = !!s.digest_enabled;
       $('#set-webhook').value = s.discord_webhook_url || '';
       $('#set-digest-time').value = s.digest_time || '08:00';
+      mobileTabPicks = parseMobileTabs(s.mobile_tabs) || [];
+      initMobileChips();
+      renderMobileChips();
       renderPreview(s.frost_preview);
     }
 
@@ -61,6 +107,7 @@
           default_weight_unit: $('#set-weight-unit').value,
           slideshow_interval: Number($('#set-slideshow-interval').value) || 5,
           confirm_water_all: $('#set-confirm-water-all').checked,
+          mobile_tabs: JSON.stringify(mobileTabPicks),
         });
         renderPreview(saved.frost_preview);
         status.textContent = '';

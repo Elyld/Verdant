@@ -8,6 +8,7 @@ the GARDEN_LAT / GARDEN_LON env vars.
 """
 from __future__ import annotations
 
+import json
 import re
 from typing import Optional
 
@@ -23,6 +24,43 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 TIME_RE = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
 
+# Canonical mobile-tab keys. The frontend keeps the matching icon/label/href
+# table (core.js NAV_SECTIONS); this set is the server-side source of truth
+# for validation.
+MOBILE_TAB_KEYS = frozenset({
+    "home", "observations", "calendar", "photos", "plants", "seeds",
+    "seedlings", "review", "import", "quick", "costs", "pests",
+    "fertilizers", "planner", "tags",
+})
+DEFAULT_MOBILE_TABS = ["quick", "plants", "calendar", "planner"]
+MAX_MOBILE_TABS = 4
+
+
+def normalize_mobile_tabs(raw: str) -> str:
+    """Validate + normalize the mobile_tabs setting.
+
+    Stored as a JSON array string of tab keys, deduped, order preserved.
+    Returns "" when unset. Raises 400 on a bad key or more than 4 tabs.
+    """
+    raw = (raw or "").strip()
+    if not raw:
+        return ""
+    try:
+        items = json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        raise HTTPException(400, f"Bad mobile_tabs {raw!r} (want a JSON array of tab keys).")
+    if not isinstance(items, list):
+        raise HTTPException(400, f"Bad mobile_tabs {raw!r} (want a JSON array of tab keys).")
+    seen: list[str] = []
+    for item in items:
+        if item not in MOBILE_TAB_KEYS:
+            raise HTTPException(400, f"Bad mobile_tabs key {item!r}.")
+        if item not in seen:
+            seen.append(item)
+    if len(seen) > MAX_MOBILE_TABS:
+        raise HTTPException(400, f"Bad mobile_tabs: at most {MAX_MOBILE_TABS} tabs.")
+    return json.dumps(seen)
+
 SETTING_KEYS = (
     "zone",
     "frost_date",
@@ -37,6 +75,7 @@ SETTING_KEYS = (
     "confirm_water_all",
     "garden_lat",
     "garden_lon",
+    "mobile_tabs",
 )
 
 # Set by app.main at startup so saving new digest settings re-arms the
@@ -63,6 +102,7 @@ class SettingsUpdate(BaseModel):
     confirm_water_all: bool = True  # confirm() before "Water all" on Quick Log
     garden_lat: str = ""  # garden latitude for the weather strip / stamping
     garden_lon: str = ""  # garden longitude — Settings win over GARDEN_LAT/LON env
+    mobile_tabs: str = ""  # JSON array of mobile tab-bar keys (max 4); "" = defaults
 
 
 def _validate(payload: SettingsUpdate) -> None:
@@ -97,6 +137,7 @@ def _validate(payload: SettingsUpdate) -> None:
                 raise HTTPException(400, f"Bad {label} {raw!r} (want a number).")
             if not (lo <= value <= hi):
                 raise HTTPException(400, f"Bad {label} {raw!r} (want {lo}..{hi}).")
+    normalize_mobile_tabs(payload.mobile_tabs)  # 400 on bad key / >4 tabs
 
 
 def _frost_preview(session: Session, which: str) -> dict:
@@ -137,6 +178,7 @@ def current_settings(session: Session) -> dict:
         "last_frost_date": frost_mod.get_setting(session, "last_frost_date"),
         "garden_lat": frost_mod.get_setting(session, "garden_lat"),
         "garden_lon": frost_mod.get_setting(session, "garden_lon"),
+        "mobile_tabs": frost_mod.get_setting(session, "mobile_tabs"),
         "temperature_unit": temp_unit,
         "week_start": week_start,
         "default_weight_unit": default_weight_unit,
@@ -174,6 +216,7 @@ def save_settings(payload: SettingsUpdate, session: Session = Depends(get_sessio
     frost_mod.set_setting(session, "confirm_water_all", "true" if payload.confirm_water_all else "false")
     frost_mod.set_setting(session, "garden_lat", payload.garden_lat.strip())
     frost_mod.set_setting(session, "garden_lon", payload.garden_lon.strip())
+    frost_mod.set_setting(session, "mobile_tabs", normalize_mobile_tabs(payload.mobile_tabs))
     session.commit()
     if _reschedule_digest is not None and payload.digest_time.strip() != old_time:
         _reschedule_digest()

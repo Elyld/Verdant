@@ -52,27 +52,80 @@
             <p id="frost-countdown" class="mt-1.5 hidden w-fit rounded-full bg-navy-900/60 px-2.5 py-0.5 text-xs text-sage-200 ring-1 ring-sage-300/40" title="Days until the first anticipated frost"></p>
           </div>
         </div>
-        <nav class="flex flex-wrap rounded-xl bg-navy-900/60 p-1 ring-1 ring-navy-600/60" aria-label="Primary navigation">
-          <a href="/" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">Blog &amp; Stories</a>
-          <a href="/observations" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">Garden Logs</a>
-          <a href="/calendar" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">Calendar</a>
-          <a href="/photos" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">Photos</a>
-          <a href="/plants" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">Plants</a>
-          <a href="/seeds" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">Seeds</a>
-          <a href="/seedlings" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">🌱 Seedlings</a>
-          <a href="/review" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">Review</a>
-          <a href="/import" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">Import</a>
-          <a href="/quick" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">Quick Log</a>
-          <a href="/costs" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">Costs</a>
-          <a href="/pests" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">Pests</a>
-          <a href="/fertilizers" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">Fertilizers</a>
-          <a href="/planner" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">🗺️ Planner</a>
-          <a href="/tags" class="tab-btn flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition sm:flex-none">🏷️ Tags</a>
+        <nav id="desktop-nav" class="nav-fern hidden rounded-2xl bg-navy-900/70 p-2 ring-1 ring-navy-600/60 md:block" aria-label="Primary navigation">
+          <div class="flex flex-wrap items-stretch gap-x-1 gap-y-2">
+            <div class="nav-group">
+              <p class="nav-group-label">Grow</p>
+              <div class="flex flex-wrap gap-1">
+                <a href="/plants" class="tab-btn">🌿 Plants</a>
+                <a href="/seeds" class="tab-btn">🫘 Seeds</a>
+                <a href="/seedlings" class="tab-btn">🌱 Seedlings</a>
+                <a href="/planner" class="tab-btn">🗺️ Planner</a>
+              </div>
+            </div>
+            <div class="nav-divider" aria-hidden="true"></div>
+            <div class="nav-group">
+              <p class="nav-group-label">Track</p>
+              <div class="flex flex-wrap gap-1">
+                <a href="/observations" class="tab-btn">📝 Garden Logs</a>
+                <a href="/calendar" class="tab-btn">📅 Calendar</a>
+                <a href="/quick" class="tab-btn">⚡ Quick Log</a>
+                <a href="/photos" class="tab-btn">📷 Photos</a>
+              </div>
+            </div>
+            <div class="nav-divider" aria-hidden="true"></div>
+            <div class="nav-group">
+              <p class="nav-group-label">Manage</p>
+              <div class="flex flex-wrap gap-1">
+                <a href="/costs" class="tab-btn">💰 Costs</a>
+                <a href="/pests" class="tab-btn">🐛 Pests</a>
+                <a href="/fertilizers" class="tab-btn">🧪 Fertilizers</a>
+                <a href="/review" class="tab-btn">📊 Review</a>
+                <a href="/import" class="tab-btn">📥 Import</a>
+                <a href="/tags" class="tab-btn">🏷️ Tags</a>
+              </div>
+            </div>
+            <div class="nav-divider" aria-hidden="true"></div>
+            <div class="nav-group">
+              <p class="nav-group-label">Read</p>
+              <div class="flex flex-wrap gap-1">
+                <a href="/" class="tab-btn">📖 Blog &amp; Stories</a>
+              </div>
+            </div>
+          </div>
         </nav>
       </div>
     </div>
   </header>
   {% endblock %}
+
+  <!-- Mobile bottom tab bar (below md). The 4 tabs render from the
+       mobile_tabs setting (Settings page; defaults: Quick Log, Plants,
+       Calendar, Planner) via initMobileNav in core.js; More is fixed. -->
+  <nav id="mobile-tabs" class="fixed inset-x-0 bottom-0 z-40 border-t border-navy-700/70 bg-navy-900/95 backdrop-blur md:hidden" style="padding-bottom: env(safe-area-inset-bottom);" aria-label="Mobile navigation">
+    <div class="flex">
+      <span id="mobile-tab-links" class="contents"></span>
+      <button type="button" id="mobile-nav-more" class="mobile-tab flex-1" aria-haspopup="dialog" aria-controls="mobile-sheet">
+        <span class="mobile-tab-icon" aria-hidden="true">⋯</span>
+        <span class="mobile-tab-label">More</span>
+        <span class="mobile-tab-dot" aria-hidden="true"></span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Mobile "More" bottom sheet (native mobile pattern, not a dropdown).
+       Grid renders every section NOT already in the tab bar. -->
+  <div id="mobile-sheet" class="fixed inset-0 z-50 hidden md:hidden" role="dialog" aria-modal="true" aria-label="All sections">
+    <div id="mobile-sheet-backdrop" class="absolute inset-0 bg-navy-900/70"></div>
+    <div class="absolute inset-x-0 bottom-0 rounded-t-3xl bg-beige-50 px-4 pb-6 pt-2 text-navy-800 shadow-botanical" style="padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));">
+      <div class="mx-auto mb-2 h-1 w-12 rounded-full bg-beige-300" aria-hidden="true"></div>
+      <div class="mb-3 flex items-center justify-between">
+        <p class="font-display text-lg font-semibold">All sections</p>
+        <button type="button" id="mobile-sheet-close" class="rounded-full px-3 py-1 text-sm font-semibold text-navy-600 ring-1 ring-beige-300" aria-label="Close">✕</button>
+      </div>
+      <div id="mobile-sheet-grid" class="grid grid-cols-3 gap-2"></div>
+    </div>
+  </div>
 
   <!-- Global weather ribbon: slim, site-wide. Shown only when garden
        coordinates are configured; never nags. Rendered by initWeatherRibbon

@@ -1,4 +1,4 @@
-# 🌿 Verdant — Self-Hosted Garden Journal (v2.27.0)
+# 🌿 Verdant — Self-Hosted Garden Journal (v2.28.0)
 
 Your garden, logged. Plant profiles with care reminders, a daily observation log
 with a calendar heatmap, photo albums with slideshows, a seed stash and seedling
@@ -17,6 +17,20 @@ all in a single Docker container. FastAPI + SQLite, no build step, no cloud.
 *Screenshots below show demo data.*
 
 ## Features
+
+### 🧭 Navigation — grouped tabs, custom mobile bar
+The desktop nav is grouped into four labeled sections — **Grow** (Plants,
+Seeds, Seedlings, Planner), **Track** (Garden Logs, Calendar, Quick Log,
+Photos), **Manage** (Costs, Pests, Fertilizers, Review, Import, Tags), and
+**Read** (Blog & Stories) — over a faint fern watermark, with no dropdown
+menus anywhere. On your phone you get a bottom tab bar instead: pick up to
+**4** of your own sections in the order you tap them, right on the
+📱 *Mobile tab bar* card of the Settings page (tap a chip to add it, tap
+again to remove — no dropdowns there either), and everything else stays one
+tap away under **More**, which opens a bottom sheet of the remaining
+sections. Out of the box the bar is Quick Log, Plants, Calendar, Planner.
+
+![Mobile tab bar](docs/screenshots/nav-mobile.png)
 
 ### 📅 Calendar — daily log at a glance
 A GitHub-style heatmap of every observation, watering, and fertilization. Click
@@ -585,6 +599,15 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.28.0** — **🧭 Navigation refresh.** The desktop nav is now four labeled
+  groups (Grow / Track / Manage / Read) with an icon on every tab and a faint
+  fern watermark — no dropdown menus anywhere. On phones there's a bottom tab
+  bar instead of the cramped top bar: it opens with Quick Log, Plants,
+  Calendar, Planner + a fixed **More** tab, and you can make it yours on the
+  new 📱 *Mobile tab bar* card in Settings — tap up to 4 section chips in the
+  order you want them (tap again to remove; numbered 1–4), and the bar
+  follows. More opens a bottom sheet with every other section, never
+  duplicating your picks.
 - **2.27.0** — **🌤️ The weather strip goes site-wide.** The forecast ribbon
   (current conditions, tonight's low, tomorrow's high, rain chance, wind gusts)
   now lives under the site header on **every** page instead of only the
