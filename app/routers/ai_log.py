@@ -27,10 +27,22 @@ DEFAULT_BASE = "http://localhost:11434"
 DEFAULT_MODEL = "qwen3:4b"
 
 
+def _normalize_base_url(raw: str) -> str:
+    """Normalize the model-server base URL.
+
+    The app appends /api/tags and /api/chat itself, so a user-supplied
+    trailing /v1 (an OpenAI-style habit) would break every call — strip it.
+    """
+    base = (raw or "").strip().rstrip("/")
+    if base.lower().endswith("/v1"):
+        base = base[: -len("/v1")].rstrip("/")
+    return base or DEFAULT_BASE
+
+
 def _config(session: Session) -> dict:
     return {
         "enabled": (frost_mod.get_setting(session, "local_ai_enabled") or "false") == "true",
-        "base_url": (frost_mod.get_setting(session, "local_ai_base_url") or DEFAULT_BASE).strip().rstrip("/"),
+        "base_url": _normalize_base_url(frost_mod.get_setting(session, "local_ai_base_url") or DEFAULT_BASE),
         "model": (frost_mod.get_setting(session, "local_ai_model") or DEFAULT_MODEL).strip(),
     }
 
@@ -130,17 +142,28 @@ class InterpretRequest(BaseModel):
 
 @router.get("/status")
 def ai_status(session: Session = Depends(get_session)) -> dict:
-    """Is the feature on, and is the model server reachable? Never raises."""
+    """Is the feature on, is the model server reachable, and is the configured
+    model actually pulled? Never raises."""
     cfg = _config(session)
     if not cfg["enabled"]:
         return {"enabled": False, "reachable": False, "model": cfg["model"]}
     try:
         body = _post_json(f"{cfg['base_url']}/api/tags", {}, timeout=5)
         models = [m.get("name") for m in (body.get("models") or []) if isinstance(m, dict)]
-        return {"enabled": True, "reachable": True, "model": cfg["model"], "models": models}
+        want = cfg["model"]
+        present = any(
+            m == want or (m and want and m.split(":")[0] == want.split(":")[0])
+            for m in models
+        )
+        return {"enabled": True, "reachable": True, "model": want,
+                "model_present": present, "models": models}
     except Exception:
-        return {"enabled": True, "reachable": False, "model": cfg["model"],
-                "hint": f"Could not reach {cfg['base_url']} — is the model server running?"}
+        hint = f"Could not reach {cfg['base_url']} — is the model server running?"
+        if "localhost" in cfg["base_url"] or "127.0.0.1" in cfg["base_url"]:
+            hint += (" Verdant runs in Docker, so localhost means the Verdant container itself — "
+                     "use http://host.docker.internal:11434 to reach Ollama on the same machine, "
+                     "and set OLLAMA_HOST=0.0.0.0 so Ollama accepts the connection.")
+        return {"enabled": True, "reachable": False, "model": cfg["model"], "hint": hint}
 
 
 @router.post("/interpret")

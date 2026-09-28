@@ -89,7 +89,7 @@ class _FakeResponse:
         return False
 
 
-def _stub_ollama(monkeypatch, chat_content=None, tags_ok=True, error=None):
+def _stub_ollama(monkeypatch, chat_content=None, tags_ok=True, error=None, tags_models=None):
     """Stub urllib.request.urlopen for the Ollama endpoints."""
     calls = []
 
@@ -98,7 +98,8 @@ def _stub_ollama(monkeypatch, chat_content=None, tags_ok=True, error=None):
         if error is not None:
             raise error
         if request.full_url.endswith("/api/tags"):
-            body = {"models": [{"name": "qwen3:4b"}]} if tags_ok else {}
+            models = tags_models if tags_models is not None else ([{"name": "qwen3:4b"}] if tags_ok else [])
+            body = {"models": models} if tags_ok or tags_models is not None else {}
         elif request.full_url.endswith("/api/chat"):
             body = {"message": {"content": chat_content or ""}, "done": True}
         else:
@@ -136,6 +137,39 @@ def test_status_reachable(ai_on, monkeypatch):
     body = r.json()
     assert body["enabled"] is True and body["reachable"] is True
     assert body["model"] == "qwen3:4b"
+    assert body["model_present"] is True
+
+
+def test_status_model_missing(ai_on, monkeypatch):
+    _stub_ollama(monkeypatch, tags_models=[{"name": "llama3:8b"}])
+    body = client.get("/api/ai/status").json()
+    assert body["reachable"] is True
+    assert body["model_present"] is False
+
+
+def test_status_strips_v1_from_base_url(ai_on, monkeypatch):
+    with SQLSession(engine) as s:
+        frost_mod.set_setting(s, "local_ai_base_url", "http://localhost:11434/v1")
+        s.commit()
+    calls = _stub_ollama(monkeypatch)
+    body = client.get("/api/ai/status").json()
+    assert body["reachable"] is True
+    assert calls and all("/v1" not in u for u in calls), calls
+
+
+def test_normalize_base_url():
+    assert ai_log._normalize_base_url("http://x:11434/v1") == "http://x:11434"
+    assert ai_log._normalize_base_url("http://x:11434/v1/") == "http://x:11434"
+    assert ai_log._normalize_base_url("http://x:11434/") == "http://x:11434"
+    assert ai_log._normalize_base_url("http://x:11434") == "http://x:11434"
+    assert ai_log._normalize_base_url("") == ai_log.DEFAULT_BASE
+
+
+def test_status_unreachable_localhost_hint(ai_on, monkeypatch):
+    _stub_ollama(monkeypatch, error=URLError("no server"))
+    body = client.get("/api/ai/status").json()
+    assert body["reachable"] is False
+    assert "host.docker.internal" in body["hint"]
 
 
 def test_status_unreachable_friendly(ai_on, monkeypatch):
