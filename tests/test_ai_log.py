@@ -204,6 +204,16 @@ def test_interpret_surfaces_server_error(ai_on, monkeypatch):
     assert "not found" in r.json()["detail"]
 
 
+def test_interpret_timeout_hint(ai_on, monkeypatch):
+    import socket
+    _stub_ollama(monkeypatch, error=socket.timeout("timed out"))
+    r = client.post("/api/ai/interpret", json={"text": "watered the tomatoes"})
+    assert r.status_code == 502
+    detail = r.json()["detail"]
+    assert "timed out" in detail.lower()
+    assert "still be loading" in detail
+
+
 # --------------------------------------------------------------------------- #
 # /api/ai/interpret
 # --------------------------------------------------------------------------- #

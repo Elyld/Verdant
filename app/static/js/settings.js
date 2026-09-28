@@ -91,7 +91,40 @@
       initMobileChips();
       renderMobileChips();
       renderPreview(s.frost_preview);
+      refreshModelOptions();
     }
+
+    // Local AI: model dropdown from the server's /api/tags. Falls back to the
+    // text input when the server is unreachable; the select always syncs the
+    // (hidden) input so saving reads one field.
+    async function refreshModelOptions(preloaded) {
+      const sel = $('#set-ai-model-select');
+      const inp = $('#set-ai-model');
+      let st = preloaded || null;
+      if (!st) {
+        try { st = await api.get('/api/ai/status'); }
+        catch { st = null; }
+      }
+      const models = (st && st.reachable && st.models) || [];
+      sel.classList.add('hidden');
+      inp.classList.remove('hidden');
+      if (!models.length) return;
+      const current = inp.value.trim();
+      const names = [...new Set([...models, ...(current ? [current] : [])])];
+      sel.innerHTML = '';
+      names.forEach((name) => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        if (name === current) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      sel.classList.remove('hidden');
+      inp.classList.add('hidden');
+    }
+    $('#set-ai-model-select').addEventListener('change', (event) => {
+      $('#set-ai-model').value = event.target.value;
+    });
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -139,8 +172,9 @@
     $('#ai-test').addEventListener('click', async () => {
       const box = $('#ai-test-status');
       box.textContent = 'Checking…';
+      let st = null;
       try {
-        const st = await api.get('/api/ai/status');
+        st = await api.get('/api/ai/status');
         if (!st.enabled) {
           box.textContent = 'Enable it and save first, then test.';
         } else if (st.reachable) {
@@ -157,6 +191,7 @@
       } catch (error) {
         box.textContent = `Check failed: ${error.message}`;
       }
+      refreshModelOptions(st);
     });
 
     // "Use my location": browser geolocation first (accurate, needs a secure

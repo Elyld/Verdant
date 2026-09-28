@@ -62,6 +62,16 @@ def _get_json(url: str, timeout: int) -> dict:
         return json.loads(response.read().decode("utf-8"))
 
 
+def _is_timeout(exc: Exception) -> bool:
+    """Did this failure come from a socket timeout (possibly wrapped in URLError)?"""
+    if isinstance(exc, TimeoutError):  # socket.timeout is an alias since 3.10
+        return True
+    reason = getattr(exc, "reason", None)
+    if isinstance(reason, TimeoutError):
+        return True
+    return "timed out" in str(reason or exc).lower()
+
+
 def _post_json(url: str, payload: dict, timeout: int) -> dict:
     """POST JSON, return the decoded body. Raises on any failure."""
     data = json.dumps(payload).encode("utf-8")
@@ -202,7 +212,7 @@ def interpret(payload: InterpretRequest, session: Session = Depends(get_session)
             f"{cfg['base_url']}/api/chat",
             {"model": cfg["model"], "stream": False, "format": "json",
              "messages": [{"role": "user", "content": prompt}]},
-            timeout=60,
+            timeout=120,  # cold model loads are slow; don't give up too early
         )
         content = ((body.get("message") or {}).get("content")) or ""
     except Exception as e:
@@ -217,9 +227,13 @@ def interpret(payload: InterpretRequest, session: Session = Depends(get_session)
                     detail += f" — server said: {said}"
             except Exception:
                 pass
+        extra = ""
+        if _is_timeout(e):
+            extra = (" The model didn't answer in time — it may still be loading "
+                     "(cold starts are slow). Wait a few seconds and try again.")
         raise HTTPException(
             502,
-            f"Couldn't reach the model at {cfg['base_url']} ({detail}). "
+            f"Couldn't reach the model at {cfg['base_url']} ({detail}).{extra} "
             "Is it running, and is the base URL right?",
         )
     items = _extract_json_array(content)
