@@ -678,6 +678,11 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.39.0** — **Local AI: model dropdown + kinder timeouts.** The model name
+  field on Settings is now a dropdown listing your Ollama server's installed
+  models when it's reachable (falls back to typing when it's not). The
+  interpret call also waits longer for cold model loads (120s) and says so
+  when it times out, instead of a bare "couldn't reach the model."
 - **2.38.3** — **The interpret step shows the real error too.** When the model
   call failed it just said "couldn't reach the model," hiding e.g. Ollama's
   `model not found`. The toast now includes what the server actually said.
@@ -795,7 +800,8 @@ server local time. Test with `POST /api/digest/send`.
   page (off by default): server URL, model name, and a Test connection
   button. The model only ever produces drafts; the confirm step writes
   through the normal log endpoints, so validation and history work exactly
-  as usual.
+  as usual. When your Ollama server is reachable, the model field becomes a
+  dropdown listing your installed models — no typing, no typos.
   ![Tell Verdant what you did](docs/screenshots/ai-log.png)
 - **2.29.0** — **⚠️ National Weather Service alerts in the ribbon.** The
   site-wide weather ribbon now shows a severity-tinted ⚠️ pill when the NWS
