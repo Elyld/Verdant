@@ -3,6 +3,7 @@
 [![CI](https://github.com/Elyld/Verdant/actions/workflows/test.yml/badge.svg)](https://github.com/Elyld/Verdant/actions/workflows/test.yml)
 [![Release](https://img.shields.io/github/v/release/Elyld/Verdant)](https://github.com/Elyld/Verdant/releases)
 [![Docker](https://img.shields.io/badge/docker-ghcr.io%2Felyld%2Fverdant-blue?logo=docker)](https://github.com/Elyld/Verdant/pkgs/container/verdant)
+[![License](https://img.shields.io/github/license/Elyld/Verdant)](LICENSE)
 
 Your garden, logged. Plant profiles with care reminders, a daily observation log
 with a calendar heatmap, photo albums with slideshows, a seed stash and seedling
