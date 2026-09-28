@@ -9,6 +9,7 @@ the GARDEN_LAT / GARDEN_LON env vars.
 from __future__ import annotations
 
 import json
+import logging
 import re
 from typing import Optional
 
@@ -22,6 +23,8 @@ from app.database import get_session
 from app.routers.digest import effective_digest_config
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
+
+log = logging.getLogger(__name__)
 
 TIME_RE = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
 
@@ -113,30 +116,41 @@ class SettingsUpdate(BaseModel):
     plantnet_api_key: str = ""  # PlantNet plant-ID key (free at my.plantnet.org); "" = off
 
 
-def _validate(payload: SettingsUpdate) -> None:
-    if payload.zone and payload.zone not in frost_mod.VALID_ZONES:
+def _validate(payload: SettingsUpdate, provided: set[str], session: Session) -> None:
+    """Validate a settings update. Only provided fields are checked, so a
+    partial PUT can't fail (or wipe) on fields the caller didn't send.
+    Cross-field checks (digest ↔ webhook, local AI ↔ base URL/model) merge
+    the payload over the stored values before deciding."""
+    if "zone" in provided and payload.zone and payload.zone not in frost_mod.VALID_ZONES:
         raise HTTPException(400, f"Unknown USDA zone {payload.zone!r} (want 3-10).")
     for label, raw in (
-        ("frost_date", payload.frost_date),
-        ("last_frost_date", payload.last_frost_date),
+        ("frost_date", payload.frost_date if "frost_date" in provided else ""),
+        ("last_frost_date", payload.last_frost_date if "last_frost_date" in provided else ""),
     ):
         if raw and frost_mod._parse_month_day(raw) is None:
             raise HTTPException(400, f"Bad {label} {raw!r} (want YYYY-MM-DD or MM-DD).")
-    if not TIME_RE.match((payload.digest_time or "").strip()):
+    if "digest_time" in provided and not TIME_RE.match((payload.digest_time or "").strip()):
         raise HTTPException(400, f"Bad digest_time {payload.digest_time!r} (want HH:MM, 24h).")
-    if payload.digest_enabled and not payload.discord_webhook_url.strip():
+    # Cross-field checks see the merged result, not just this payload.
+    digest_on = payload.digest_enabled if "digest_enabled" in provided else (
+        frost_mod.get_setting(session, "digest_enabled") == "true"
+    )
+    webhook = payload.discord_webhook_url.strip() if "discord_webhook_url" in provided else (
+        frost_mod.get_setting(session, "discord_webhook_url") or ""
+    )
+    if digest_on and not webhook:
         raise HTTPException(400, "Digest is on but no Discord webhook URL was given.")
-    if payload.temperature_unit not in ("F", "C"):
+    if "temperature_unit" in provided and payload.temperature_unit not in ("F", "C"):
         raise HTTPException(400, f"Bad temperature_unit {payload.temperature_unit!r} (want 'F' or 'C').")
-    if payload.week_start not in ("0", "1"):
+    if "week_start" in provided and payload.week_start not in ("0", "1"):
         raise HTTPException(400, f"Bad week_start {payload.week_start!r} (want '0' for Sunday or '1' for Monday).")
-    if payload.default_weight_unit not in ("oz", "g", "lb", "kg"):
+    if "default_weight_unit" in provided and payload.default_weight_unit not in ("oz", "g", "lb", "kg"):
         raise HTTPException(400, f"Bad default_weight_unit {payload.default_weight_unit!r} (want oz/g/lb/kg).")
-    if payload.slideshow_interval not in (3, 5, 10, 30):
+    if "slideshow_interval" in provided and payload.slideshow_interval not in (3, 5, 10, 30):
         raise HTTPException(400, f"Bad slideshow_interval {payload.slideshow_interval!r} (want 3/5/10/30).")
     for label, raw, lo, hi in (
-        ("garden_lat", payload.garden_lat, -90, 90),
-        ("garden_lon", payload.garden_lon, -180, 180),
+        ("garden_lat", payload.garden_lat if "garden_lat" in provided else "", -90, 90),
+        ("garden_lon", payload.garden_lon if "garden_lon" in provided else "", -180, 180),
     ):
         if raw.strip():
             try:
@@ -145,12 +159,21 @@ def _validate(payload: SettingsUpdate) -> None:
                 raise HTTPException(400, f"Bad {label} {raw!r} (want a number).")
             if not (lo <= value <= hi):
                 raise HTTPException(400, f"Bad {label} {raw!r} (want {lo}..{hi}).")
-    normalize_mobile_tabs(payload.mobile_tabs)  # 400 on bad key / >4 tabs
-    base = (payload.local_ai_base_url or "").strip()
-    if payload.local_ai_enabled:
+    if "mobile_tabs" in provided:
+        normalize_mobile_tabs(payload.mobile_tabs)  # 400 on bad key / >4 tabs
+    ai_on = payload.local_ai_enabled if "local_ai_enabled" in provided else (
+        frost_mod.get_setting(session, "local_ai_enabled") == "true"
+    )
+    base = (payload.local_ai_base_url if "local_ai_base_url" in provided
+            else frost_mod.get_setting(session, "local_ai_base_url"))
+    base = (base or "").strip()
+    model = (payload.local_ai_model if "local_ai_model" in provided
+             else frost_mod.get_setting(session, "local_ai_model"))
+    model = (model or "").strip()
+    if ai_on:
         if not base or not base.startswith(("http://", "https://")):
             raise HTTPException(400, f"Bad local_ai_base_url {base!r} (want an http(s) URL).")
-        if not (payload.local_ai_model or "").strip():
+        if not model:
             raise HTTPException(400, "Local AI is on but no model name was given.")
 
 
@@ -234,27 +257,58 @@ def get_settings(session: Session = Depends(get_session)) -> dict:
 
 @router.put("")
 def save_settings(payload: SettingsUpdate, session: Session = Depends(get_session)) -> dict:
-    _validate(payload)
+    # Partial-update semantics: only fields actually present in the request
+    # body are written. Anything omitted keeps its stored value — a partial
+    # PUT must never reset the rest to defaults.
+    provided = set(payload.model_dump(exclude_unset=True))
+    _validate(payload, provided, session)
     old_time = frost_mod.get_setting(session, "digest_time")
-    frost_mod.set_setting(session, "zone", payload.zone.strip())
-    frost_mod.set_setting(session, "frost_date", payload.frost_date.strip())
-    frost_mod.set_setting(session, "last_frost_date", payload.last_frost_date.strip())
-    frost_mod.set_setting(session, "digest_enabled", "true" if payload.digest_enabled else "false")
-    frost_mod.set_setting(session, "discord_webhook_url", payload.discord_webhook_url.strip())
-    frost_mod.set_setting(session, "digest_time", payload.digest_time.strip() or "08:00")
-    frost_mod.set_setting(session, "temperature_unit", payload.temperature_unit)
-    frost_mod.set_setting(session, "week_start", payload.week_start)
-    frost_mod.set_setting(session, "default_weight_unit", payload.default_weight_unit)
-    frost_mod.set_setting(session, "slideshow_interval", str(payload.slideshow_interval))
-    frost_mod.set_setting(session, "confirm_water_all", "true" if payload.confirm_water_all else "false")
-    frost_mod.set_setting(session, "garden_lat", payload.garden_lat.strip())
-    frost_mod.set_setting(session, "garden_lon", payload.garden_lon.strip())
-    frost_mod.set_setting(session, "mobile_tabs", normalize_mobile_tabs(payload.mobile_tabs))
-    frost_mod.set_setting(session, "local_ai_enabled", "true" if payload.local_ai_enabled else "false")
-    frost_mod.set_setting(session, "local_ai_base_url", (payload.local_ai_base_url or "").strip() or "http://localhost:11434")
-    frost_mod.set_setting(session, "local_ai_model", (payload.local_ai_model or "").strip() or "qwen3:4b")
-    frost_mod.set_setting(session, "plantnet_api_key", (payload.plantnet_api_key or "").strip())
+    set_setting = frost_mod.set_setting
+    if "zone" in provided:
+        set_setting(session, "zone", payload.zone.strip())
+    if "frost_date" in provided:
+        set_setting(session, "frost_date", payload.frost_date.strip())
+    if "last_frost_date" in provided:
+        set_setting(session, "last_frost_date", payload.last_frost_date.strip())
+    if "digest_enabled" in provided:
+        set_setting(session, "digest_enabled", "true" if payload.digest_enabled else "false")
+    if "discord_webhook_url" in provided:
+        set_setting(session, "discord_webhook_url", payload.discord_webhook_url.strip())
+    new_time: Optional[str] = None
+    if "digest_time" in provided:
+        new_time = payload.digest_time.strip() or "08:00"
+        set_setting(session, "digest_time", new_time)
+    if "temperature_unit" in provided:
+        set_setting(session, "temperature_unit", payload.temperature_unit)
+    if "week_start" in provided:
+        set_setting(session, "week_start", payload.week_start)
+    if "default_weight_unit" in provided:
+        set_setting(session, "default_weight_unit", payload.default_weight_unit)
+    if "slideshow_interval" in provided:
+        set_setting(session, "slideshow_interval", str(payload.slideshow_interval))
+    if "confirm_water_all" in provided:
+        set_setting(session, "confirm_water_all", "true" if payload.confirm_water_all else "false")
+    if "garden_lat" in provided:
+        set_setting(session, "garden_lat", payload.garden_lat.strip())
+    if "garden_lon" in provided:
+        set_setting(session, "garden_lon", payload.garden_lon.strip())
+    if "mobile_tabs" in provided:
+        set_setting(session, "mobile_tabs", normalize_mobile_tabs(payload.mobile_tabs))
+    if "local_ai_enabled" in provided:
+        set_setting(session, "local_ai_enabled", "true" if payload.local_ai_enabled else "false")
+    if "local_ai_base_url" in provided:
+        set_setting(session, "local_ai_base_url", (payload.local_ai_base_url or "").strip() or "http://localhost:11434")
+    if "local_ai_model" in provided:
+        set_setting(session, "local_ai_model", (payload.local_ai_model or "").strip() or "qwen3:4b")
+    if "plantnet_api_key" in provided:
+        set_setting(session, "plantnet_api_key", (payload.plantnet_api_key or "").strip())
     session.commit()
-    if _reschedule_digest is not None and payload.digest_time.strip() != old_time:
-        _reschedule_digest()
+    if new_time is not None and _reschedule_digest is not None and new_time != old_time:
+        # Best-effort: the new time is already saved, so a scheduler hiccup
+        # must not turn this into a 500 (worst case the new time applies
+        # after the next restart).
+        try:
+            _reschedule_digest()
+        except Exception:
+            log.warning("digest reschedule after settings save failed", exc_info=True)
     return current_settings(session)

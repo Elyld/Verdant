@@ -682,7 +682,9 @@ server local time. Test with `POST /api/digest/send`.
   now ends with a **💧 watering-advice line** computed from real
   evapotranspiration (PyETo, FAO-56) against your forecast. Also in this
   release: the nav bar's fern watermark was redrawn with longer, more
-  detailed fronds.
+  detailed fronds. Also fixed: a partial settings save through the API no
+  longer resets the settings you didn't send to their defaults (an
+  explicitly sent empty value still clears that one field).
   ![Crop guide with community data](docs/screenshots/crop-community.png)
   ![Zone auto-detect](docs/screenshots/zone-detect.png)
   ![Plant identification](docs/screenshots/plant-identify.png)
