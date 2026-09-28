@@ -626,7 +626,7 @@
           <dl class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
             <div><dt class="lbl">Sun</dt><dd class="text-navy-800">${esc(crop.sun)}</dd></div>
             <div><dt class="lbl">Spacing</dt><dd class="text-navy-800">${esc(crop.spacing_in)}&Prime;</dd></div>
-            <div><dt class="lbl">Sow depth</dt><dd class="text-navy-800">${esc(crop.sowing_depth_in)}&Prime;</dd></div>
+            <div><dt class="lbl">Sow depth</dt><dd class="text-navy-800">${crop.sowing_depth_in ? esc(crop.sowing_depth_in) + '&Prime;' : '—'}</dd></div>
             <div><dt class="lbl">Germinates</dt><dd class="text-navy-800">${esc(crop.days_to_germination)} days</dd></div>
             <div><dt class="lbl">Matures</dt><dd class="text-navy-800">~${maturity} days</dd></div>
           </dl>
@@ -689,7 +689,8 @@
     const notes = $('#plant-notes');
     if (notes) {
       const label = variety ? `${variety.name} (${crop.name})` : crop.name;
-      const block = `🌱 Growing info (${label}): ${crop.sun}; space ${crop.spacing_in}" apart; sow ${crop.sowing_depth_in}" deep; germinates in ${crop.days_to_germination} days.${variety && variety.note ? ` ${variety.note}` : ''} ${crop.description}`;
+      const depthBit = crop.sowing_depth_in ? `; sow ${crop.sowing_depth_in}" deep` : '';
+      const block = `🌱 Growing info (${label}): ${crop.sun}; space ${crop.spacing_in}" apart${depthBit}; germinates in ${crop.days_to_germination} days.${variety && variety.note ? ` ${variety.note}` : ''} ${crop.description}`;
       if (!notes.value.includes(`Growing info (${label})`)) {
         notes.value = notes.value.trim() ? `${notes.value.trim()}\n\n${block}` : block;
       }

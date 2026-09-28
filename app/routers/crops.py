@@ -1,14 +1,22 @@
-"""Curated crop lookup — replaces the defunct OpenFarm API.
+"""Crop lookup — replaces the defunct OpenFarm API.
 
 A bundled, offline crop database with the planting guidance a gardener
 actually needs when adding a plant: sun, spacing, sowing depth,
 germination and maturity timing, plus a short how-to. Instant, private,
 no API key, no network.
 
+The database is two layers (see scripts/build_crops_db.py):
+  1. 30 curated crops with hand-written varieties and family info.
+  2. ~8,200 edible plants from OpenPlantDB (CC0 public domain), each with
+     variety-level detail — this is where "Fatalii Pepper" and the other
+     superhots live.
+Growstuff community medians (real gardens) layer on top where available.
+
 v2.33.0: variety-level entries (curated popular varieties per crop, with
 their own maturity timing) and seed-stash matching, so a search for
 "Cherokee Purple" finds the variety — and your own seed packets.
-Every result carries its source: the built-in guide or your seed stash.
+Every result carries its source: the built-in guide, OpenPlantDB, or
+your seed stash.
 """
 from __future__ import annotations
 
@@ -28,6 +36,7 @@ router = APIRouter(prefix="/api/crops", tags=["crops"])
 DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "crops.json"
 
 GUIDE_SOURCE = "Built-in crop guide"
+OPENPLANTDB_SOURCE = "OpenPlantDB"
 STASH_SOURCE = "Your seed stash"
 
 
@@ -180,7 +189,7 @@ def crop_detail(key: str) -> dict:
     for crop in _crops():
         if crop["key"] == key:
             community = growstuff.get(crop.get("key", ""))
-            detail = {**crop, "source": GUIDE_SOURCE}
+            detail = {**crop, "source": crop.get("source") or GUIDE_SOURCE}
             if community:
                 detail["community"] = {
                     "median_days_to_first_harvest": community[

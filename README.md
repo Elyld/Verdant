@@ -70,9 +70,11 @@ Photos you assign on the 🎯 Match photos page appear in a **Photos** gallery
 on the plant's profile, with a lightbox on click.
 
 Adding a plant? Hit **🔎 Look up growing info** on the form — search the
-built-in crop guide, pick your crop, and sun, days to maturity, spacing,
+crop guide (30 curated crops plus **8,200 edible plants from OpenPlantDB**,
+public domain, with variety-level detail down to Fatalii and the other
+superhots), pick your crop, and sun, days to maturity, spacing,
 sowing depth, and germination timing fill themselves in (only the empty
-fields; your typing is never overwritten). The guide also blends in
+fields; your typing is never overwritten). Latin names are searchable too. The guide also blends in
 **🌍 Growstuff community data**: when real gardeners' results exist for a
 crop, maturity timing is the community median (tomatoes show ~92 days from
 227 gardens, not the generic guide number), and the source is spelled out
@@ -668,6 +670,19 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.36.0** — **🌶️ 8,200-crop guide + calmer nav ferns.** The crop guide's
+  backbone is now **OpenPlantDB** (public domain): 8,204 edible plants —
+  vegetables, herbs, berries, and fruit — with variety-level detail, so
+  "Fatalii Pepper" and the other superhots are finally in there, each with
+  germination/maturity ranges, spacing, sun, and real growing directions.
+  The 30 curated crops keep their hand-written varieties and family info
+  and win any name collisions; Growstuff community medians still layer on
+  top where they exist, and every detail spells out its source (built-in
+  guide vs OpenPlantDB vs your seed stash). Latin names are searchable too —
+  "Capsicum chinense" finds your peppers. Also: the header fern watermark
+  is now one flowing, non-repeating scene tucked under the nav words
+  instead of a tiled pattern.
+  ![Crop guide: Fatalii pepper](docs/screenshots/crop-openplantdb.png)
 - **2.35.1** — **🔧 Growstuff cache reliability fix.** The community-data
   cache used `0.0` as its "stale" marker against `time.monotonic()`, which
   starts near zero on a freshly booted machine — so the first minutes of a
