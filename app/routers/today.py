@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app import planting
+from app import et as et_mod
 from app.database import get_session
 from app.models import Plant
 
@@ -70,4 +71,5 @@ def today_overview(session: Session = Depends(get_session)) -> dict:
         "due": due,
         "harvest_forecast": forecast,
         "frost": frost_info,
+        "watering_advice": et_mod.watering_advice(session),
     }

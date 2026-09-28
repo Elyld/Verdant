@@ -7,7 +7,10 @@
           <h2 class="font-display text-2xl font-semibold text-navy-800">Plants</h2>
           <p class="text-sm text-navy-500">Every plant's story — care, timeline, harvests, and growth over time.</p>
         </div>
-        <button type="button" id="plant-add-toggle" class="btn-primary text-sm">+ Add plant</button>
+        <div class="flex items-center gap-2">
+          <button type="button" id="plant-identify" class="btn-ghost hidden text-sm" title="Identify a plant from a photo (Pl@ntNet)">🔍 Identify</button>
+          <button type="button" id="plant-add-toggle" class="btn-primary text-sm">+ Add plant</button>
+        </div>
       </header>
 
       <!-- Care reminders -->
@@ -57,6 +60,7 @@
 {% block overlays %}
 <div id="plant-modal" class="modal hidden" aria-hidden="true"></div>
 <div id="crop-modal" class="modal hidden" aria-hidden="true"></div>
+<div id="identify-modal" class="modal hidden" aria-hidden="true"></div>
 
 
 <div id="lightbox" class="fixed inset-0 z-50 hidden items-center justify-center bg-navy-900/80 p-4">

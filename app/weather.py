@@ -119,7 +119,7 @@ def fetch_forecast(session=None) -> Optional[dict]:
         "&hourly=temperature_2m,precipitation_probability,precipitation,"
         "relative_humidity_2m,wind_gusts_10m"
         "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,"
-        "precipitation_sum,wind_gusts_10m_max"
+        "precipitation_sum,wind_gusts_10m_max,shortwave_radiation_sum"
         "&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch"
         "&timezone=auto&forecast_days=7"
     )
@@ -168,6 +168,7 @@ def fetch_forecast(session=None) -> Optional[dict]:
             dcol("precipitation_probability_max"), dcol("precipitation_sum"),
             dcol("wind_gusts_10m_max"),
         )
+        drad = dcol("shortwave_radiation_sum")
         days = [
             {
                 "date": dtime[i],
@@ -176,11 +177,13 @@ def fetch_forecast(session=None) -> Optional[dict]:
                 "precip_prob": dprob[i],
                 "precip_in": dprecip[i],
                 "gust_mph": dgust[i],
+                "rad_mj": drad[i],  # measured solar radiation, MJ/m^2/day
             }
             for i in range(m)
         ]
         return {
             "as_of": current.get("time"),
+            "elevation_m": payload.get("elevation"),
             "current": {
                 "temp_f": current.get("temperature_2m"),
                 "summary": _summarize(int(current.get("weather_code") or 0)),

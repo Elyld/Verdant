@@ -47,6 +47,12 @@ are the final judge). Below that, the weather strip, any active NOAA alerts,
 and a **❄️ frost countdown** to your first fall frost — or a gentle prompt to
 set it in Settings if you haven't. One glance, then grab your gloves.
 
+The weather strip ends with a **💧 watering-advice line**: Verdant computes
+real evapotranspiration (FAO-56 Penman-Monteith via PyETo) from your forecast
+and tells you, in plain words, whether today calls for a normal round, a
+deep soak, or putting the hose down — with the ET number in inches for the
+curious.
+
 ![Today](docs/screenshots/today.png)
 
 ### 📅 Calendar — daily log at a glance
@@ -66,12 +72,25 @@ on the plant's profile, with a lightbox on click.
 Adding a plant? Hit **🔎 Look up growing info** on the form — search the
 built-in crop guide, pick your crop, and sun, days to maturity, spacing,
 sowing depth, and germination timing fill themselves in (only the empty
-fields; your typing is never overwritten). Every crop detail also answers
+fields; your typing is never overwritten). The guide also blends in
+**🌍 Growstuff community data**: when real gardeners' results exist for a
+crop, maturity timing is the community median (tomatoes show ~92 days from
+227 gardens, not the generic guide number), and the source is spelled out
+under every detail. Every crop detail also answers
 **“can I still plant this?”** — a 🌱 planting calculator that works back from
 your first frost date (minus the days to maturity and a 14-day buffer) and
 tells you it's still time, cutting it close, or too late for a fall harvest.
 
+Got a mystery plant? The **🔍 Identify** button (needs a free PlantNet API
+key, set in Settings) sends one photo and suggests matches with confidence
+scores — a tap assigns the winning name. Your photo is only ever sent when
+you tap Identify, never before.
+
 ![Crop lookup](docs/screenshots/crop-lookup.png)
+
+![Crop guide with community data](docs/screenshots/crop-community.png)
+
+![Plant identification](docs/screenshots/plant-identify.png)
 
 ![Plant profiles](docs/screenshots/plants.png)
 
@@ -287,7 +306,9 @@ before upgrades.
 USDA zone, last/first frost dates (exact dates beat zone averages),
 temperature units, which day your calendar week starts on, default harvest
 weight unit, slideshow autoplay interval, and the morning digest schedule —
-all on one page. Your **garden coordinates** live here too (with a
+all on one page. Don't know your zone? Hit **🎯 Detect from coordinates**
+and Verdant looks it up from your saved garden coordinates (offline, from a
+built-in dataset). Your **garden coordinates** live here too (with a
 📍 *Use my location* button that fills them in from your browser, falling
 back to a one-time city-level lookup) — they power the Planner's weather
 strip and stamp new observations with the current conditions. The frost
@@ -296,6 +317,8 @@ seed-starting calendar on the Plants page. The site-wide weather ribbon
 also watches the National Weather Service for your garden point: when there's
 an active alert, a severity-tinted ⚠️ pill appears — click it for
 the timing and details.
+
+![Zone auto-detect](docs/screenshots/zone-detect.png)
 
 ![NWS weather alerts](docs/screenshots/noaa-alerts.png)
 
@@ -644,6 +667,28 @@ correct, and the container's clock/timezone matches yours — `DIGEST_TIME` is
 server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
+
+- **2.35.0** — **🌍 Community growing data, zone auto-detect, plant ID, and
+  a smarter weather card.** The crop guide now blends in **Growstuff
+  community data**: when real gardeners' results exist for a crop, the
+  days-to-maturity shown (and used in the planting calculator and harvest
+  estimates) is the community median — e.g. tomatoes show ~92 days from 227
+  gardens instead of the generic guide number — with the source spelled out
+  on every screen. Settings grew a **🎯 Detect from coordinates** button
+  that looks up your USDA hardiness zone from your saved garden coordinates.
+  The Plants page has a **🔍 Identify** button (needs a free PlantNet API
+  key in Settings): snap a mystery plant, and it suggests matches with
+  confidence scores — a tap assigns the name. And the Today weather card
+  now ends with a **💧 watering-advice line** computed from real
+  evapotranspiration (PyETo, FAO-56) against your forecast. Also in this
+  release: the nav bar's fern watermark was redrawn with longer, more
+  detailed fronds. Also fixed: a partial settings save through the API no
+  longer resets the settings you didn't send to their defaults (an
+  explicitly sent empty value still clears that one field).
+  ![Crop guide with community data](docs/screenshots/crop-community.png)
+  ![Zone auto-detect](docs/screenshots/zone-detect.png)
+  ![Plant identification](docs/screenshots/plant-identify.png)
+  ![Today with watering advice](docs/screenshots/today.png)
 
 - **2.34.0** — **☀️ Today view, Quick Log undo, planting calculator.** A new
   **Today** landing page: greeting + date, 💧 care-due list (overdue + due

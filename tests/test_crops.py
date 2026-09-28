@@ -32,7 +32,7 @@ def test_search_matches_name():
     # summary shape — no description dump in list results
     first = body["guide"][0]
     assert set(first) == {"kind", "key", "name", "crop_name", "family", "sun",
-                          "days_to_maturity", "note"}
+                          "days_to_maturity", "maturity_source", "community", "note"}
     assert first["kind"] == "crop"
 
 

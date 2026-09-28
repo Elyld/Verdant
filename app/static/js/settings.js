@@ -86,6 +86,7 @@
       $('#set-ai-enabled').checked = !!s.local_ai_enabled;
       $('#set-ai-base').value = s.local_ai_base_url || 'http://localhost:11434';
       $('#set-ai-model').value = s.local_ai_model || 'qwen3:4b';
+      $('#set-plantnet-key').value = s.plantnet_api_key || '';
       mobileTabPicks = parseMobileTabs(s.mobile_tabs) || [];
       initMobileChips();
       renderMobileChips();
@@ -114,6 +115,7 @@
           local_ai_enabled: $('#set-ai-enabled').checked,
           local_ai_base_url: $('#set-ai-base').value.trim(),
           local_ai_model: $('#set-ai-model').value.trim(),
+          plantnet_api_key: $('#set-plantnet-key').value.trim(),
         });
         renderPreview(saved.frost_preview);
         status.textContent = '';
@@ -193,6 +195,43 @@
         btn.disabled = false;
       }
     });
+
+    async function detectZone({ silent } = {}) {
+      const lat = Number($('#set-lat').value);
+      const lon = Number($('#set-lon').value);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+        if (!silent) toast('Enter your coordinates first, then detect.', 'err');
+        return;
+      }
+      const note = $('#zone-detect-note');
+      try {
+        const res = await api.get(`/api/settings/detect-zone?lat=${lat}&lon=${lon}`);
+        if (res && res.ok && res.zone_setting) {
+          $('#set-zone').value = res.zone_setting;
+          if (note) {
+            note.textContent = `Detected from your coordinates: USDA zone ${res.zone} → set to zone ${res.zone_setting}.`;
+            note.classList.remove('hidden');
+          }
+        } else if (!silent) {
+          toast('No hardiness zone found for those coordinates.', 'err');
+        }
+      } catch (error) {
+        if (!silent) toast(`Zone detection failed: ${error.message}`, 'err');
+      }
+    }
+
+    $('#zone-detect').addEventListener('click', () => detectZone());
+
+    // Auto-detect the zone when coordinates change and no zone is set yet.
+    let zoneTimer = null;
+    const maybeAutoDetect = () => {
+      clearTimeout(zoneTimer);
+      zoneTimer = setTimeout(() => {
+        if (!$('#set-zone').value) detectZone({ silent: true });
+      }, 600);
+    };
+    $('#set-lat').addEventListener('change', maybeAutoDetect);
+    $('#set-lon').addEventListener('change', maybeAutoDetect);
 
     load().catch((error) => toast(`Could not load settings: ${error.message}`, 'err'));
   }

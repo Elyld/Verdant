@@ -38,7 +38,7 @@ const named = {};
  'set-lat', 'set-lon', 'set-locate', 'set-temp-unit', 'set-week-start', 'set-weight-unit',
  'set-digest-enabled', 'set-digest-time', 'set-webhook', 'set-slideshow-interval',
  'set-confirm-water-all', 'frost-preview', 'settings-save', 'digest-test',
- 'digest-enabled-card', 'toasts',
+ 'digest-enabled-card', 'toasts', 'zone-detect', 'zone-detect-note',
 ].forEach((id) => { named[`#${id}`] = makeEl(); });
 
 const requests = [];
@@ -56,6 +56,7 @@ global.fetch = async (url, options = {}) => {
   if (url === '/api/settings') resp = settingsPayload;
   else if (url === '/api/weather/geolocate') resp = { ok: true, lat: 35.5, lon: -95.5, city: 'Tulsa' };
   else if (url === '/api/digest/preview') resp = { ok: true, preview: {} };
+  else if (url.startsWith('/api/settings/detect-zone')) resp = { ok: true, zone: '6b', zone_setting: '6' };
   return { ok: true, status: 200, json: async () => resp };
 };
 
@@ -123,6 +124,30 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
   check('fallback hits /api/weather/geolocate', requests.some((r) => r.url === '/api/weather/geolocate'));
   check('fallback fills city-level coords', named['#set-lat'].value === '35.5000' && named['#set-lon'].value === '-95.5000');
   check('fallback toast mentions city-level', toasts.some((t) => t.msg.includes('city-level')));
+
+  // Zone detect button: fills the zone from the detect-zone endpoint.
+  named['#set-lat'].value = '39.09603';
+  named['#set-lon'].value = '-95.66';
+  named['#set-zone'].value = '';
+  fire(named['#zone-detect'], 'click');
+  await tick(30);
+  check('detect-zone fills the zone field', named['#set-zone'].value === '6');
+  check('detect-zone shows a note', named['#zone-detect-note'].textContent.includes('6b'));
+  check('detect-zone note visible', !named['#zone-detect-note'].classList.contains('hidden'));
+
+  // Auto-detect: changing coords with an empty zone triggers a silent detect.
+  named['#set-zone'].value = '';
+  named['#zone-detect-note'].classList.add('hidden');
+  fire(named['#set-lat'], 'change');
+  await tick(750);
+  check('auto-detect fills the zone on coord change', named['#set-zone'].value === '6');
+
+  // Auto-detect respects a manually chosen zone (never overwrites).
+  named['#set-zone'].value = '7';
+  named['#set-lat'].value = '39.1';
+  fire(named['#set-lat'], 'change');
+  await tick(750);
+  check('manual zone choice is never overwritten', named['#set-zone'].value === '7');
 
   console.log(failures ? `\n${failures} check(s) failed.` : '\nAll checks passed.');
   process.exit(failures ? 1 : 0);

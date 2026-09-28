@@ -131,6 +131,7 @@ const api = {
       frost_date: '2026-11-15', frost_source: 'exact',
       sow_by: '2026-10-04', days_left: 6, verdict: 'close',
     };
+    if (url === '/api/settings') return settingsResponse;
     throw new Error('unexpected GET ' + url);
   },
 };
@@ -138,10 +139,15 @@ const api = {
 const toasts = [];
 const bootFns = [];
 const docListeners = {};
+let settingsResponse = { plantnet_api_key: 'test-key' };
 
 const modal = makeModal();
 const resultsBox = modal._kids['#crop-results'];
 const detailBox = modal._kids['#crop-detail'];
+const identifyBtn = makeEl();
+identifyBtn.classList.add('hidden'); // starts hidden until a key is seen
+const identifyModal = makeEl();
+identifyModal.classList.add('hidden');
 const named = {
   '#crop-lookup-btn': makeEl(),
   '#crop-modal': modal,
@@ -153,6 +159,8 @@ const named = {
   '#plant-maturity': makeEl(),
   '#plant-notes': makeEl(),
   '#crop-sowby': makeEl(),
+  '#plant-identify': identifyBtn,
+  '#identify-modal': identifyModal,
 };
 
 globalThis.Verdant = {
@@ -176,7 +184,7 @@ global.window = {};
 async function main() {
   const src = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'js', 'plants.js'), 'utf8');
   eval(src);
-  check('two boot fns registered (initPlants + initCropLookup)', bootFns.length === 2);
+  check('three boot fns registered (initPlants + initCropLookup + initIdentify)', bootFns.length === 3);
   await bootFns[1](); // initCropLookup only
   await tick(20);
 
@@ -302,6 +310,30 @@ async function main() {
   (docListeners.keydown || []).forEach((fn) => fn({ key: 'Escape' }));
   await tick(20);
   check('escape closes modal', modal.classList.contains('hidden'));
+
+  // 9. Identify button: hidden without a PlantNet key, shown with one.
+  await bootFns[2](); // initIdentify
+  await tick(20);
+  check('identify button shown when key is set', !identifyBtn.classList.contains('hidden'));
+  // no-key case: fresh hidden button, settings without a key
+  const identifyBtn2 = makeEl();
+  identifyBtn2.classList.add('hidden');
+  named['#plant-identify'] = identifyBtn2;
+  settingsResponse = {};
+  await bootFns[2]();
+  await tick(20);
+  check('identify button stays hidden without a key', identifyBtn2.classList.contains('hidden'));
+
+  // 10. Identify modal opens with modal-open (visible) and closes cleanly.
+  identifyBtn.click();
+  await tick(20);
+  check('identify modal opens', identifyModal.classList.contains('modal-open'));
+  check('identify modal not hidden', !identifyModal.classList.contains('hidden'));
+  check('identify modal has content', identifyModal.innerHTML.includes('Identify a plant'));
+  (docListeners.keydown || []).forEach((fn) => fn({ key: 'Escape' }));
+  await tick(20);
+  check('identify modal closed', !identifyModal.classList.contains('modal-open'));
+  check('identify modal re-hidden', identifyModal.classList.contains('hidden'));
 
   console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} FAILURES`);
   process.exit(failures === 0 ? 0 : 1);

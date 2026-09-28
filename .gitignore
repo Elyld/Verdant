@@ -10,3 +10,4 @@ uploads/*
 !data/.gitkeep
 .pytest_cache/
 .env
+data/growstuff_cache.json

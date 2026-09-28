@@ -567,10 +567,11 @@
       html += '<p class="pt-1 text-xs font-semibold uppercase tracking-wide text-navy-400">📖 Crop guide</p>';
       html += guide.map((c) => {
         const isVar = c.kind === 'variety';
+        const meta = `${c.sun} · ~${c.days_to_maturity}d${c.community ? ' 🌍' : ''}`;
         return btn(`data-kind="${c.kind}" data-key="${esc(c.key)}" data-variety="${esc(isVar ? c.name : '')}"`,
           esc(c.name) + (isVar ? ' <span class="text-xs font-normal text-sage-600">variety</span>' : ''),
           esc(isVar ? c.crop_name : c.family),
-          esc(`${c.sun} · ~${c.days_to_maturity}d`));
+          esc(meta));
       }).join('');
     }
     box.innerHTML = html;
@@ -610,7 +611,12 @@
       const v = ds.kind === 'variety'
         ? (crop.varieties || []).find((x) => x.name === ds.variety) : null;
       const title = v ? v.name : crop.name;
-      const maturity = (v && v.days_to_maturity) || crop.days_to_maturity;
+      const comm = crop.community || null;
+      const maturity = (comm && comm.median_days_to_first_harvest)
+        || (v && v.days_to_maturity) || crop.days_to_maturity;
+      const commLine = comm
+        ? ` · 🌍 community data (${comm.gardens != null ? `${comm.gardens} gardens` : 'Growstuff'})`
+        : '';
       detail.innerHTML = `
         <div class="rounded-xl bg-beige-100 p-3 ring-1 ring-beige-300">
           <div class="flex items-center justify-between gap-2">
@@ -627,7 +633,7 @@
           ${v && v.note ? `<p class="mt-2 text-sm text-navy-600">${esc(v.note)}</p>` : ''}
           <p class="mt-2 text-sm text-navy-600">${esc(crop.description)}</p>
           <div id="crop-sowby" class="mt-2"></div>
-          <p class="mt-2 text-xs text-navy-400">Source: ${esc(crop.source || 'built-in crop guide')}${v ? ' · variety notes' : ''}</p>
+          <p class="mt-2 text-xs text-navy-400">Source: ${esc(crop.source || 'built-in crop guide')}${v ? ' · variety notes' : ''}${commLine}</p>
           <button type="button" id="crop-use" class="btn-primary mt-3 text-sm">Use this info → fill the form</button>
         </div>`;
       fillSowBy(maturity);
@@ -720,4 +726,145 @@
   }
 
   globalThis.Verdant.onBoot(initCropLookup);
+})();
+
+/* 🔍 PlantNet identification — photo in, "what is this plant" out. */
+(() => {
+  'use strict';
+
+  const { $, esc, api, toast } = globalThis.Verdant;
+
+  function openModal() {
+    const modal = $('#identify-modal');
+    if (!modal) return;
+    modal.innerHTML = `<div class="modal-backdrop" data-close></div>
+      <div class="modal-card card" role="dialog" aria-modal="true" aria-label="Identify a plant">
+        <div class="flex items-center justify-between gap-2">
+          <h3 class="font-display text-lg font-semibold text-navy-800">🔍 Identify a plant</h3>
+          <button type="button" data-close class="btn-ghost px-2 py-1 text-sm">✕</button>
+        </div>
+        <p class="mt-1 text-xs text-navy-400">Your photo is sent to Pl@ntNet only when you tap Identify — never before.</p>
+        <div class="mt-3">
+          <label class="lbl" for="identify-file">Photo of the plant</label>
+          <input id="identify-file" type="file" accept="image/*" capture="environment" class="inp" />
+        </div>
+        <div id="identify-preview" class="mt-3 hidden">
+          <img id="identify-img" class="max-h-64 rounded-xl ring-1 ring-beige-200" alt="Plant photo preview" />
+        </div>
+        <div class="mt-3 flex items-center gap-3">
+          <button type="button" id="identify-go" class="btn-primary text-sm" disabled>Identify this plant</button>
+          <span id="identify-status" class="text-sm text-navy-400"></span>
+        </div>
+        <div id="identify-results" class="mt-3 space-y-2"></div>
+      </div>`;
+    modal.classList.remove('hidden');
+    modal.classList.add('modal-open');
+    modal.setAttribute('aria-hidden', 'false');
+    wireModal(modal);
+  }
+
+  function closeModal() {
+    const modal = $('#identify-modal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.classList.remove('modal-open');
+    modal.setAttribute('aria-hidden', 'true');
+    modal.innerHTML = '';
+  }
+
+  function wireModal(modal) {
+    modal.querySelectorAll('[data-close]').forEach((el) =>
+      el.addEventListener('click', closeModal));
+    const fileInput = modal.querySelector('#identify-file');
+    const goBtn = modal.querySelector('#identify-go');
+    const status = modal.querySelector('#identify-status');
+    let objectUrl = null;
+
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files && fileInput.files[0];
+      const results = modal.querySelector('#identify-results');
+      results.innerHTML = '';
+      status.textContent = '';
+      if (!file) { goBtn.disabled = true; return; }
+      if (!file.type.startsWith('image/')) {
+        toast('That file is not an image.', 'err');
+        fileInput.value = '';
+        goBtn.disabled = true;
+        return;
+      }
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      objectUrl = URL.createObjectURL(file);
+      const img = modal.querySelector('#identify-img');
+      img.src = objectUrl;
+      modal.querySelector('#identify-preview').classList.remove('hidden');
+      goBtn.disabled = false;
+    });
+
+    goBtn.addEventListener('click', async () => {
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+      const results = modal.querySelector('#identify-results');
+      goBtn.disabled = true;
+      status.textContent = 'Asking Pl@ntNet… 🌿';
+      try {
+        const form = new FormData();
+        form.append('photo', file, file.name);
+        const res = await api.upload('/api/identify', form);
+        const matches = (res && res.results) || [];
+        if (!matches.length) {
+          results.innerHTML = '<p class="text-sm text-navy-500">No confident matches — try a closer, well-lit photo of leaves or flowers.</p>';
+          return;
+        }
+        results.innerHTML = matches.map((m, i) => {
+          const pct = m.score != null ? `${m.score}%` : '—';
+          const common = (m.common_names || []).slice(0, 3).join(', ');
+          return `<div class="flex items-center justify-between gap-2 rounded-lg bg-beige-50 px-3 py-2 ring-1 ring-beige-200">
+            <div class="text-sm">
+              <p class="font-semibold text-navy-800"><em>${esc(m.name || 'Unknown')}</em>
+                <span class="ml-2 text-xs font-normal text-sage-700">${esc(pct)} match</span></p>
+              ${common ? `<p class="text-xs text-navy-500">${esc(common)}</p>` : ''}
+            </div>
+            <button type="button" class="btn-ghost shrink-0 px-3 py-1.5 text-sm" data-use="${i}">Use this</button>
+          </div>`;
+        }).join('');
+        results.querySelectorAll('[data-use]').forEach((btn) =>
+          btn.addEventListener('click', () => useMatch(matches[Number(btn.dataset.use)])));
+      } catch (error) {
+        toast(error.message || 'Identification failed.', 'err');
+      } finally {
+        status.textContent = '';
+        goBtn.disabled = false;
+      }
+    });
+  }
+
+  function useMatch(match) {
+    if (!match) return;
+    const form = $('#plant-form');
+    if (form && form.classList.contains('hidden')) $('#plant-add-toggle').click();
+    const species = $('#plant-species');
+    const name = $('#plant-name');
+    if (species) species.value = match.name || '';
+    if (name && !name.value) {
+      name.value = (match.common_names && match.common_names[0]) || match.name || '';
+    }
+    closeModal();
+    toast(`Filled in “${match.name || 'plant'}” from Pl@ntNet 🌱 — check it and save.`, 'ok');
+    if (species) species.focus();
+  }
+
+  async function initIdentify() {
+    const btn = $('#plant-identify');
+    if (!btn) return;
+    try {
+      const s = await api.get('/api/settings');
+      if (s && s.plantnet_api_key) btn.classList.remove('hidden');
+    } catch { /* stay hidden without a key */ }
+    btn.addEventListener('click', openModal);
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeModal();
+    });
+  }
+
+  globalThis.Verdant.onBoot(initIdentify);
 })();

@@ -185,3 +185,36 @@ def test_settings_page_renders(client):
     assert res.status_code == 200
     assert "Verdant · Settings" in res.text
     assert "/static/js/settings.js" in res.text
+
+
+def test_settings_partial_update_preserves_others(client):
+    # Full save first.
+    res = client.put("/api/settings", json={
+        "zone": "6",
+        "garden_lat": "39.09603",
+        "garden_lon": "-95.66",
+        "digest_enabled": True,
+        "discord_webhook_url": "https://discord.example/hook",
+        "digest_time": "07:30",
+    })
+    assert res.status_code == 200, res.text
+    # A partial PUT must only touch what was sent — everything else stays.
+    res = client.put("/api/settings", json={"plantnet_api_key": "abc123"})
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["plantnet_api_key"] == "abc123"
+    assert body["zone"] == "6"
+    assert body["garden_lat"] == "39.09603"
+    assert body["garden_lon"] == "-95.66"
+    assert body["digest_enabled"] is True
+    assert body["digest_time"] == "07:30"
+    # Cross-field checks see the merged result: enabling digest with a
+    # stored webhook passes even though this payload has no webhook.
+    res = client.put("/api/settings", json={"digest_enabled": True})
+    assert res.status_code == 200, res.text
+    # An explicitly sent empty string still clears that one field only.
+    res = client.put("/api/settings", json={"zone": ""})
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert not body["zone"]
+    assert body["garden_lat"] == "39.09603"

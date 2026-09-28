@@ -11,6 +11,8 @@ from functools import lru_cache
 from pathlib import Path
 import json
 
+from app import growstuff
+
 # Days of safety margin between a crop's expected maturity and the first
 # frost when computing the last safe sow date. Shown in the UI ("the math").
 SOW_BUFFER_DAYS = 14
@@ -62,13 +64,24 @@ def match_crop(plant_text: str) -> dict | None:
     if best is None:
         return None
     crop, var = best
-    maturity = (var.get("days_to_maturity") if var else None) or crop.get("days_to_maturity")
+    # Growstuff community medians (real gardens) win over the bundled
+    # packet-claim numbers when cached data is available.
+    community = growstuff.get(crop.get("key", ""))
+    if community:
+        maturity = int(community["median_days_to_first_harvest"])
+        maturity_source = "community"
+    else:
+        maturity = (var.get("days_to_maturity") if var else None) or crop.get(
+            "days_to_maturity"
+        )
+        maturity_source = "guide"
     if not maturity:
         return None
     return {
         "crop": crop,
         "variety": var,
         "days_to_maturity": int(maturity),
+        "maturity_source": maturity_source,
         "crop_name": crop.get("name", ""),
         "variety_name": var.get("name") if var else None,
     }
@@ -104,17 +117,20 @@ def harvest_forecast(
     if not date_planted:
         return None
     maturity = plant_maturity
+    maturity_source = "plant"  # the plant's own recorded timing
     crop_name = None
     if not maturity:
         matched = match_crop(f"{plant_variety} {plant_species}")
         if not matched:
             return None
         maturity = matched["days_to_maturity"]
+        maturity_source = matched["maturity_source"]
         crop_name = matched["crop_name"]
     ready = date_planted + timedelta(days=int(maturity))
     days_until = (ready - today).days
     return {
         "days_to_maturity": int(maturity),
+        "maturity_source": maturity_source,
         "ready_date": ready.isoformat(),
         "days_until_ready": days_until,
         "status": "ready" if days_until <= 0 else "growing",
