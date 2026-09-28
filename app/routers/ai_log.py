@@ -52,6 +52,15 @@ def _plant_names(session: Session, limit: int = 40) -> list[str]:
     return [n for n in session.exec(stmt).all() if n]
 
 
+def _get_json(url: str, timeout: int) -> dict:
+    """GET JSON, return the decoded body. Raises on any failure."""
+    request = urllib.request.Request(
+        url, headers={"User-Agent": "verdant-garden-log"},
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
 def _post_json(url: str, payload: dict, timeout: int) -> dict:
     """POST JSON, return the decoded body. Raises on any failure."""
     data = json.dumps(payload).encode("utf-8")
@@ -148,7 +157,8 @@ def ai_status(session: Session = Depends(get_session)) -> dict:
     if not cfg["enabled"]:
         return {"enabled": False, "reachable": False, "model": cfg["model"]}
     try:
-        body = _post_json(f"{cfg['base_url']}/api/tags", {}, timeout=5)
+        # /api/tags is GET-only on Ollama (POST → 405), so don't use _post_json here.
+        body = _get_json(f"{cfg['base_url']}/api/tags", timeout=5)
         models = [m.get("name") for m in (body.get("models") or []) if isinstance(m, dict)]
         want = cfg["model"]
         present = any(

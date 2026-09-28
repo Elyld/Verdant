@@ -97,10 +97,14 @@ def _stub_ollama(monkeypatch, chat_content=None, tags_ok=True, error=None, tags_
         calls.append(request.full_url)
         if error is not None:
             raise error
+        method = request.get_method()
         if request.full_url.endswith("/api/tags"):
+            # Ollama's /api/tags is GET-only (POST → 405) — pin the method.
+            assert method == "GET", f"/api/tags must be GET, got {method}"
             models = tags_models if tags_models is not None else ([{"name": "qwen3:4b"}] if tags_ok else [])
             body = {"models": models} if tags_ok or tags_models is not None else {}
         elif request.full_url.endswith("/api/chat"):
+            assert method == "POST", f"/api/chat must be POST, got {method}"
             body = {"message": {"content": chat_content or ""}, "done": True}
         else:
             raise AssertionError(f"unexpected URL {request.full_url}")

@@ -678,6 +678,10 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.38.2** — **Local AI test actually connects now.** The status check was
+  POSTing to Ollama's `/api/tags`, which is GET-only — every test failed with
+  405 even when Ollama was fine. It uses GET now (the error-detail line from
+  2.38.1 is what caught it).
 - **2.38.1** — **Local AI test shows the real error.** The Test connection button
   used to swallow the failure and just say "couldn't connect." It now prints
   the underlying error too — connection refused (Ollama isn't listening),
