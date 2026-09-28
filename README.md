@@ -1,4 +1,4 @@
-# 🌿 Verdant — Self-Hosted Garden Journal (v2.17.0)
+# 🌿 Verdant — Self-Hosted Garden Journal (v2.26.0)
 
 Your garden, logged. Plant profiles with care reminders, a daily observation log
 with a calendar heatmap, photo albums with slideshows, a seed stash and seedling
