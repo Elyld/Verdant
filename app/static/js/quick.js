@@ -38,10 +38,11 @@
       } catch (error) { toast(`Could not log watering: ${error.message}`, 'err'); }
     }
 
-    async function logHarvest(plantId, qty, btn) {
+    async function logHarvest(plantId, qty, weight, weightUnit, btn) {
       try {
-        await api.post('/api/harvests/', { plant_id: plantId, date: today, quantity: qty });
-        toast(`Harvested ${qty} 🧺`, 'ok');
+        await api.post('/api/harvests/', { plant_id: plantId, date: today, quantity: qty,
+          weight: weight, weight_unit: weightUnit });
+        toast(weight != null ? `Harvested ${qty} 🧺 · ${weight} ${weightUnit}` : `Harvested ${qty} 🧺`, 'ok');
         flash(btn);
       } catch (error) { toast(`Could not log harvest: ${error.message}`, 'err'); }
     }
@@ -54,7 +55,7 @@
       } catch (error) { toast(`Could not log note: ${error.message}`, 'err'); }
     }
 
-    function quickPlantCard(plant) {
+    function quickPlantCard(plant, defaultWeightUnit) {
       const card = document.createElement('div');
       card.className = 'card space-y-3';
       card.innerHTML = `
@@ -64,13 +65,19 @@
           <button type="button" data-act="harvest" class="rounded-xl bg-sage-600 px-2 py-4 text-2xl text-beige-50 ring-1 ring-sage-500 active:bg-sage-500" title="Log harvest">🧺<span class="block text-xs font-semibold">Harvest</span></button>
           <button type="button" data-act="note" class="rounded-xl bg-beige-200 px-2 py-4 text-2xl text-navy-800 ring-1 ring-beige-300 active:bg-beige-300" title="Quick note">📝<span class="block text-xs font-semibold">Note</span></button>
         </div>
-        <div data-harvest-ui class="hidden items-center justify-between gap-2 rounded-xl bg-sage-50 px-3 py-2 ring-1 ring-sage-200">
-          <div class="flex items-center gap-2">
-            <button type="button" data-hv-dec class="rounded-lg bg-beige-200 px-3 py-2 text-lg font-bold">−</button>
-            <span data-hv-qty class="w-10 text-center text-lg font-bold">1</span>
-            <button type="button" data-hv-inc class="rounded-lg bg-beige-200 px-3 py-2 text-lg font-bold">+</button>
+        <div data-harvest-ui class="hidden flex-col gap-2 rounded-xl bg-sage-50 px-3 py-2 ring-1 ring-sage-200">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <button type="button" data-hv-dec class="rounded-lg bg-beige-200 px-3 py-2 text-lg font-bold">−</button>
+              <span data-hv-qty class="w-10 text-center text-lg font-bold">1</span>
+              <button type="button" data-hv-inc class="rounded-lg bg-beige-200 px-3 py-2 text-lg font-bold">+</button>
+            </div>
+            <div class="flex items-center gap-1">
+              <input type="number" min="0" step="0.1" data-hv-weight class="inp w-24 text-sm" placeholder="weight" />
+              <select data-hv-weight-unit class="inp w-[4.5rem] shrink-0 text-sm"><option>oz</option><option>g</option><option>lb</option><option>kg</option></select>
+            </div>
           </div>
-          <button type="button" data-hv-save class="btn-primary text-sm">Log harvest</button>
+          <button type="button" data-hv-save class="btn-primary w-full text-sm">Log harvest</button>
         </div>
         <div data-note-ui class="hidden gap-2">
           <input type="text" data-note-text class="inp flex-1" placeholder="Quick note…" maxlength="500" />
@@ -93,7 +100,14 @@
       });
       card.querySelector('[data-hv-dec]').addEventListener('click', () => { qty = Math.max(1, qty - 1); qtyEl.textContent = qty; });
       card.querySelector('[data-hv-inc]').addEventListener('click', () => { qty += 1; qtyEl.textContent = qty; });
-      card.querySelector('[data-hv-save]').addEventListener('click', (e) => logHarvest(plant.id, qty, e.currentTarget));
+      card.querySelector('[data-hv-save]').addEventListener('click', (e) => {
+        const wRaw = card.querySelector('[data-hv-weight]').value.trim();
+        const weight = wRaw === '' ? null : Number(wRaw);
+        const weightUnit = card.querySelector('[data-hv-weight-unit]').value;
+        logHarvest(plant.id, qty, weight, weightUnit, e.currentTarget);
+      });
+      const unitSel = card.querySelector('[data-hv-weight-unit]');
+      if (unitSel && defaultWeightUnit) unitSel.value = defaultWeightUnit;
       const noteInput = card.querySelector('[data-note-text]');
       card.querySelector('[data-note-save]').addEventListener('click', (e) => {
         const text = noteInput.value.trim();
@@ -130,6 +144,9 @@
         api.get('/api/plants/'),
         api.get('/api/locations/').catch(() => []),
       ]);
+      // Prefill the harvest weight unit from Preferences (mirrors the Plants page form).
+      let defaultWeightUnit = 'oz';
+      try { defaultWeightUnit = (await getSettings()).default_weight_unit || 'oz'; } catch { /* preference is supplementary */ }
       let growing = (Array.isArray(plants) ? plants : []).filter((p) => p.status === 'Growing');
       // NFC tag prefill: narrow to one plant or one location.
       if (onlyPlant) growing = growing.filter((p) => p.id === onlyPlant);
@@ -161,7 +178,7 @@
         section.appendChild(header);
         const grid = document.createElement('div');
         grid.className = 'grid gap-3 sm:grid-cols-2';
-        plist.forEach((p) => grid.appendChild(quickPlantCard(p)));
+        plist.forEach((p) => grid.appendChild(quickPlantCard(p, defaultWeightUnit)));
         section.appendChild(grid);
         host.appendChild(section);
       });

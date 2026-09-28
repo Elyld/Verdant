@@ -173,6 +173,42 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
   check('companion hint shown for tomato x basil', hints.includes('tomato × basil') && hints.includes('🌱'));
   check('no false bad-pair hint', !hints.includes('⚠️'));
 
+  // unconfigured weather (no GARDEN_LAT/GARDEN_LON): hint instead of a silently hidden strip
+  const lsStore = {};
+  global.localStorage = {
+    getItem: (k) => (k in lsStore ? lsStore[k] : null),
+    setItem: (k, v) => { lsStore[k] = String(v); },
+    removeItem: (k) => { delete lsStore[k]; },
+  };
+  const origFetch = global.fetch;
+  global.fetch = async (url, options) => {
+    if (url === '/api/weather/forecast') {
+      return { ok: true, status: 200, json: async () => ({
+        ok: false, reason: 'not-configured',
+        hint: 'Set GARDEN_LAT and GARDEN_LON to enable weather.' }) };
+    }
+    if (url === '/api/weather/alerts') {
+      return { ok: true, status: 200, json: async () => ({ ok: false, reason: 'not-configured', alerts: [] }) };
+    }
+    return origFetch(url, options);
+  };
+  named['#weather-strip'] = makeEl();
+  named['#weather-strip'].classList.add('hidden');
+  const dismissBtn = makeEl();
+  named['[data-wx-dismiss]'] = dismissBtn;
+  delete require.cache[require.resolve('/home/hatch/workspace/verdant/app/static/js/planner.js')];
+  require('/home/hatch/workspace/verdant/app/static/js/planner.js');
+  await tick(80);
+  const strip2 = named['#weather-strip'];
+  check('unconfigured weather shows hint strip (not silently hidden)',
+    !strip2.classList.contains('hidden') && strip2.classList.contains('flex'));
+  check('hint names GARDEN_LAT/GARDEN_LON', strip2.innerHTML.includes('GARDEN_LAT/GARDEN_LON'));
+  check('hint has dismiss button', strip2.innerHTML.includes('data-wx-dismiss'));
+  fire(dismissBtn, 'click');
+  await tick(20);
+  check('dismiss hides the strip', strip2.classList.contains('hidden'));
+  check('dismiss remembered in localStorage', lsStore['verdant.wx-hint-dismissed'] === '1');
+
   console.log(failures ? `\n${failures} check(s) failed.` : '\nAll checks passed.');
   process.exit(failures ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });
