@@ -352,7 +352,7 @@ to `.env` (or set them in your Dockge stack) for the ones you want.
 | `GARDEN_PUBLIC_URL` | `http://localhost:3113` | Base URL used to resolve relative URLs in "Import from URL" |
 | `IMMICH_BASE_URL` | (unset) | Your Immich server URL, e.g. `http://192.168.0.50:2283` (enables Immich import) |
 | `IMMICH_API_KEY` | (unset) | Immich API key (Account Settings → API Keys). Needs `album.read`, `asset.view`, `asset.download` |
-| `GARDEN_LAT` / `GARDEN_LON` | (unset) | Your garden's coordinates — stamps new observations with current weather (free Open-Meteo data, no key needed) |
+| `GARDEN_LAT` / `GARDEN_LON` | (unset) | Fallback for your garden's coordinates — prefer the Settings page (📍 Use my location button). Stamps new observations with current weather + powers the Planner weather strip (free Open-Meteo data, no key needed) |
 | `DIGEST_ENABLED` | `false` | Set `true` to enable the morning Discord digest |
 | `DISCORD_WEBHOOK_URL` | (unset) | Discord webhook URL (Server Settings → Integrations → Webhooks) |
 | `DIGEST_TIME` | `08:00` | When the digest sends (24h `HH:MM`, server local time) |
@@ -371,9 +371,14 @@ to `.env` (or set them in your Dockge stack) for the ones you want.
 
 ### Weather stamping
 
-Set `GARDEN_LAT` and `GARDEN_LON` (find your coordinates by clicking your spot
-on the map at <https://open-meteo.com>) and every new observation is stamped
-with the temperature and conditions at log time. Free, no API key.
+Set your garden coordinates on the **Settings page** (preferred — there's a
+📍 *Use my location* button that fills them in from your browser, falling back
+to a one-time city-level lookup via ip-api.com when you click it) or with the
+`GARDEN_LAT` / `GARDEN_LON` env vars (kept as a fallback; Settings win). Find
+coordinates by hand by clicking your spot on the map at
+<https://open-meteo.com>. Every new observation is then stamped with the
+temperature and conditions at log time, and the Planner shows its weather
+strip. Free, no API key.
 
 ### Discord digest
 
@@ -554,6 +559,14 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.26.0** — **📍 Garden coordinates move to Settings.** Latitude/longitude
+  are now first-class Settings-page fields (saved like everything else, no env
+  vars needed) with a **Use my location** button: it tries your browser's
+  geolocation first, and falls back to a one-time city-level IP lookup via
+  ip-api.com — click-only, never in the background, nothing stored beyond the
+  coordinates. Settings outrank the `GARDEN_LAT` / `GARDEN_LON` env vars (kept
+  as fallback), so a stale env var can never shadow what you picked in the UI.
+  The planner's unconfigured-weather hint now points at Settings too.
 - **2.25.0** — **🛒 Winter seed-order assistant.** New tab on the Seeds page
   that pulls ordering season together: a ratings table for the stash (how old
   each packet is, one-tap "grow again?" ratings — 👎 Skip, 👍 Grow again,

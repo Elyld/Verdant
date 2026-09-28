@@ -47,6 +47,28 @@
         Zone dates are approximate averages — good enough for countdowns and sowing calendars.
         An exact date always wins over the zone.
       </p>
+      <div class="grid gap-4 sm:grid-cols-3">
+        <label class="block">
+          <span class="lbl">Garden latitude</span>
+          <input id="set-lat" type="number" step="any" min="-90" max="90" class="inp" placeholder="30.2672" />
+        </label>
+        <label class="block">
+          <span class="lbl">Garden longitude</span>
+          <input id="set-lon" type="number" step="any" min="-180" max="180" class="inp" placeholder="-97.7431" />
+        </label>
+        <div class="flex items-end">
+          <button type="button" id="set-locate" class="btn-ghost text-sm">📍 Use my location</button>
+        </div>
+      </div>
+      <p class="text-xs text-navy-400">
+        Coordinates power the Planner's weather strip and stamp new observations with the
+        current conditions (free Open-Meteo data, no key needed). They take precedence over
+        the <code>GARDEN_LAT</code> / <code>GARDEN_LON</code> env vars.
+        <strong>Use my location</strong> first tries your browser's location (needs a secure
+        context and your permission); if that's unavailable it does a one-time city-level
+        lookup via ip-api.com. It only ever runs when you click it — nothing is stored
+        beyond the coordinates themselves.
+      </p>
       <div id="frost-preview" class="rounded-xl bg-beige-100 px-4 py-3 text-sm text-navy-700 ring-1 ring-beige-300">
         <span class="text-navy-400">Frost preview will appear here once you save.</span>
       </div>

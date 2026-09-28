@@ -1,7 +1,8 @@
 """Current weather via Open-Meteo (free, no API key required).
 
-Used to stamp observations with the weather at log time. Configure with:
-  GARDEN_LAT=...  GARDEN_LON=...
+Garden coordinates come from the Settings page (garden_lat / garden_lon),
+with the GARDEN_LAT / GARDEN_LON env vars as fallback — Settings win, so a
+stale env var can never shadow what was picked in the UI.
 If unset, weather capture is skipped silently.
 """
 
@@ -13,14 +14,33 @@ import time
 import urllib.request
 from typing import Optional
 
+from app import frost as frost_mod
 
-def _coords() -> Optional[tuple[float, float]]:
+
+def _parse_coords(lat_raw, lon_raw) -> Optional[tuple[float, float]]:
+    """Parse a lat/lon pair; None when missing, non-numeric, or out of range."""
     try:
-        lat = float(os.getenv("GARDEN_LAT", ""))
-        lon = float(os.getenv("GARDEN_LON", ""))
+        lat = float(lat_raw)
+        lon = float(lon_raw)
     except (TypeError, ValueError):
         return None
+    if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+        return None
     return (lat, lon)
+
+
+def _coords(session=None) -> Optional[tuple[float, float]]:
+    """Garden coordinates. The Settings page (garden_lat/garden_lon) outranks
+    the GARDEN_LAT/GARDEN_LON env vars; a partial or invalid Settings entry
+    falls through to env rather than breaking weather."""
+    if session is not None:
+        pair = _parse_coords(
+            frost_mod.get_setting(session, "garden_lat"),
+            frost_mod.get_setting(session, "garden_lon"),
+        )
+        if pair is not None:
+            return pair
+    return _parse_coords(os.getenv("GARDEN_LAT", ""), os.getenv("GARDEN_LON", ""))
 
 
 def _summarize(code: int) -> str:
@@ -41,12 +61,12 @@ def _summarize(code: int) -> str:
     return "Overcast"
 
 
-def fetch_current_weather() -> Optional[dict]:
+def fetch_current_weather(session=None) -> Optional[dict]:
     """Return {'temp_c': float, 'summary': str} or None if unavailable.
 
     Never raises: any failure (no coords, no network, bad payload) → None.
     """
-    coords = _coords()
+    coords = _coords(session)
     if coords is None:
         return None
     lat, lon = coords
@@ -70,8 +90,8 @@ def fetch_current_weather() -> Optional[dict]:
         return None
 
 
-def configured() -> bool:
-    return _coords() is not None
+def configured(session=None) -> bool:
+    return _coords(session) is not None
 
 
 # --------------------------------------------------------------------------- #
@@ -81,14 +101,14 @@ FORECAST_TTL_S = 1800  # 30 minutes
 _forecast_cache = {"at": 0.0, "data": None}
 
 
-def fetch_forecast() -> Optional[dict]:
+def fetch_forecast(session=None) -> Optional[dict]:
     """Fetch and compact the Open-Meteo forecast. Never raises.
 
     Returns imperial units (F, mph, inches) — the router converts to C when
     the user's temperature_unit setting says so. Shape:
       {"as_of": iso, "current": {...}, "hourly": [...48], "daily": [...7]}
     """
-    coords = _coords()
+    coords = _coords(session)
     if coords is None:
         return None
     lat, lon = coords
@@ -175,21 +195,32 @@ def fetch_forecast() -> Optional[dict]:
         return None
 
 
-def get_forecast() -> Optional[dict]:
-    """Cached forecast; falls back to stale data when a refresh fails. Never raises."""
+def get_forecast(session=None) -> Optional[dict]:
+    """Cached forecast; falls back to stale data when a refresh fails. Never raises.
+
+    The cache is keyed by coords, so changing the garden location in Settings
+    refreshes immediately instead of serving the old spot's forecast.
+    """
+    coords = _coords(session)
+    if coords is None:
+        return None
     now = time.monotonic()
     fresh = (
         _forecast_cache["data"] is not None
+        and _forecast_cache.get("coords") == coords
         and now - _forecast_cache["at"] < FORECAST_TTL_S
     )
     if fresh:
         return _forecast_cache["data"]
     try:
-        data = fetch_forecast()
+        data = fetch_forecast(session)
     except Exception:
         data = None
     if data is not None:
         _forecast_cache["at"] = now
         _forecast_cache["data"] = data
+        _forecast_cache["coords"] = coords
         return data
-    return _forecast_cache["data"]  # stale is better than nothing
+    if _forecast_cache.get("coords") == coords:
+        return _forecast_cache["data"]  # stale is better than nothing
+    return None

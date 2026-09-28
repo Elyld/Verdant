@@ -2,7 +2,9 @@
 
 Stored in the `settings` key/value table. Digest keys saved here win over
 the DIGEST_* env vars; frost keys feed the header countdown and the
-seed-starting calendar (see app/frost.py for precedence).
+seed-starting calendar (see app/frost.py for precedence); garden_lat /
+garden_lon feed the weather strip and observation stamping, winning over
+the GARDEN_LAT / GARDEN_LON env vars.
 """
 from __future__ import annotations
 
@@ -33,6 +35,8 @@ SETTING_KEYS = (
     "default_weight_unit",
     "slideshow_interval",
     "confirm_water_all",
+    "garden_lat",
+    "garden_lon",
 )
 
 # Set by app.main at startup so saving new digest settings re-arms the
@@ -57,6 +61,8 @@ class SettingsUpdate(BaseModel):
     default_weight_unit: str = "oz"  # prefill for the harvest form weight-unit select
     slideshow_interval: int = 5  # default slideshow autoplay interval, seconds
     confirm_water_all: bool = True  # confirm() before "Water all" on Quick Log
+    garden_lat: str = ""  # garden latitude for the weather strip / stamping
+    garden_lon: str = ""  # garden longitude — Settings win over GARDEN_LAT/LON env
 
 
 def _validate(payload: SettingsUpdate) -> None:
@@ -80,6 +86,17 @@ def _validate(payload: SettingsUpdate) -> None:
         raise HTTPException(400, f"Bad default_weight_unit {payload.default_weight_unit!r} (want oz/g/lb/kg).")
     if payload.slideshow_interval not in (3, 5, 10, 30):
         raise HTTPException(400, f"Bad slideshow_interval {payload.slideshow_interval!r} (want 3/5/10/30).")
+    for label, raw, lo, hi in (
+        ("garden_lat", payload.garden_lat, -90, 90),
+        ("garden_lon", payload.garden_lon, -180, 180),
+    ):
+        if raw.strip():
+            try:
+                value = float(raw)
+            except ValueError:
+                raise HTTPException(400, f"Bad {label} {raw!r} (want a number).")
+            if not (lo <= value <= hi):
+                raise HTTPException(400, f"Bad {label} {raw!r} (want {lo}..{hi}).")
 
 
 def _frost_preview(session: Session, which: str) -> dict:
@@ -118,6 +135,8 @@ def current_settings(session: Session) -> dict:
         "zone": frost_mod.get_setting(session, "zone"),
         "frost_date": frost_mod.get_setting(session, "frost_date"),
         "last_frost_date": frost_mod.get_setting(session, "last_frost_date"),
+        "garden_lat": frost_mod.get_setting(session, "garden_lat"),
+        "garden_lon": frost_mod.get_setting(session, "garden_lon"),
         "temperature_unit": temp_unit,
         "week_start": week_start,
         "default_weight_unit": default_weight_unit,
@@ -153,6 +172,8 @@ def save_settings(payload: SettingsUpdate, session: Session = Depends(get_sessio
     frost_mod.set_setting(session, "default_weight_unit", payload.default_weight_unit)
     frost_mod.set_setting(session, "slideshow_interval", str(payload.slideshow_interval))
     frost_mod.set_setting(session, "confirm_water_all", "true" if payload.confirm_water_all else "false")
+    frost_mod.set_setting(session, "garden_lat", payload.garden_lat.strip())
+    frost_mod.set_setting(session, "garden_lon", payload.garden_lon.strip())
     session.commit()
     if _reschedule_digest is not None and payload.digest_time.strip() != old_time:
         _reschedule_digest()

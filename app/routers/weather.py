@@ -1,6 +1,8 @@
 """Weather API: cached forecast + garden alerts linked to the user's data."""
 from __future__ import annotations
 
+import json
+import urllib.request
 from datetime import date as date_cls
 from typing import Optional
 
@@ -12,6 +14,11 @@ from app import garden_alerts, weather as weather_mod
 from app.database import get_session
 
 router = APIRouter(prefix="/api/weather", tags=["weather"])
+
+NOT_CONFIGURED_HINT = (
+    "Set your garden coordinates on the Settings page "
+    "(or the GARDEN_LAT / GARDEN_LON env vars) to enable weather."
+)
 
 
 def _temp_unit(session: Session) -> str:
@@ -57,10 +64,10 @@ def _convert(forecast: dict, unit: str) -> dict:
 
 @router.get("/forecast")
 def get_forecast(session: Session = Depends(get_session)) -> dict:
-    if not weather_mod.configured():
+    if not weather_mod.configured(session):
         return {"ok": False, "reason": "not-configured",
-                "hint": "Set GARDEN_LAT and GARDEN_LON to enable weather."}
-    fc = weather_mod.get_forecast()
+                "hint": NOT_CONFIGURED_HINT}
+    fc = weather_mod.get_forecast(session)
     if not fc:
         return {"ok": False, "reason": "unavailable",
                 "hint": "Could not reach the forecast service."}
@@ -70,11 +77,38 @@ def get_forecast(session: Session = Depends(get_session)) -> dict:
 
 @router.get("/alerts")
 def get_alerts(session: Session = Depends(get_session)) -> dict:
-    if not weather_mod.configured():
+    if not weather_mod.configured(session):
         return {"ok": False, "reason": "not-configured", "alerts": []}
-    fc = weather_mod.get_forecast()
+    fc = weather_mod.get_forecast(session)
     if not fc or not (fc.get("hourly") or []):
         return {"ok": False, "reason": "unavailable", "alerts": []}
     unit = _temp_unit(session)
     alerts = garden_alerts.compute_alerts(session, fc, today=date_cls.today(), temp_unit=unit)
     return {"ok": True, "temp_unit": unit, "as_of": fc.get("as_of"), "alerts": alerts}
+
+
+@router.get("/geolocate")
+def geolocate() -> dict:
+    """One-shot IP-based location lookup for the Settings page's
+    \"Use my location\" button. City-level accuracy via ip-api.com (free, no
+    key). Click-only — never called in the background — and nothing is
+    stored; the button just fills the latitude/longitude fields for the user
+    to save. Never raises: any failure → {"ok": False}.
+    """
+    try:
+        request = urllib.request.Request(
+            "https://ip-api.com/json/?fields=status,lat,lon,city",
+            headers={"User-Agent": "verdant-garden-log"},
+        )
+        with urllib.request.urlopen(request, timeout=6) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        if payload.get("status") != "success":
+            return {"ok": False, "reason": "lookup-failed"}
+        return {
+            "ok": True,
+            "lat": float(payload["lat"]),
+            "lon": float(payload["lon"]),
+            "city": payload.get("city") or "",
+        }
+    except Exception:
+        return {"ok": False, "reason": "lookup-failed"}
