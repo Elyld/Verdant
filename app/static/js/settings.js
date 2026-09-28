@@ -2,9 +2,9 @@
 (() => {
   'use strict';
 
-  const { $, esc, api, toast, NAV_SECTIONS, parseMobileTabs } = globalThis.Verdant;
+  const { $, esc, api, toast, NAV_SECTIONS, DEFAULT_MOBILE_TABS, MAX_MOBILE_TABS, parseMobileTabs } = globalThis.Verdant;
 
-  // Mobile tab-bar chip picker: up to 4 section keys, in tap order.
+  // Mobile tab-bar chip picker: up to MAX_MOBILE_TABS section keys, in tap order.
   let mobileTabPicks = [];
 
   function renderMobileChips() {
@@ -20,8 +20,8 @@
     const count = $('#mobile-tab-count');
     if (count) {
       count.textContent = mobileTabPicks.length
-        ? `${mobileTabPicks.length} of 4 tabs picked`
-        : 'No picks yet — the tab bar will use Quick Log, Plants, Calendar, Planner.';
+        ? `${mobileTabPicks.length} of ${MAX_MOBILE_TABS} tabs picked`
+        : `No picks yet — the tab bar will use ${DEFAULT_MOBILE_TABS.map((k) => (NAV_SECTIONS.find((s) => s.key === k) || {}).label || k).join(', ')}.`;
     }
   }
 
@@ -37,8 +37,8 @@
       if (at >= 0) {
         mobileTabPicks.splice(at, 1);
       } else {
-        if (mobileTabPicks.length >= 4) {
-          toast('Up to 4 tabs — remove one first.', 'err');
+        if (mobileTabPicks.length >= MAX_MOBILE_TABS) {
+          toast(`Up to ${MAX_MOBILE_TABS} tabs — remove one first.`, 'err');
           return;
         }
         mobileTabPicks.push(key);

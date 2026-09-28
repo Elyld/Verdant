@@ -30,10 +30,10 @@ TIME_RE = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
 MOBILE_TAB_KEYS = frozenset({
     "home", "observations", "calendar", "photos", "plants", "seeds",
     "seedlings", "review", "import", "quick", "costs", "pests",
-    "fertilizers", "planner", "tags",
+    "fertilizers", "planner", "tags", "settings",
 })
-DEFAULT_MOBILE_TABS = ["quick", "plants", "calendar", "planner"]
-MAX_MOBILE_TABS = 4
+DEFAULT_MOBILE_TABS = ["quick", "plants", "calendar", "planner", "settings"]
+MAX_MOBILE_TABS = 5
 
 
 def normalize_mobile_tabs(raw: str) -> str:

@@ -140,9 +140,10 @@
     { key: 'fertilizers', href: '/fertilizers', icon: '🧪', label: 'Fertilizers' },
     { key: 'planner', href: '/planner', icon: '🗺️', label: 'Planner' },
     { key: 'tags', href: '/tags', icon: '🏷️', label: 'Tags' },
+    { key: 'settings', href: '/settings', icon: '⚙️', label: 'Settings' },
   ];
-  const DEFAULT_MOBILE_TABS = ['quick', 'plants', 'calendar', 'planner'];
-  const MAX_MOBILE_TABS = 4;
+  const DEFAULT_MOBILE_TABS = ['quick', 'plants', 'calendar', 'planner', 'settings'];
+  const MAX_MOBILE_TABS = 5;
 
   // Parse the mobile_tabs setting (JSON array string). Returns the key list
   // in the user's order, or null when unset/invalid (caller falls back to
@@ -406,7 +407,7 @@
   globalThis.Verdant = {
     $, $$, esc, fmtDate, fmtDateTime, fmtAmount, tempUnit, fmtTemp, api, toast, markdown,
     uploadFiles, wireDraft, renderStats, healthBar, plantCard, onBoot, onBootLate, todayLocal,
-    getSettings, NAV_SECTIONS, DEFAULT_MOBILE_TABS, parseMobileTabs,
+    getSettings, NAV_SECTIONS, DEFAULT_MOBILE_TABS, MAX_MOBILE_TABS, parseMobileTabs,
   };
 
   document.addEventListener('DOMContentLoaded', boot);

@@ -1,4 +1,4 @@
-# 🌿 Verdant — Self-Hosted Garden Journal (v2.31.0)
+# 🌿 Verdant — Self-Hosted Garden Journal (v2.32.0)
 
 Your garden, logged. Plant profiles with care reminders, a daily observation log
 with a calendar heatmap, photo albums with slideshows, a seed stash and seedling
@@ -24,11 +24,12 @@ Seeds, Seedlings, Planner), **Track** (Garden Logs, Calendar, Quick Log,
 Photos), **Manage** (Costs, Pests, Fertilizers, Review, Import, Tags), and
 **Read** (Blog & Stories) — over a faint fern watermark, with no dropdown
 menus anywhere. On your phone you get a bottom tab bar instead: pick up to
-**4** of your own sections in the order you tap them, right on the
+**5** of your own sections in the order you tap them, right on the
 📱 *Mobile tab bar* card of the Settings page (tap a chip to add it, tap
 again to remove — no dropdowns there either), and everything else stays one
 tap away under **More**, which opens a bottom sheet of the remaining
-sections. Out of the box the bar is Quick Log, Plants, Calendar, Planner.
+sections. Out of the box the bar is Quick Log, Plants, Calendar, Planner,
+and Settings — so Settings is always one tap away on your phone.
 
 ![Mobile tab bar](docs/screenshots/nav-mobile.png)
 
@@ -618,6 +619,12 @@ correct, and the container's clock/timezone matches yours — `DIGEST_TIME` is
 server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
+
+- **2.32.0** — **⚙️ Settings joins the mobile tab bar.** The bottom tab bar
+  now fits up to **5** of your sections, and **Settings** is one of the
+  defaults (Quick Log, Plants, Calendar, Planner, Settings) — no more
+  hunting for it on your phone. The 📱 *Mobile tab bar* card on the Settings
+  page lets you swap any of the five.
 
 - **2.31.0** — **🔎 Crop lookup — growing info on tap.** The plant form has a
   new “Look up growing info” button: search the built-in crop guide (30
