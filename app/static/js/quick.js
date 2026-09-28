@@ -199,3 +199,200 @@
 
   globalThis.Verdant.onBoot(initQuick);
 })();
+
+/* "Tell Verdant what you did" — local-model sentence → draft log entries. */
+(() => {
+  'use strict';
+
+  const { $, esc, api, toast, todayLocal } = globalThis.Verdant;
+
+  const AI_ACTIONS = {
+    water: { icon: '💧', label: 'Water' },
+    fertilize: { icon: '🧪', label: 'Feed' },
+    observe: { icon: '👁️', label: 'Observe' },
+    harvest: { icon: '🧺', label: 'Harvest' },
+    pest: { icon: '🐛', label: 'Pest' },
+    note: { icon: '📝', label: 'Note' },
+  };
+
+  function initAiLog() {
+    const card = $('#ai-log-card');
+    if (!card) return;
+    const off = $('#ai-log-off');
+    const form = $('#ai-log-form');
+    const textEl = $('#ai-log-text');
+    const goBtn = $('#ai-log-go');
+    const draftsEl = $('#ai-log-drafts');
+    const actionsEl = $('#ai-log-actions');
+    let plants = [];
+    let drafts = [];
+
+    async function boot() {
+      let status;
+      try {
+        status = await api.get('/api/ai/status');
+      } catch { return; } // card stays hidden when the backend is unreachable
+      if (!status || !status.enabled) return; // disabled → hidden, no nagging
+      card.classList.remove('hidden');
+      if (!status.reachable) {
+        form.classList.add('hidden');
+        off.classList.remove('hidden');
+        off.textContent = status.hint || 'The model server is not reachable — check Settings → Local AI.';
+        return;
+      }
+      try {
+        plants = (await api.get('/api/plants/')).filter((p) => p.status === 'Growing');
+      } catch { plants = []; }
+    }
+
+    function plantOptions(selectedId) {
+      return plants.map((p) =>
+        `<option value="${p.id}"${p.id === selectedId ? ' selected' : ''}>${esc(p.variety_name)}</option>`).join('');
+    }
+
+    function draftCard(d, idx) {
+      const meta = AI_ACTIONS[d.action] || AI_ACTIONS.note;
+      const el = document.createElement('div');
+      el.className = 'rounded-xl bg-beige-100 px-3 py-2 ring-1 ring-beige-300 space-y-2';
+      el.dataset.idx = idx;
+      const extra = [];
+      if (d.action === 'fertilize') {
+        extra.push(`<label class="block"><span class="lbl">Product</span><input data-f="detail" class="inp text-sm" value="${esc(d.detail || '')}" maxlength="120" placeholder="e.g. fish emulsion" /></label>`);
+        extra.push(`<div class="grid grid-cols-2 gap-2">
+          <label class="block"><span class="lbl">Amount</span><input data-f="amount" type="number" min="0" step="any" class="inp text-sm" value="${d.amount ?? ''}" /></label>
+          <label class="block"><span class="lbl">Unit</span><input data-f="unit" class="inp text-sm" value="${esc(d.unit || '')}" maxlength="12" placeholder="oz" /></label>
+        </div>`);
+      } else if (d.action === 'pest') {
+        extra.push(`<label class="block"><span class="lbl">Pest</span><input data-f="detail" class="inp text-sm" value="${esc(d.detail || '')}" maxlength="120" placeholder="e.g. aphids" /></label>`);
+      } else if (d.action === 'harvest') {
+        extra.push(`<label class="block"><span class="lbl">Quantity</span><input data-f="amount" type="number" min="1" step="1" class="inp text-sm" value="${Math.max(1, Math.round(d.amount || 1))}" /></label>`);
+      }
+      el.innerHTML =
+        `<div class="flex items-center justify-between gap-2">
+          <span class="font-semibold text-navy-800">${meta.icon} ${meta.label}</span>
+          <button type="button" data-remove class="btn-ghost px-2 py-1 text-sm" title="Remove draft">✕</button>
+        </div>
+        <label class="block"><span class="lbl">Plant</span>
+          <select data-f="plant_id" class="inp text-sm">
+            <option value="">— pick —</option>${plantOptions(d.plant_id)}
+          </select></label>
+        ${extra.join('')}
+        <label class="block"><span class="lbl">Notes</span><input data-f="notes" class="inp text-sm" value="${esc(d.notes || '')}" maxlength="500" /></label>`;
+      el.querySelector('[data-remove]').addEventListener('click', () => {
+        drafts.splice(idx, 1);
+        renderDrafts();
+      });
+      return el;
+    }
+
+    function renderDrafts() {
+      draftsEl.innerHTML = '';
+      drafts.forEach((d, i) => draftsEl.appendChild(draftCard(d, i)));
+      actionsEl.classList.toggle('hidden', drafts.length === 0);
+      actionsEl.classList.toggle('flex', drafts.length > 0);
+    }
+
+    function readCard(el, d) {
+      const val = (name) => {
+        const input = el.querySelector(`[data-f="${name}"]`);
+        return input ? input.value.trim() : '';
+      };
+      const plantId = Number(val('plant_id')) || null;
+      d.plant_id = plantId;
+      d.plant_name = (plants.find((p) => p.id === plantId) || {}).variety_name || null;
+      d.notes = val('notes');
+      d.detail = val('detail') || null;
+      const amount = val('amount');
+      d.amount = amount === '' ? null : Number(amount);
+      d.unit = val('unit') || null;
+    }
+
+    async function interpret() {
+      const text = textEl.value.trim();
+      if (!text) { toast('Say what you did first.', 'err'); return; }
+      goBtn.disabled = true;
+      goBtn.textContent = 'Thinking…';
+      try {
+        const res = await api.post('/api/ai/interpret', { text });
+        drafts = res.drafts || [];
+        renderDrafts();
+        if (!drafts.length) {
+          toast(res.message || 'Nothing loggable in there.', 'err');
+        } else {
+          toast(`${drafts.length} draft${drafts.length === 1 ? '' : 's'} — review and confirm.`, 'ok');
+        }
+      } catch (error) {
+        toast(error.message || 'The model did not answer.', 'err');
+      } finally {
+        goBtn.disabled = false;
+        goBtn.textContent = 'Interpret → drafts';
+      }
+    }
+
+    async function confirm() {
+      const today = todayLocal();
+      // Pull any user edits from the cards back into the drafts.
+      [...draftsEl.children].forEach((el) => {
+        const d = drafts[Number(el.dataset.idx)];
+        if (d) readCard(el, d);
+      });
+      let saved = 0;
+      const problems = [];
+      for (const d of drafts) {
+        if (!d.plant_id && d.action !== 'note') {
+          problems.push(`${(AI_ACTIONS[d.action] || {}).label || d.action}: pick a plant`);
+          continue;
+        }
+        try {
+          if (d.action === 'water') {
+            await api.post('/api/watering-logs/', { plant_id: d.plant_id, date: today });
+          } else if (d.action === 'fertilize') {
+            if (!d.detail) { problems.push('Feed: product is required'); continue; }
+            await api.post('/api/fertilizations', {
+              date: today, fertilizer_name: d.detail,
+              amount_used: [d.amount ?? '', d.unit ?? ''].filter((x) => x !== '').join(' '),
+              notes: d.notes || '', plant_id: d.plant_id,
+            });
+          } else if (d.action === 'harvest') {
+            await api.post('/api/harvests/', {
+              plant_id: d.plant_id, date: today,
+              quantity: Math.max(1, Math.round(d.amount || 1)), notes: d.notes || '',
+            });
+          } else if (d.action === 'pest') {
+            if (!d.detail) { problems.push('Pest: pest name is required'); continue; }
+            await api.post('/api/pests/', {
+              date: today, pest_name: d.detail, plant_id: d.plant_id, notes: d.notes || '',
+            });
+          } else { // observe / note
+            const pname = d.plant_name || (plants.find((p) => p.id === d.plant_id) || {}).variety_name;
+            if (!pname) { problems.push('Note: pick a plant'); continue; }
+            await api.post('/api/observations', {
+              plant_id: d.plant_id, plant_name: pname, date: today,
+              notes: d.notes || '(no note)', health_scale: 7,
+            });
+          }
+          saved += 1;
+        } catch (error) {
+          problems.push(`${(AI_ACTIONS[d.action] || {}).label || d.action}: ${error.message}`);
+        }
+      }
+      if (saved) toast(`Saved ${saved} entr${saved === 1 ? 'y' : 'ies'} ✓`, 'ok');
+      if (problems.length) toast(problems.join(' · '), 'err');
+      drafts = [];
+      renderDrafts();
+      textEl.value = '';
+    }
+
+    goBtn.addEventListener('click', interpret);
+    $('#ai-log-cancel').addEventListener('click', () => {
+      drafts = [];
+      renderDrafts();
+      textEl.value = '';
+    });
+    $('#ai-log-confirm').addEventListener('click', confirm);
+
+    boot();
+  }
+
+  globalThis.Verdant.onBoot(initAiLog);
+})();

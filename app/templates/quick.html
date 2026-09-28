@@ -14,6 +14,25 @@
 
       <div id="quick-groups" class="space-y-6"></div>
 
+      <section id="ai-log-card" class="card hidden space-y-3">
+        <h3 class="font-display text-lg font-semibold text-navy-800">🤖 Tell Verdant what you did</h3>
+        <p class="text-sm text-navy-500">
+          Describe it in plain words — <em>“watered the tomatoes and harvested 3 peppers”</em> —
+          and the local model turns it into log entries for you to confirm. Nothing is saved until you say so.
+        </p>
+        <p id="ai-log-off" class="hidden rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800 ring-1 ring-amber-200"></p>
+        <div id="ai-log-form" class="flex flex-col gap-2">
+          <textarea id="ai-log-text" rows="2" class="inp" maxlength="2000"
+            placeholder="What did you do out there?"></textarea>
+          <button type="button" id="ai-log-go" class="btn-primary self-start text-sm">Interpret → drafts</button>
+        </div>
+        <div id="ai-log-drafts" class="space-y-2"></div>
+        <div id="ai-log-actions" class="hidden flex gap-2">
+          <button type="button" id="ai-log-confirm" class="btn-primary text-sm">Confirm &amp; save</button>
+          <button type="button" id="ai-log-cancel" class="btn-ghost text-sm">Discard</button>
+        </div>
+      </section>
+
       <section class="card">
         <h3 class="font-display text-lg font-semibold text-navy-800">Logged today</h3>
         <ul id="quick-today-log" class="mt-2 space-y-1 text-sm text-navy-600">

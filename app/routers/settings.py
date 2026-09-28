@@ -76,6 +76,9 @@ SETTING_KEYS = (
     "garden_lat",
     "garden_lon",
     "mobile_tabs",
+    "local_ai_enabled",
+    "local_ai_base_url",
+    "local_ai_model",
 )
 
 # Set by app.main at startup so saving new digest settings re-arms the
@@ -103,6 +106,9 @@ class SettingsUpdate(BaseModel):
     garden_lat: str = ""  # garden latitude for the weather strip / stamping
     garden_lon: str = ""  # garden longitude — Settings win over GARDEN_LAT/LON env
     mobile_tabs: str = ""  # JSON array of mobile tab-bar keys (max 4); "" = defaults
+    local_ai_enabled: bool = False  # "Tell Verdant what you did" card on Quick Log
+    local_ai_base_url: str = "http://localhost:11434"  # Ollama-compatible server
+    local_ai_model: str = "qwen3:4b"  # small model name, plain text
 
 
 def _validate(payload: SettingsUpdate) -> None:
@@ -138,6 +144,12 @@ def _validate(payload: SettingsUpdate) -> None:
             if not (lo <= value <= hi):
                 raise HTTPException(400, f"Bad {label} {raw!r} (want {lo}..{hi}).")
     normalize_mobile_tabs(payload.mobile_tabs)  # 400 on bad key / >4 tabs
+    base = (payload.local_ai_base_url or "").strip()
+    if payload.local_ai_enabled:
+        if not base or not base.startswith(("http://", "https://")):
+            raise HTTPException(400, f"Bad local_ai_base_url {base!r} (want an http(s) URL).")
+        if not (payload.local_ai_model or "").strip():
+            raise HTTPException(400, "Local AI is on but no model name was given.")
 
 
 def _frost_preview(session: Session, which: str) -> dict:
@@ -184,6 +196,9 @@ def current_settings(session: Session) -> dict:
         "default_weight_unit": default_weight_unit,
         "slideshow_interval": slideshow_interval,
         "confirm_water_all": confirm_water_all,
+        "local_ai_enabled": (frost_mod.get_setting(session, "local_ai_enabled") or "false") == "true",
+        "local_ai_base_url": frost_mod.get_setting(session, "local_ai_base_url") or "http://localhost:11434",
+        "local_ai_model": frost_mod.get_setting(session, "local_ai_model") or "qwen3:4b",
         "digest_enabled": digest.enabled,
         "discord_webhook_url": digest.webhook_url,
         "digest_time": digest.time,
@@ -217,6 +232,9 @@ def save_settings(payload: SettingsUpdate, session: Session = Depends(get_sessio
     frost_mod.set_setting(session, "garden_lat", payload.garden_lat.strip())
     frost_mod.set_setting(session, "garden_lon", payload.garden_lon.strip())
     frost_mod.set_setting(session, "mobile_tabs", normalize_mobile_tabs(payload.mobile_tabs))
+    frost_mod.set_setting(session, "local_ai_enabled", "true" if payload.local_ai_enabled else "false")
+    frost_mod.set_setting(session, "local_ai_base_url", (payload.local_ai_base_url or "").strip() or "http://localhost:11434")
+    frost_mod.set_setting(session, "local_ai_model", (payload.local_ai_model or "").strip() or "qwen3:4b")
     session.commit()
     if _reschedule_digest is not None and payload.digest_time.strip() != old_time:
         _reschedule_digest()
