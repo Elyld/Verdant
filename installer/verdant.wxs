@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Verdant Windows installer (WiX Toolset v3). Built by installer/build.ps1,
+     which supplies ProductVersion, SourceDir, and VerdantExeFileId.
+     UpgradeCode is stable across releases so installing a newer .msi
+     cleanly replaces the old one. -->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*"
+           Name="Verdant"
+           Language="1033"
+           Version="$(var.ProductVersion)"
+           Manufacturer="Verdant"
+           UpgradeCode="05018500-3b9a-4434-a8fd-597005ba87b8">
+    <Package InstallerVersion="200"
+             Compressed="yes"
+             InstallScope="perMachine" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Verdant is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Feature Id="ProductFeature" Title="Verdant" Level="1">
+      <ComponentGroupRef Id="VerdantFiles" />
+      <ComponentRef Id="VerdantShortcut" />
+    </Feature>
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="Verdant" />
+      </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="Verdant" />
+      </Directory>
+    </Directory>
+
+    <DirectoryRef Id="ApplicationProgramsFolder">
+      <Component Id="VerdantShortcut" Guid="6decf8eb-e338-4bb7-84f7-008d215e8de4">
+        <Shortcut Id="VerdantStartMenuShortcut"
+                  Name="Verdant"
+                  Description="Open your Verdant garden journal"
+                  Target="[#$(var.VerdantExeFileId)]"
+                  WorkingDirectory="INSTALLFOLDER" />
+        <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
+        <RegistryValue Root="HKCU"
+                       Key="Software\Verdant"
+                       Name="installed"
+                       Type="integer"
+                       Value="1"
+                       KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+  </Product>
+</Wix>
