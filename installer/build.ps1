@@ -47,11 +47,20 @@ try {
     $exeId = $m.Groups[1].Value
     Write-Host "verdant.exe File Id: $exeId"
 
+    # WiX needs a four-part product version (x.x.x.x); pad "2.47.0" -> "2.47.0.0".
+    $wixVersion = $version
+    $vparts = $wixVersion.Split('.')
+    while ($vparts.Count -lt 4) { $vparts += '0' }
+    $wixVersion = ($vparts[0..3] -join '.')
+
     # 5. Compile and link the .msi
+    # NOTE: -d defines are double-quoted so PowerShell always expands the
+    # variables. An unquoted -dName=$var can reach candle with the literal
+    # text "$var" (seen 2026-10-01: ProductVersion arrived as "$version").
     & "$wixBin\candle.exe" -arch x64 `
-        -dProductVersion=$version `
+        "-dProductVersion=$wixVersion" `
         "-dSourceDir=$repoRoot\dist\verdant" `
-        -dVerdantExeFileId=$exeId `
+        "-dVerdantExeFileId=$exeId" `
         installer/verdant.wxs installer/files.wxs -out installer/obj/
     $msiName = "Verdant-$version-x64.msi"
     & "$wixBin\light.exe" installer/obj/verdant.wixobj installer/obj/files.wixobj `

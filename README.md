@@ -749,6 +749,15 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.47.0** — **🌿 Fern + detail pass.** The nav fern is now lush filled
+  fronds instead of stick-figure outlines, and the Today dashboard got a
+  proper header: a fern hero banner with the greeting and date, section
+  labels (Up next / Forecast / Season), count badges on the care and harvest
+  cards, richer empty states, and a "Right now" label on the weather card.
+  Also fixed the Windows installer build — the version number was reaching
+  the installer tool as literally `$version`, and it needs a 4-part version,
+  so the build script now quotes it and pads it (2.47.0 → 2.47.0.0) behind
+  the scenes. Releases ship a working .msi from here on.
 - **2.46.0** — **💬 Chat bubble, movable + 💻 .msi that actually ships.** The
   🌱 assistant button can now be dragged anywhere on screen (tap still opens
   the chat, position is remembered), and on phones the chat opens as a
