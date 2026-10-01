@@ -73,6 +73,7 @@ SETTING_KEYS = (
     "discord_webhook_url",
     "digest_time",
     "digest_timezone",
+    "digest_ai_briefing",
     "temperature_unit",
     "week_start",
     "default_weight_unit",
@@ -108,6 +109,7 @@ class SettingsUpdate(BaseModel):
     discord_webhook_url: str = ""
     digest_time: str = "08:00"
     digest_timezone: str = ""  # IANA zone for the digest send time; "" = browser/server local
+    digest_ai_briefing: bool = False  # LLM-written opening paragraph on the digest
     temperature_unit: str = "F"  # "F" or "C" — display unit for weather temps (stored Celsius)
     week_start: str = "0"  # "0" = Sunday, "1" = Monday — first column of the calendar
     default_weight_unit: str = "oz"  # prefill for the harvest form weight-unit select
@@ -272,6 +274,7 @@ def current_settings(session: Session) -> dict:
         "discord_webhook_url": digest.webhook_url,
         "digest_time": digest.time,
         "digest_timezone": digest.timezone,
+        "digest_ai_briefing": digest.ai_briefing,
         "frost_preview": {
             "first": _frost_preview(session, "first"),
             "last": _frost_preview(session, "last"),
@@ -323,6 +326,9 @@ def save_settings(payload: SettingsUpdate, session: Session = Depends(get_sessio
         set_setting(session, "digest_time", new_time)
     if "digest_timezone" in provided:
         set_setting(session, "digest_timezone", (payload.digest_timezone or "").strip())
+    if "digest_ai_briefing" in provided:
+        # Toggling this doesn't touch the schedule, so it stays out of digest_touched.
+        set_setting(session, "digest_ai_briefing", "true" if payload.digest_ai_briefing else "false")
     if "temperature_unit" in provided:
         set_setting(session, "temperature_unit", payload.temperature_unit)
     if "week_start" in provided:

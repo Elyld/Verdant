@@ -292,7 +292,12 @@ It can look things up on its own (care history, notes, seed stash, planner,
 reminders) and take action: tell it what you did and it drafts the log
 entries; ask it to add a seed packet, change a plant's status, or move a
 plant to another container and it drafts that too — all under the same
-confirm-before-anything-is-saved contract as “Tell Verdant”. The conversation
+confirm-before-anything-is-saved contract as “Tell Verdant”. It also has
+seasonal coaching (frost countdown, what to plant/harvest now), a memory
+notebook it can save to and recall from (always confirm-before-save), and
+year-over-year variety performance from your harvest logs. Attach a photo to
+a message and a vision-capable model (e.g. DeepSeek v4.1 flash on OpenRouter)
+can see it for pest ID or ripeness checks. The conversation
 survives page navigation within the tab. It runs on whichever AI provider
 you've picked (Ollama or OpenRouter); the OpenRouter model picker lists every
 available model with free ones marked.
@@ -394,6 +399,11 @@ what's overdue, what's due today, what's coming up. Off by default — turn it o
 from the 🌅 Morning digest card on the Settings page (the send time uses the
 timezone you pick there, defaulting to your browser's zone), or set
 `DIGEST_ENABLED=true` and `DISCORD_WEBHOOK_URL` in the environment.
+Optional: turn on "Let the AI write a short morning briefing" in the same card
+(`DIGEST_AI_BRIEFING=true`) to have your configured AI provider write a warm
+2–4 sentence briefing on top of the data sections — it falls back to data-only
+if the provider is unreachable. The digest also flags the first fall frost
+when it's within two weeks.
 
 ### 🔌 Immich integration
 Browse albums on your own Immich server and import their photos straight into
@@ -749,6 +759,22 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.48.0** — **🤖 AI powerhouse.** The assistant got eyes, a memory, and a
+  coaching voice. **Eyes:** attach a photo to a chat message and the model
+  can see it — pest ID, ripeness, plant health (works with vision models like
+  DeepSeek v4.1 flash via OpenRouter; Ollama gets base64 images best-effort).
+  **Morning briefing:** the Discord digest can now open with a short
+  AI-written briefing in a friendly neighbor tone, on top of the usual data
+  sections — opt-in via the new "AI briefing" checkbox in Settings (falls
+  back to data-only if the provider is down), and the digest now also warns
+  you when the first fall frost is within two weeks. **New chat tools:**
+  `season_advice` (frost countdown, what to plant/harvest now in zone 6b,
+  garlic planting reminder, seed-order hints), `save_memory_note` /
+  `recall_notes` (a confirm-before-save memory notebook — nothing saved
+  without your OK), and `variety_performance` (year-over-year harvest totals
+  per variety). **Voice logging:** new `POST /api/ai/voice-log` endpoint —
+  the client does speech-to-text and the server turns the transcript into
+  confirm-before-save drafts, same as the /interpret pipeline.
 - **2.47.0** — **🌿 Fern + detail pass.** The nav fern is now lush filled
   fronds instead of stick-figure outlines, and the Today dashboard got a
   proper header: a fern hero banner with the greeting and date, section
