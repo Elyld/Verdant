@@ -61,9 +61,10 @@
     const wrap = document.createElement('div');
     wrap.id = 'ai-chat-root';
     wrap.innerHTML = `
+      <div id="ai-chat-scrim" class="fixed inset-0 z-30 hidden bg-navy-900/40 sm:hidden"></div>
       <button id="ai-chat-fab" type="button" aria-label="Chat with your garden assistant"
-        class="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-sage-700 text-2xl text-beige-50 shadow-botanical ring-1 ring-sage-500 transition hover:bg-sage-600">🌱</button>
-      <section id="ai-chat-panel" class="fixed bottom-24 right-6 z-40 hidden w-[22rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl bg-beige-50 shadow-botanical ring-1 ring-beige-300" style="height:min(32rem,70vh)">
+        class="fixed bottom-6 right-6 z-40 flex h-14 w-14 cursor-grab items-center justify-center rounded-full bg-sage-700 text-2xl text-beige-50 shadow-botanical ring-1 ring-sage-500 transition hover:bg-sage-600 active:cursor-grabbing">🌱</button>
+      <section id="ai-chat-panel" class="fixed inset-y-0 right-0 z-40 hidden w-full max-w-sm translate-x-full flex-col overflow-hidden bg-beige-50 shadow-botanical transition-transform duration-200 sm:inset-y-auto sm:bottom-24 sm:right-6 sm:h-[min(32rem,70vh)] sm:w-[22rem] sm:max-w-[calc(100vw-2rem)] sm:translate-x-0 sm:rounded-2xl sm:ring-1 sm:ring-beige-300">
         <header class="flex items-center justify-between bg-navy-800 px-4 py-3 text-beige-50">
           <div>
             <p class="font-display text-base font-semibold">🌱 Garden assistant</p>
@@ -80,6 +81,7 @@
     document.body.appendChild(wrap);
     els = {
       fab: $('#ai-chat-fab', wrap),
+      scrim: $('#ai-chat-scrim', wrap),
       panel: $('#ai-chat-panel', wrap),
       msgs: $('#ai-chat-msgs', wrap),
       form: $('#ai-chat-form', wrap),
@@ -88,18 +90,115 @@
       sub: $('#ai-chat-sub', wrap),
       close: $('#ai-chat-close', wrap),
     };
-    els.fab.addEventListener('click', toggle);
+    els.scrim.addEventListener('click', closePanel);
     els.close.addEventListener('click', toggle);
     els.form.addEventListener('submit', onSend);
   }
 
-  function toggle() {
-    els.panel.classList.toggle('hidden');
-    els.panel.classList.toggle('flex');
-    if (!els.panel.classList.contains('hidden')) {
-      render();
+  function openPanel() {
+    els.scrim.classList.remove('hidden');
+    els.panel.classList.remove('hidden');
+    els.panel.classList.add('flex');
+    els.fab.classList.add('invisible');
+    // Slide the mobile sheet in (no-op on desktop: sm:translate-x-0 wins).
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      els.panel.classList.remove('translate-x-full');
+    }));
+    render();
+    if (window.matchMedia && window.matchMedia('(pointer:fine)').matches) {
       els.input.focus();
     }
+  }
+
+  function closePanel() {
+    els.panel.classList.add('translate-x-full');
+    els.scrim.classList.add('hidden');
+    els.fab.classList.remove('invisible');
+    window.setTimeout(() => {
+      els.panel.classList.add('hidden');
+      els.panel.classList.remove('flex');
+    }, 210);
+  }
+
+  function toggle() {
+    if (els.panel.classList.contains('hidden')) openPanel();
+    else closePanel();
+  }
+
+  // The 🌱 button can be dragged anywhere on screen (touch + mouse); a tap
+  // still opens the chat. The position persists per browser.
+  const FAB_POS_KEY = 'verdant-ai-fab-pos';
+  const FAB_MARGIN = 8;
+
+  function clampFab(x, y) {
+    const w = els.fab.offsetWidth || 56;
+    const h = els.fab.offsetHeight || 56;
+    const maxX = Math.max(FAB_MARGIN, window.innerWidth - w - FAB_MARGIN);
+    const maxY = Math.max(FAB_MARGIN, window.innerHeight - h - FAB_MARGIN);
+    return {
+      x: Math.min(Math.max(x, FAB_MARGIN), maxX),
+      y: Math.min(Math.max(y, FAB_MARGIN), maxY),
+    };
+  }
+
+  function applyFabPos(x, y) {
+    const p = clampFab(x, y);
+    els.fab.style.left = `${p.x}px`;
+    els.fab.style.top = `${p.y}px`;
+    els.fab.style.right = 'auto';
+    els.fab.style.bottom = 'auto';
+  }
+
+  function restoreFabPos() {
+    try {
+      const raw = localStorage.getItem(FAB_POS_KEY);
+      if (!raw) return;
+      const pos = JSON.parse(raw);
+      if (Number.isFinite(pos.x) && Number.isFinite(pos.y)) applyFabPos(pos.x, pos.y);
+    } catch { /* no saved position — keep the default corner */ }
+  }
+
+  function enableFabDrag() {
+    const fab = els.fab;
+    fab.style.touchAction = 'none';
+    let pid = null, startX = 0, startY = 0, baseX = 0, baseY = 0, moved = false;
+
+    fab.addEventListener('pointerdown', (e) => {
+      pid = e.pointerId;
+      moved = false;
+      startX = e.clientX; startY = e.clientY;
+      const r = fab.getBoundingClientRect();
+      baseX = r.left; baseY = r.top;
+      if (fab.setPointerCapture) { try { fab.setPointerCapture(pid); } catch { /* noop */ } }
+    });
+    fab.addEventListener('pointermove', (e) => {
+      if (e.pointerId !== pid) return;
+      const dx = e.clientX - startX, dy = e.clientY - startY;
+      if (!moved && Math.hypot(dx, dy) > 8) moved = true;
+      if (moved) applyFabPos(baseX + dx, baseY + dy);
+    });
+    const finish = (e, save) => {
+      if (e.pointerId !== pid) return;
+      pid = null;
+      if (moved) {
+        moved = false;
+        if (save) {
+          try {
+            const r = fab.getBoundingClientRect();
+            localStorage.setItem(FAB_POS_KEY,
+              JSON.stringify({ x: Math.round(r.left), y: Math.round(r.top) }));
+          } catch { /* storage blocked — the position just won't persist */ }
+        }
+      } else {
+        toggle();
+      }
+    };
+    fab.addEventListener('pointerup', (e) => finish(e, true));
+    fab.addEventListener('pointercancel', (e) => finish(e, false));
+    fab.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    });
+    window.addEventListener('resize', restoreFabPos);
   }
 
   function bubble(role, html, extraClass) {
@@ -315,6 +414,8 @@
     catch { return; }
     if (!st || !st.enabled) return;
     build();
+    restoreFabPos();
+    enableFabDrag();
     wireDraftClicks();
     loadStored();
     if (!st.reachable && !messages.length) {

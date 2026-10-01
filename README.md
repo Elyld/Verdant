@@ -749,6 +749,13 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.46.0** — **💬 Chat bubble, movable + 💻 .msi that actually ships.** The
+  🌱 assistant button can now be dragged anywhere on screen (tap still opens
+  the chat, position is remembered), and on phones the chat opens as a
+  full-height slide-over panel you dismiss by tapping outside it. Also fixed:
+  the Windows installer workflow never fired for auto-created releases, so no
+  release ever got its .msi — the release job now builds and attaches it
+  directly, so every release from here on ships one.
 - **2.45.0** — **🌅 Digest fixes.** Two reasons the morning Discord digest
   could silently never arrive: saving the digest settings only (re)started the
   scheduler when the send *time* changed (enabling it or pasting the webhook

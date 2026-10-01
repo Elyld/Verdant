@@ -15,6 +15,15 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+  # Called by the auto-release workflow after it creates a tag + release.
+  # (Tags pushed with the default GITHUB_TOKEN don't trigger other workflows,
+  # so the push trigger above never fires for auto-created releases.)
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag to attach the .msi to (defaults to the pushed tag)"
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -45,12 +54,13 @@ jobs:
         run: ./installer/build.ps1
 
       - name: Attach the .msi to the release
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || github.event_name == 'workflow_call'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = "${{ github.ref_name }}"
+          $tag = "${{ inputs.tag }}"
+          if ([string]::IsNullOrWhiteSpace($tag)) { $tag = "${{ github.ref_name }}" }
           $msi = Get-ChildItem installer/dist/Verdant-*-x64.msi | Select-Object -First 1
           # The auto-release workflow creates the release from the same tag
           # push; the build takes a while, but wait for it just in case.

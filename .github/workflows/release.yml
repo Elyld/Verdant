@@ -21,6 +21,9 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    outputs:
+      tagged: ${{ steps.tag.outputs.tagged }}
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,6 +31,7 @@ jobs:
           fetch-depth: 0
 
       - name: Tag and release on version bump
+        id: tag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -38,6 +42,7 @@ jobs:
 
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists; nothing to do."
+            echo "tagged=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -66,3 +71,18 @@ jobs:
           gh release create "$TAG" --title "$TAG" \
             --notes-file /tmp/release-notes.md \
             --repo "${{ github.repository }}"
+
+          echo "tagged=true" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+  # Build the Windows .msi and attach it to the release. This runs as a
+  # reusable-workflow call (not a tag push) because tags pushed with the
+  # default GITHUB_TOKEN don't trigger other workflows.
+  build-windows-installer:
+    needs: release
+    if: needs.release.outputs.tagged == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/msi.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}
