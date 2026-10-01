@@ -165,7 +165,7 @@
     }
 
     async function load() {
-      const [cs, g, pl, p, l, ys, rw, al, cp] = await Promise.all([
+      const [cs, g, pl, p, l, ys, rw, al, cp, sc] = await Promise.all([
         api.get(`/api/containers/?year=${year}`).catch(() => []),
         api.get('/api/containers/grid').catch(() => ({ cols: 24, rows: 16 })),
         api.get(`/api/containers/plantings?year=${year}`).catch(() => []),
@@ -175,6 +175,7 @@
         api.get(`/api/containers/rotation-warnings?year=${year}`).catch(() => []),
         api.get('/api/weather/alerts').catch(() => ({ ok: false, alerts: [] })),
         api.get('/static/data/companions.json').catch(() => []),
+        api.get(`/api/succession/suggestions?year=${year}`).catch(() => null),
       ]);
       containers = Array.isArray(cs) ? cs : [];
       cols = g.cols || 24;
@@ -209,6 +210,7 @@
         locations.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
       renderWarnings();
       renderWxAlerts();
+      renderSuccession(sc);
       render();
       if (view === '3d' && T) buildScene3D();
     }
@@ -230,6 +232,35 @@
         `<p class="font-semibold">${esc(a.icon || '')} ${esc(a.title || '')}</p>` +
         (a.detail ? `<p class="mt-0.5">${esc(a.detail)}</p>` : '') +
         `</div>`).join('');
+    }
+
+    function renderSuccession(sc) {
+      const panel = $('#succession-panel');
+      if (!sc || !sc.ok || !sc.containers || !sc.containers.length) {
+        panel.classList.add('hidden');
+        panel.innerHTML = '';
+        return;
+      }
+      const frostBit = sc.first_frost
+        ? ` · first frost ~${esc(sc.first_frost)} (${sc.days_left}d left)`
+        : '';
+      panel.innerHTML =
+        `<div class="rounded-2xl bg-navy-900/70 p-4 ring-1 ring-navy-600/60">` +
+        `<p class="font-display text-lg font-semibold text-beige-50">🔄 Succession ideas${frostBit}</p>` +
+        `<p class="mt-0.5 text-sm text-sage-200/80">Empty right now — these still beat the frost, rotation-aware.</p>` +
+        `<div class="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">` +
+        sc.containers.map((c) => {
+          const body = c.suggestions.length
+            ? `<ul class="mt-1.5 space-y-1 text-sm">` + c.suggestions.map((s) =>
+              `<li class="flex items-baseline justify-between gap-2">` +
+              `<span class="text-beige-50">${esc(s.name)}</span>` +
+              `<span class="shrink-0 text-xs text-sage-200/80">sow by ${esc(s.sow_by)} · ${s.days_to_maturity}d</span></li>`).join('') + `</ul>`
+            : `<p class="mt-1.5 text-sm text-sage-200/80">${esc(c.note || 'Nothing fits this window.')}</p>`;
+          return `<div class="rounded-xl bg-navy-800/60 p-3 ring-1 ring-navy-600/50">` +
+            `<p class="text-sm font-semibold text-beige-50">${esc(c.container_name)} <span class="font-normal text-sage-200/70">· ${esc(c.kind || 'container')}</span></p>` +
+            body + `</div>`;
+        }).join('') + `</div></div>`;
+      panel.classList.remove('hidden');
     }
 
     async function toggleHeatmap() {

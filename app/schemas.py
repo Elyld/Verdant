@@ -140,6 +140,10 @@ class ReminderRead(BaseModel):
     due_date: Optional[Date] = None
     days_until_due: Optional[int] = None  # negative = overdue
     status: str  # "overdue" | "due" | "soon" | "ok" | "unset"
+    # Weather-aware care: when significant rain is expected, watering
+    # reminders carry a hold note instead of nagging ("let the sky do it").
+    rain_hold: bool = False
+    rain_note: Optional[str] = None
 
 
 class TimelineEvent(BaseModel):
@@ -174,6 +178,82 @@ class HarvestCreate(BaseModel):
     weight: Optional[float] = Field(default=None, ge=0)
     weight_unit: str = Field(default="oz", max_length=8)
     notes: str = ""
+
+
+# --------------------------- Preservation & pantry ------------------------- #
+PRESERVATION_METHODS = ("canned", "frozen", "dehydrated", "fermented", "gave_away", "fresh")
+
+
+class PreservationCreate(BaseModel):
+    date: Date
+    method: str = Field(default="frozen", max_length=20)
+    variety_name: str = Field(default="", max_length=120)
+    plant_id: Optional[int] = None
+    harvest_id: Optional[int] = None
+    qty_in: Optional[float] = Field(default=None, ge=0)
+    qty_in_unit: str = Field(default="", max_length=12)
+    qty_out: Optional[float] = Field(default=None, ge=0)
+    qty_out_unit: str = Field(default="", max_length=12)
+    stored_location: str = Field(default="", max_length=80)
+    notes: str = ""
+    # When true, also creates a PantryItem from qty_out (name defaults to
+    # "<method> <variety_name>" when pantry_name is blank).
+    add_to_pantry: bool = False
+    pantry_name: str = Field(default="", max_length=160)
+
+
+class PreservationRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    preservation_id: str
+    date: Date
+    method: str
+    variety_name: str
+    plant_id: Optional[int] = None
+    harvest_id: Optional[int] = None
+    qty_in: Optional[float] = None
+    qty_in_unit: str = ""
+    qty_out: Optional[float] = None
+    qty_out_unit: str = ""
+    stored_location: str = ""
+    notes: str = ""
+
+    _null_str = field_validator(
+        "variety_name", "qty_in_unit", "qty_out_unit", "stored_location", "notes",
+        mode="before",
+    )(_none_to_str)
+
+
+class PantryItemCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    method: str = Field(default="", max_length=20)
+    quantity: float = Field(default=0, ge=0)
+    unit: str = Field(default="", max_length=12)
+    stored_date: Date = Field(default_factory=Date.today)
+    location: str = Field(default="", max_length=80)
+    notes: str = ""
+    preservation_id: Optional[int] = None
+
+
+class PantryItemRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    method: str
+    quantity: float
+    unit: str
+    stored_date: Date
+    location: str = ""
+    notes: str = ""
+    preservation_id: Optional[int] = None
+
+    _null_str = field_validator("method", "unit", "location", "notes", mode="before")(_none_to_str)
+
+
+class PantryUse(BaseModel):
+    amount: float = Field(gt=0)
 
 
 class WateringCreate(BaseModel):

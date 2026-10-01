@@ -224,6 +224,40 @@ def _reminder_status(days_until_due: Optional[int], cadence: Optional[int]) -> s
     return "ok"
 
 
+# Rain that makes watering pointless: ≥ 1/4" expected, or a ≥ 70% chance.
+# Checked for today and tomorrow — tonight's storm covers today's chore.
+RAIN_HOLD_INCHES = 0.25
+RAIN_HOLD_PROB = 70
+
+
+def rain_hold_note(session) -> Optional[str]:
+    """'0.6" rain expected tomorrow' when the sky will water for you.
+
+    Never raises: unconfigured weather or a dead forecast → None.
+    """
+    try:
+        from app import weather as weather_mod
+
+        fc = weather_mod.get_forecast(session)
+        days = (fc or {}).get("daily") or []
+        for i, label in ((0, "today"), (1, "tomorrow")):
+            if i >= len(days):
+                continue
+            day = days[i] or {}
+            precip_in = day.get("precip_in") or 0
+            precip_prob = day.get("precip_prob") or 0
+            if precip_in >= RAIN_HOLD_INCHES or precip_prob >= RAIN_HOLD_PROB:
+                amt = (
+                    f'{precip_in:g}" of rain'
+                    if precip_in >= RAIN_HOLD_INCHES
+                    else f"{precip_prob:g}% chance of rain"
+                )
+                return f"{amt} expected {label} — let the sky handle it"
+    except Exception:
+        pass
+    return None
+
+
 @router.get("/reminders/list", response_model=List[ReminderRead])
 def plant_reminders(session: Session = Depends(get_session)) -> List[ReminderRead]:
     """Watering/feeding reminders derived from each plant's care cadence."""
@@ -284,4 +318,12 @@ def plant_reminders(session: Session = Depends(get_session)) -> List[ReminderRea
     # Most urgent first: overdue, due, soon, ok, unset.
     order = {"overdue": 0, "due": 1, "soon": 2, "ok": 3, "unset": 4}
     reminders.sort(key=lambda r: (order[r.status], r.days_until_due if r.days_until_due is not None else 999))
+    # Weather-aware care: when rain's coming, watering reminders hold
+    # instead of nagging. Advisory only — the reminder stays visible.
+    rain_note = rain_hold_note(session)
+    if rain_note:
+        for r in reminders:
+            if r.kind == "water" and r.status in ("overdue", "due", "soon"):
+                r.rain_hold = True
+                r.rain_note = rain_note
     return reminders

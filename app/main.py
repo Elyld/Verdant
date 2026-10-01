@@ -23,6 +23,8 @@ from app.models import GardenTag, utcnow
 from app.security import RateLimitMiddleware, SecurityHeadersMiddleware, docs_enabled
 from app.routers import albums, backup, containers, digest, expenses, fertilizations, immich, import_csv, invoices, observations, order_assistant, pests, posts, seed_packets, settings as settings_router, stats, tags, weather, wishlist
 from app.routers import ai_log, crops, today
+from app.routers import pantry as pantry_router
+from app.routers import succession as succession_router
 from app.routers import pest_guide as pest_guide_router
 from app.routers import identify as identify_router
 from app.routers.tags import tag_destination
@@ -151,6 +153,8 @@ app.include_router(today.router)
 app.include_router(identify_router.router)
 app.include_router(order_assistant.router)
 app.include_router(wishlist.router)
+app.include_router(pantry_router.router)
+app.include_router(succession_router.router)
 
 @app.get("/api/health", tags=["meta"])
 def health() -> dict:
@@ -250,6 +254,12 @@ def costs_page(request: Request) -> HTMLResponse:
 def pests_page(request: Request) -> HTMLResponse:
     """Pest sightings and treatments."""
     return templates.TemplateResponse(request, "pests.html", {"__version__": __version__})
+
+
+@app.get("/pantry", include_in_schema=False)
+def pantry_page(request: Request) -> HTMLResponse:
+    """Post-harvest preservation log and pantry inventory."""
+    return templates.TemplateResponse(request, "pantry.html", {"__version__": __version__})
 
 
 @app.get("/settings", include_in_schema=False)

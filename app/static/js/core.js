@@ -136,6 +136,7 @@
     { key: 'review', href: '/review', icon: '📊', label: 'Review' },
     { key: 'import', href: '/import', icon: '📥', label: 'Import' },
     { key: 'quick', href: '/quick', icon: '⚡', label: 'Quick Log' },
+    { key: 'pantry', href: '/pantry', icon: '🥫', label: 'Pantry' },
     { key: 'costs', href: '/costs', icon: '💰', label: 'Costs' },
     { key: 'pests', href: '/pests', icon: '🐛', label: 'Pests' },
     { key: 'fertilizers', href: '/fertilizers', icon: '🧪', label: 'Fertilizers' },

@@ -67,8 +67,12 @@
           const when = r.status === 'overdue'
             ? `<span class="font-semibold text-red-700">${Math.abs(r.days_until_due)}d overdue</span>`
             : 'due today';
-          return `<li class="flex items-center justify-between gap-2 rounded-lg bg-beige-50 px-3 py-2 ring-1 ring-beige-200">
-            <span>${what} <a class="font-semibold text-navy-700 underline decoration-sage-400" href="/plants">${esc(r.plant_name)}</a></span>
+          const rain = r.rain_hold && r.rain_note
+            ? `<span class="ml-1 rounded-full bg-sky-100 px-2 py-0.5 text-xs text-sky-800 ring-1 ring-sky-300" title="${esc(r.rain_note)}">🌧 rain hold</span>`
+            : '';
+          const dim = r.rain_hold ? ' opacity-60' : '';
+          return `<li class="flex items-center justify-between gap-2 rounded-lg bg-beige-50 px-3 py-2 ring-1 ring-beige-200${dim}">
+            <span>${what} <a class="font-semibold text-navy-700 underline decoration-sage-400" href="/plants">${esc(r.plant_name)}</a>${rain}</span>
             <span class="text-navy-500">${when}</span></li>`;
         }).join('')
       : '<li class="text-navy-400">Nothing due — enjoy the garden. 🌱</li>';

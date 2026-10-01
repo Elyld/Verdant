@@ -1,5 +1,5 @@
 /* Navigation refresh (v2.28.0):
-   - desktop grouped nav: 16 links, 4 labeled groups, no dropdowns, icon on every tab
+   - desktop grouped nav: 17 links, 4 labeled groups, no dropdowns, icon on every tab
    - mobile bottom tab bar: renders mobile_tabs picks (tap order) + fixed More,
      defaults when unset/invalid; More sheet lists everything else, no duplicates
    - Settings chip picker: toggles with max-5 enforcement, order numbers, PUT saves
@@ -73,14 +73,14 @@ const desktopNavHtml = baseHtml.match(/<nav id="desktop-nav"[\s\S]*?<\/nav>/)[0]
   const hrefs = [...desktopNavHtml.matchAll(/<a\s[^>]*href="([^"]+)"/g)].map((m) => m[1]);
   const expected = ['/', '/blog', '/observations', '/calendar', '/photos', '/plants', '/seeds',
     '/seedlings', '/review', '/import', '/quick', '/costs', '/pests',
-    '/fertilizers', '/planner', '/tags'];
-  check('desktop nav has all 16 links', hrefs.length === 16 && expected.every((h) => hrefs.includes(h)));
+    '/fertilizers', '/planner', '/tags', '/pantry'];
+  check('desktop nav has all 17 links', hrefs.length === 17 && expected.every((h) => hrefs.includes(h)));
   check('desktop nav has no dropdowns', !/<select/i.test(desktopNavHtml) && !/dropdown/i.test(desktopNavHtml));
   const labels = [...desktopNavHtml.matchAll(/nav-group-label">([^<]+)</g)].map((m) => m[1]);
   check('desktop nav has 4 labeled groups', JSON.stringify(labels) === JSON.stringify(['Grow', 'Track', 'Manage', 'Read']));
   const linkTexts = [...desktopNavHtml.matchAll(/<a\s[^>]*>([\s\S]*?)<\/a>/g)].map((m) => m[1]);
   const emojiRe = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u;
-  check('every desktop tab has an icon', linkTexts.length === 16 && linkTexts.every((t) => emojiRe.test(t)));
+  check('every desktop tab has an icon', linkTexts.length === 17 && linkTexts.every((t) => emojiRe.test(t)));
   const mobileBlock = baseHtml.match(/<nav id="mobile-tabs"[\s\S]*?<\/nav>/)[0];
   check('mobile bar markup: no dropdowns', !/<select/i.test(mobileBlock) && !/dropdown/i.test(mobileBlock));
   const sheetBlock = baseHtml.match(/<div id="mobile-sheet"[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/);
@@ -175,8 +175,8 @@ function sheetOpen() { return !named['#mobile-sheet'].classList.contains('hidden
   check('More button present after tabs', !!named['#mobile-nav-more']);
   {
     const sh = sheetHrefs();
-    check('sheet lists the other 12, no duplicates',
-      sh.length === 12 && !['/quick', '/plants', '/calendar', '/planner', '/settings'].some((h) => sh.includes(h)));
+    check('sheet lists the other 13, no duplicates',
+      sh.length === 13 && !['/quick', '/plants', '/calendar', '/planner', '/settings'].some((h) => sh.includes(h)));
   }
 
   // B2: custom picks respected in tap order; sheet excludes them
@@ -186,8 +186,8 @@ function sheetOpen() { return !named['#mobile-sheet'].classList.contains('hidden
     JSON.stringify(tabHrefs()) === JSON.stringify(['planner', 'costs', 'seeds']));
   {
     const sh = sheetHrefs();
-    check('sheet excludes picked tabs (14 left)',
-      sh.length === 14 && !['/planner', '/costs', '/seeds'].some((h) => sh.includes(h))
+    check('sheet excludes picked tabs (15 left)',
+      sh.length === 15 && !['/planner', '/costs', '/seeds'].some((h) => sh.includes(h))
       && ['/quick', '/plants', '/calendar'].every((h) => sh.includes(h)));
   }
 
@@ -250,8 +250,8 @@ function sheetOpen() { return !named['#mobile-sheet'].classList.contains('hidden
   await bootFresh(true);
   {
     const chips = chipState();
-    check('17 chips rendered, none pressed by default',
-      chips.length === 17 && chips.every((c) => !c.on));
+    check('18 chips rendered, none pressed by default',
+      chips.length === 18 && chips.every((c) => !c.on));
   }
   clickChip('quick');
   clickChip('plants');

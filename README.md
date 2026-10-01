@@ -51,7 +51,10 @@ The weather strip ends with a **💧 watering-advice line**: Verdant computes
 real evapotranspiration (FAO-56 Penman-Monteith via PyETo) from your forecast
 and tells you, in plain words, whether today calls for a normal round, a
 deep soak, or putting the hose down — with the ET number in inches for the
-curious.
+curious. And care reminders are **🌧️ weather-aware**: when real rain is
+expected today or tomorrow, watering tasks show a rain-hold badge and sink to
+the bottom of the list instead of nagging — the sky's got those. The morning
+Discord digest says the same.
 
 ![Today](docs/screenshots/today.png)
 
@@ -213,6 +216,14 @@ curated, extension-service-sourced list.
 
 ![Backyard planner](docs/screenshots/planner.png)
 ![Backyard planner in 3D](docs/screenshots/planner-3d.png)
+
+Empty containers don't sit idle: **🔄 succession ideas** read the season,
+your first-frost date, and the crop guide, then suggest what each free
+container can still fit before frost — sow-by dates included, rotation-aware
+(same family that just grew there is skipped). In October it'll honestly tell
+you nothing beats the frost and point you at garlic instead.
+
+![Succession ideas](docs/screenshots/succession.png)
 ![Backyard planner with weather and yield heatmap](docs/screenshots/planner-heatmap.png)
 
 ### 🏷️ NFC Tags — tap it, log it
@@ -259,11 +270,30 @@ listening through pauses until you tap Stop. A small model running on
 your server; opt-in on the Settings page. (Voice needs a secure https
 connection, so on the LAN it works through the Cloudflare tunnel.)
 
+**🎙️ Voice quick-log** is the no-AI sibling: tap Talk, say “watered the
+tomatoes” or “harvested 3 peppers”, tap Stop, and it parses the command —
+plant matched from your growing list, quantity pulled out — into a one-tap
+Save. No model needed, so it works even when the local AI is offline.
+
+![Voice quick-log](docs/screenshots/quick-voice.png)
+
 ![Tell Verdant what you did](docs/screenshots/ai-log.png)
 
 ![Quick Log](docs/screenshots/quick.png)
 
 ![Quick Log undo](docs/screenshots/quick-undo.png)
+
+### 🥫 Pantry — what happened after harvest
+Verdant used to track everything up to picking day, then the food vanished
+from the story. The **Pantry** page closes the loop: log what you preserved —
+canned, frozen, dehydrated, fermented, gave away, or just ate fresh — with
+amounts in and out, where it's stored, and an optional link back to the
+harvest it came from. Tick one box and the finished amount lands in your
+**pantry inventory**, which you decrement as you use things up ("Used 2 bags
+of frozen peppers") until the shelf is bare. The full preservation history
+stays even after the last jar is gone.
+
+![Pantry](docs/screenshots/pantry.png)
 
 ### 💰 Costs — was it worth growing?
 Every garden expense in one place, broken down by category — rows are
@@ -689,6 +719,16 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.41.0** — **🥫 Pantry & the post-harvest loop.** Log what you preserved
+  (canned, frozen, dehydrated, fermented, gave away, ate fresh) with amounts
+  in/out and storage location, optionally linked to the harvest; one checkbox
+  stocks the finished amount into a **pantry inventory** you decrement as you
+  use things up. **🔄 Succession ideas** on the planner suggest what each
+  empty container can still fit before first frost — sow-by dates, rotation
+  aware, honest in October (it'll point you at garlic). **🌧️ Weather-aware
+  care**: watering reminders hold with a rain badge when real rain is
+  expected, on the Today page and in the morning digest. **🎙️ Voice
+  quick-log**: speak "watered the tomatoes", tap Save — no AI model needed.
 - **2.40.0** — **🪟 Windows installer (.msi).** No Docker? Download
   `Verdant-<version>-x64.msi` from the release page, double-click, follow the
   prompts. It installs Verdant to Program Files with a Start menu shortcut —
