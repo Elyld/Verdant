@@ -84,8 +84,16 @@
       $('#set-webhook').value = s.discord_webhook_url || '';
       $('#set-digest-time').value = s.digest_time || '08:00';
       $('#set-ai-enabled').checked = !!s.local_ai_enabled;
+      $('#set-ai-provider').value = s.ai_provider === 'openrouter' ? 'openrouter' : 'ollama';
       $('#set-ai-base').value = s.local_ai_base_url || 'http://localhost:11434';
       $('#set-ai-model').value = s.local_ai_model || 'qwen3:4b';
+      $('#set-ai-or-model').value = s.openrouter_model || 'openai/gpt-4o-mini';
+      $('#set-ai-or-key').value = '';
+      $('#set-ai-or-key').placeholder = s.openrouter_key_set ? '•••••••• (saved — leave blank to keep)' : 'sk-or-…';
+      $('#set-ai-or-key-state').textContent = s.openrouter_key_set
+        ? 'A key is saved. Leave the field blank to keep it.'
+        : 'No key saved yet.';
+      updateAiProviderBlocks();
       $('#set-plantnet-key').value = s.plantnet_api_key || '';
       mobileTabPicks = parseMobileTabs(s.mobile_tabs) || [];
       initMobileChips();
@@ -93,6 +101,14 @@
       renderPreview(s.frost_preview);
       refreshModelOptions();
     }
+
+    // AI provider: show the Ollama fields or the OpenRouter fields.
+    function updateAiProviderBlocks() {
+      const or = $('#set-ai-provider').value === 'openrouter';
+      $('#ai-ollama-block').classList.toggle('hidden', or);
+      $('#ai-openrouter-block').classList.toggle('hidden', !or);
+    }
+    $('#set-ai-provider').addEventListener('change', updateAiProviderBlocks);
 
     // Local AI: model dropdown from the server's /api/tags. Falls back to the
     // text input when the server is unreachable; the select always syncs the
@@ -146,11 +162,22 @@
           confirm_water_all: $('#set-confirm-water-all').checked,
           mobile_tabs: JSON.stringify(mobileTabPicks),
           local_ai_enabled: $('#set-ai-enabled').checked,
+          ai_provider: $('#set-ai-provider').value,
           local_ai_base_url: $('#set-ai-base').value.trim(),
           local_ai_model: $('#set-ai-model').value.trim(),
+          openrouter_model: $('#set-ai-or-model').value.trim(),
+          // Only sent when the user typed a new key — blank keeps the saved one.
+          ...($('#set-ai-or-key').value.trim()
+            ? { openrouter_api_key: $('#set-ai-or-key').value.trim() }
+            : {}),
           plantnet_api_key: $('#set-plantnet-key').value.trim(),
         });
         renderPreview(saved.frost_preview);
+        $('#set-ai-or-key').value = '';
+        $('#set-ai-or-key').placeholder = saved.openrouter_key_set ? '•••••••• (saved — leave blank to keep)' : 'sk-or-…';
+        $('#set-ai-or-key-state').textContent = saved.openrouter_key_set
+          ? 'A key is saved. Leave the field blank to keep it.'
+          : 'No key saved yet.';
         status.textContent = '';
         toast('Settings saved 🌿', 'ok');
       } catch (error) {
@@ -168,7 +195,7 @@
       }
     });
 
-    // Local AI: ping the model server (GET /api/ai/status hits /api/tags).
+    // AI: ping the provider (Ollama /api/tags, or OpenRouter's free key check).
     $('#ai-test').addEventListener('click', async () => {
       const box = $('#ai-test-status');
       box.textContent = 'Checking…';
@@ -177,6 +204,9 @@
         st = await api.get('/api/ai/status');
         if (!st.enabled) {
           box.textContent = 'Enable it and save first, then test.';
+        } else if (st.reachable && st.provider === 'openrouter') {
+          box.textContent = `OpenRouter key works ✓ (model: ${st.model})`;
+          if (st.key_usage_usd != null) box.textContent += ` — $${Number(st.key_usage_usd).toFixed(2)} used`;
         } else if (st.reachable) {
           const n = (st.models || []).length;
           if (st.model_present === false) {

@@ -20,6 +20,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from sqlmodel import Session as SQLSession  # noqa: E402
 
 from app import frost as frost_mod  # noqa: E402
+from app import llm as llm_mod  # noqa: E402
 from app.database import engine, init_db  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import Harvest, ObservationLog, Plant, WateringLog  # noqa: E402
@@ -162,11 +163,11 @@ def test_status_strips_v1_from_base_url(ai_on, monkeypatch):
 
 
 def test_normalize_base_url():
-    assert ai_log._normalize_base_url("http://x:11434/v1") == "http://x:11434"
-    assert ai_log._normalize_base_url("http://x:11434/v1/") == "http://x:11434"
-    assert ai_log._normalize_base_url("http://x:11434/") == "http://x:11434"
-    assert ai_log._normalize_base_url("http://x:11434") == "http://x:11434"
-    assert ai_log._normalize_base_url("") == ai_log.DEFAULT_BASE
+    assert llm_mod._normalize_base_url("http://x:11434/v1") == "http://x:11434"
+    assert llm_mod._normalize_base_url("http://x:11434/v1/") == "http://x:11434"
+    assert llm_mod._normalize_base_url("http://x:11434/") == "http://x:11434"
+    assert llm_mod._normalize_base_url("http://x:11434") == "http://x:11434"
+    assert llm_mod._normalize_base_url("") == llm_mod.DEFAULT_OLLAMA_BASE
 
 
 def test_status_unreachable_localhost_hint(ai_on, monkeypatch):

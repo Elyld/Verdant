@@ -1,86 +1,33 @@
-"""Local-model "tell it what you did" for Quick Log.
+"""Turn "I watered the tomatoes" into draft log entries.
 
-Opt-in (Settings → Local AI, default OFF). POSTs the user's sentence to an
-Ollama-compatible server on their own machine and turns the reply into *draft*
-log entries — nothing is ever written without the user confirming each draft
-in the UI. All failures degrade to a friendly message; the endpoint never
-raises a stack trace at the caller.
+Opt-in (Settings → AI, default OFF). POSTs the user's sentence to the
+configured AI provider (Ollama on the user's own machine, or OpenRouter's
+cloud API) and turns the reply into *draft* log entries — nothing is ever
+written without the user confirming each draft in the UI. All failures
+degrade to a friendly message; the endpoint never raises a stack trace
+at the caller.
 """
 from __future__ import annotations
 
 import json
-import urllib.error
-import urllib.request
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from app import frost as frost_mod
+from app import llm as llm_mod
 from app.database import get_session
 from app.models import Plant
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
 ACTIONS = ("water", "fertilize", "observe", "harvest", "pest", "note")
-DEFAULT_BASE = "http://localhost:11434"
-DEFAULT_MODEL = "qwen3:4b"
-
-
-def _normalize_base_url(raw: str) -> str:
-    """Normalize the model-server base URL.
-
-    The app appends /api/tags and /api/chat itself, so a user-supplied
-    trailing /v1 (an OpenAI-style habit) would break every call — strip it.
-    """
-    base = (raw or "").strip().rstrip("/")
-    if base.lower().endswith("/v1"):
-        base = base[: -len("/v1")].rstrip("/")
-    return base or DEFAULT_BASE
-
-
-def _config(session: Session) -> dict:
-    return {
-        "enabled": (frost_mod.get_setting(session, "local_ai_enabled") or "false") == "true",
-        "base_url": _normalize_base_url(frost_mod.get_setting(session, "local_ai_base_url") or DEFAULT_BASE),
-        "model": (frost_mod.get_setting(session, "local_ai_model") or DEFAULT_MODEL).strip(),
-    }
 
 
 def _plant_names(session: Session, limit: int = 40) -> list[str]:
     stmt = select(Plant.variety_name).where(Plant.status == "Growing").limit(limit)
     return [n for n in session.exec(stmt).all() if n]
-
-
-def _get_json(url: str, timeout: int) -> dict:
-    """GET JSON, return the decoded body. Raises on any failure."""
-    request = urllib.request.Request(
-        url, headers={"User-Agent": "verdant-garden-log"},
-    )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return json.loads(response.read().decode("utf-8"))
-
-
-def _is_timeout(exc: Exception) -> bool:
-    """Did this failure come from a socket timeout (possibly wrapped in URLError)?"""
-    if isinstance(exc, TimeoutError):  # socket.timeout is an alias since 3.10
-        return True
-    reason = getattr(exc, "reason", None)
-    if isinstance(reason, TimeoutError):
-        return True
-    return "timed out" in str(reason or exc).lower()
-
-
-def _post_json(url: str, payload: dict, timeout: int) -> dict:
-    """POST JSON, return the decoded body. Raises on any failure."""
-    data = json.dumps(payload).encode("utf-8")
-    request = urllib.request.Request(
-        url, data=data,
-        headers={"Content-Type": "application/json", "User-Agent": "verdant-garden-log"},
-    )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return json.loads(response.read().decode("utf-8"))
 
 
 def _build_prompt(text: str, plants: list[str]) -> str:
@@ -115,7 +62,7 @@ def _extract_json_array(raw: str) -> Optional[list]:
         return None
     try:
         parsed = json.loads(text[start:end + 1])
-    except (json.JSONDecodeError, ValueError):
+    except ValueError:
         return None
     return parsed if isinstance(parsed, list) else None
 
@@ -162,34 +109,8 @@ class InterpretRequest(BaseModel):
 
 @router.get("/status")
 def ai_status(session: Session = Depends(get_session)) -> dict:
-    """Is the feature on, is the model server reachable, and is the configured
-    model actually pulled? Never raises."""
-    cfg = _config(session)
-    if not cfg["enabled"]:
-        return {"enabled": False, "reachable": False, "model": cfg["model"]}
-    try:
-        # /api/tags is GET-only on Ollama (POST → 405), so don't use _post_json here.
-        body = _get_json(f"{cfg['base_url']}/api/tags", timeout=5)
-        models = [m.get("name") for m in (body.get("models") or []) if isinstance(m, dict)]
-        want = cfg["model"]
-        present = any(
-            m == want or (m and want and m.split(":")[0] == want.split(":")[0])
-            for m in models
-        )
-        return {"enabled": True, "reachable": True, "model": want,
-                "model_present": present, "models": models}
-    except Exception as e:
-        hint = f"Could not reach {cfg['base_url']} — is the model server running?"
-        if "localhost" in cfg["base_url"] or "127.0.0.1" in cfg["base_url"]:
-            hint += (" Verdant runs in Docker, so localhost means the Verdant container itself — "
-                     "use http://host.docker.internal:11434 to reach Ollama on the same machine, "
-                     "and set OLLAMA_HOST=0.0.0.0 so Ollama accepts the connection.")
-        # Surface the raw failure so the Test connection button can show it:
-        # "refused" = nothing listening (Ollama down or bound to 127.0.0.1),
-        # "timed out" = firewall/routing, name-resolution errors = bad hostname.
-        detail = f"{type(e).__name__}: {e}".strip()
-        return {"enabled": True, "reachable": False, "model": cfg["model"],
-                "hint": hint, "error": detail[:300]}
+    """Is the feature on, and is the provider reachable? Never raises."""
+    return llm_mod.status(session)
 
 
 @router.post("/interpret")
@@ -202,40 +123,19 @@ def interpret(payload: InterpretRequest, session: Session = Depends(get_session)
         raise HTTPException(400, "Tell me what you did first.")
     if len(text) > 2000:
         raise HTTPException(400, "That's a lot — try one or two sentences.")
-    cfg = _config(session)
-    if not cfg["enabled"]:
-        raise HTTPException(400, "Local AI is off — enable it on the Settings page first.")
+    if not llm_mod.get_config(session)["enabled"]:
+        raise HTTPException(400, "AI is off — enable it on the Settings page first.")
     plants = _plant_names(session)
     prompt = _build_prompt(text, plants)
     try:
-        body = _post_json(
-            f"{cfg['base_url']}/api/chat",
-            {"model": cfg["model"], "stream": False, "format": "json",
-             "messages": [{"role": "user", "content": prompt}]},
-            timeout=120,  # cold model loads are slow; don't give up too early
+        content = llm_mod.chat(
+            session, [{"role": "user", "content": prompt}], json_mode=True
         )
-        content = ((body.get("message") or {}).get("content")) or ""
-    except Exception as e:
-        # Surface what the model server actually said (e.g. Ollama's
-        # {"error": "model 'qwen3:4b' not found"}) instead of a generic 502 —
-        # otherwise a wrong model name looks exactly like a dead server.
-        detail = f"{type(e).__name__}: {e}".strip()
-        if isinstance(e, urllib.error.HTTPError):
-            try:
-                said = e.read().decode("utf-8", "replace").strip()[:300]
-                if said:
-                    detail += f" — server said: {said}"
-            except Exception:
-                pass
-        extra = ""
-        if _is_timeout(e):
-            extra = (" The model didn't answer in time — it may still be loading "
-                     "(cold starts are slow). Wait a few seconds and try again.")
-        raise HTTPException(
-            502,
-            f"Couldn't reach the model at {cfg['base_url']} ({detail}).{extra} "
-            "Is it running, and is the base URL right?",
-        )
+    except llm_mod.LLMError as e:
+        msg = str(e)
+        if e.hint:
+            msg += f" {e.hint}"
+        raise HTTPException(502, msg)
     items = _extract_json_array(content)
     if items is None:
         return {"ok": True, "drafts": [],

@@ -265,10 +265,14 @@
       } catch { return; } // card stays hidden when the backend is unreachable
       if (!status || !status.enabled) return; // disabled → hidden, no nagging
       card.classList.remove('hidden');
+      if (status.provider === 'openrouter') {
+        const blurb = $('#ai-log-blurb');
+        if (blurb) blurb.innerHTML = 'Describe it in plain words — <em>“watered the tomatoes and harvested 3 peppers”</em> — and AI (via OpenRouter) turns it into log entries for you to confirm. Nothing is saved until you say so.';
+      }
       if (!status.reachable) {
         form.classList.add('hidden');
         off.classList.remove('hidden');
-        off.textContent = status.hint || 'The model server is not reachable — check Settings → Local AI.';
+        off.textContent = status.hint || 'The model server is not reachable — check Settings → AI.';
         return;
       }
       try {
