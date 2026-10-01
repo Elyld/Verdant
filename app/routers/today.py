@@ -34,6 +34,8 @@ def today_overview(session: Session = Depends(get_session)) -> dict:
         for r in reminders
         if r.status in ("overdue", "due")
     ]
+    # Rain-held watering sinks to the bottom — the sky's got those.
+    due.sort(key=lambda r: (1 if r.get("rain_hold") else 0))
 
     forecast = []
     plants = session.query(Plant).filter(Plant.status == "Growing").all()

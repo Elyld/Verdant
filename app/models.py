@@ -219,6 +219,54 @@ class Harvest(SQLModel, table=True):
     notes: Optional[str] = None
     plant: Optional[Plant] = Relationship(back_populates="harvests")
 
+
+# --------------------------------------------------------------------------- #
+# Preservation & pantry — what happened to the harvest after picking day.
+# A PreservationLog is the event ("canned 12 lbs of tomatoes"); PantryItem
+# rows are what's still on the shelf, decremented as they're used up.
+# --------------------------------------------------------------------------- #
+class PreservationLog(SQLModel, table=True):
+    __tablename__ = "preservation_logs"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    preservation_id: str = Field(
+        default_factory=lambda: f"PRES-{uuid4().hex[:8].upper()}",
+        unique=True, index=True,
+    )
+    date: str = Field(index=True, default="")  # ISO YYYY-MM-DD
+    # canned | frozen | dehydrated | fermented | gave_away | fresh
+    method: str = Field(default="frozen", index=True)
+    variety_name: str = Field(default="", index=True)
+    plant_id: Optional[int] = Field(default=None, foreign_key="plants.id", index=True)
+    harvest_id: Optional[int] = Field(default=None, foreign_key="harvests.id", index=True)
+    qty_in: Optional[float] = None
+    qty_in_unit: Optional[str] = Field(default="")
+    qty_out: Optional[float] = None
+    qty_out_unit: Optional[str] = Field(default="")
+    stored_location: Optional[str] = Field(default="")  # "freezer", "pantry shelf"
+    notes: Optional[str] = None
+
+    plant: Optional["Plant"] = Relationship()
+
+
+class PantryItem(SQLModel, table=True):
+    __tablename__ = "pantry_items"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(index=True)  # "Canned Cherokee Purple tomatoes"
+    method: str = Field(default="", index=True)  # mirrors PreservationLog.method
+    quantity: float = Field(default=0)
+    unit: str = Field(default="")
+    stored_date: str = Field(default="", index=True)  # ISO YYYY-MM-DD
+    location: Optional[str] = Field(default="")
+    notes: Optional[str] = None
+    preservation_id: Optional[int] = Field(
+        default=None, foreign_key="preservation_logs.id", index=True
+    )
+
+    preservation: Optional[PreservationLog] = Relationship()
+
+
 class WateringLog(SQLModel, table=True):
     __tablename__ = "watering_logs"
     id: Optional[int] = Field(default=None, primary_key=True)

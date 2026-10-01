@@ -87,7 +87,8 @@ def _line(r: ReminderRead) -> str:
     else:  # soon
         when = f"due in {r.days_until_due}d ({r.due_date})" if r.days_until_due else f"due {r.due_date}"
     last = f" (last {r.last_date})" if r.last_date else ""
-    return f"{icon} **{r.plant_name}** — {action} · {when}{last}"
+    rain = f" · 🌧 {r.rain_note}" if r.rain_hold and r.rain_note else ""
+    return f"{icon} **{r.plant_name}** — {action} · {when}{last}{rain}"
 
 
 def build_digest_message(

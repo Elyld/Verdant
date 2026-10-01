@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Verdant · Pantry{% endblock %}
+{% block content %}
+<section id="panel-pantry" class="space-y-6">
+  <header>
+    <h2 class="font-display text-2xl font-semibold text-navy-800">🥫 Pantry</h2>
+    <p class="text-sm text-navy-500">What happened to the harvest after picking day — preserved, stored, and used up.</p>
+  </header>
+
+  <form id="preserve-form" class="card space-y-3">
+    <h3 class="font-display text-lg font-semibold text-navy-800">Log a preservation</h3>
+    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <label class="block"><span class="lbl">Date</span><input id="pres-date" type="date" class="inp" required /></label>
+      <label class="block"><span class="lbl">Method</span>
+        <select id="pres-method" class="inp">
+          <option value="frozen">🧊 Frozen</option>
+          <option value="canned">🥫 Canned</option>
+          <option value="dehydrated">☀️ Dehydrated</option>
+          <option value="fermented">🫧 Fermented</option>
+          <option value="gave_away">💝 Gave away</option>
+          <option value="fresh">🥗 Ate fresh</option>
+        </select>
+      </label>
+      <label class="block"><span class="lbl">What</span><input id="pres-variety" type="text" class="inp" placeholder="Cherokee Purple tomatoes" maxlength="120" list="pres-variety-list" /></label>
+      <datalist id="pres-variety-list"></datalist>
+      <label class="block"><span class="lbl">From harvest</span><select id="pres-harvest" class="inp"><option value="">— none —</option></select></label>
+      <label class="block"><span class="lbl">Amount in</span><input id="pres-qty-in" type="number" min="0" step="any" class="inp" placeholder="12" /></label>
+      <label class="block"><span class="lbl">Unit in</span><input id="pres-unit-in" type="text" class="inp" placeholder="lbs" maxlength="12" /></label>
+      <label class="block"><span class="lbl">Amount out</span><input id="pres-qty-out" type="number" min="0" step="any" class="inp" placeholder="7" /></label>
+      <label class="block"><span class="lbl">Unit out</span><input id="pres-unit-out" type="text" class="inp" placeholder="quarts" maxlength="12" /></label>
+      <label class="block"><span class="lbl">Stored where</span><input id="pres-location" type="text" class="inp" placeholder="freezer" maxlength="80" /></label>
+      <label class="block sm:col-span-2"><span class="lbl">Notes</span><input id="pres-notes" type="text" class="inp" placeholder="optional" maxlength="200" /></label>
+    </div>
+    <label class="flex items-center gap-2 text-sm text-navy-700">
+      <input id="pres-to-pantry" type="checkbox" class="h-4 w-4 accent-sage-600" checked />
+      Add the finished amount to the pantry inventory
+    </label>
+    <button type="submit" class="btn-primary">Log it</button>
+  </form>
+
+  <section class="card">
+    <h3 class="font-display text-lg font-semibold text-navy-800">On the shelf</h3>
+    <div id="pantry-items" class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"></div>
+    <p id="pantry-items-empty" class="py-3 text-center text-sm text-navy-400">Pantry's bare — log a preservation above.</p>
+  </section>
+
+  <section class="card">
+    <h3 class="font-display text-lg font-semibold text-navy-800">Preservation history</h3>
+    <ul id="pres-history" class="mt-3 space-y-2"></ul>
+    <p id="pres-history-empty" class="py-3 text-center text-sm text-navy-400">Nothing preserved yet.</p>
+  </section>
+</section>
+{% endblock %}
