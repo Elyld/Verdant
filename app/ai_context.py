@@ -151,6 +151,39 @@ def build_context(session: Session) -> str:
     except Exception:
         pass
 
+    # Per-plant care history — the "when did I last feed the tomatoes?" answer.
+    try:
+        growing = session.exec(
+            select(Plant).where(Plant.status == "Growing")
+            .order_by(Plant.variety_name).limit(MAX_PLANTS)).all()
+        hist_lines = []
+        for p in growing:
+            w = session.exec(
+                select(WateringLog).where(WateringLog.plant_id == p.id)
+                .order_by(WateringLog.date.desc()).limit(1)).first()
+            f = session.exec(
+                select(FertilizationLog).where(FertilizationLog.plant_id == p.id)
+                .order_by(FertilizationLog.date.desc()).limit(1)).first()
+            h = session.exec(
+                select(Harvest).where(Harvest.plant_id == p.id)
+                .order_by(Harvest.date.desc()).limit(1)).first()
+            bits = []
+            bits.append(f"watered {w.date}" if w and w.date else "never watered")
+            if f and f.date:
+                prod = (f.fertilizer_name or "").strip()
+                bits.append(f"fed {f.date}" + (f" ({prod})" if prod else ""))
+            else:
+                bits.append("never fed")
+            if h and h.date:
+                bits.append(f"harvested {h.date} ({h.quantity or '?'}x)")
+            else:
+                bits.append("never harvested")
+            hist_lines.append(f"- {p.variety_name}: " + " · ".join(bits))
+        if hist_lines:
+            lines.append("Care history (most recent per plant):\n" + "\n".join(hist_lines))
+    except Exception:
+        pass
+
     # Weather, when configured
     try:
         lat = (frost_mod.get_setting(session, "garden_lat") or "").strip()
