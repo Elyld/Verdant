@@ -244,3 +244,147 @@ def test_scheduler_not_started_when_disabled():
 
     _set_settings_via_db(digest_enabled="false")
     assert _maybe_start_digest_scheduler() is None
+
+
+def _unset_ai_briefing_setting():
+    from sqlmodel import Session as _Session  # noqa: E402
+    from sqlmodel import delete  # noqa: E402
+
+    from app.database import engine as _engine  # noqa: E402
+    from app.models import Setting  # noqa: E402
+
+    with _Session(_engine) as s:
+        s.exec(delete(Setting).where(Setting.key == "digest_ai_briefing"))
+        s.commit()
+
+
+def _mock_llm(monkeypatch, chat_impl):
+    import app.llm as llm_mod  # noqa: E402
+
+    monkeypatch.setattr(llm_mod, "get_config", lambda session: {"enabled": True})
+    monkeypatch.setattr(llm_mod, "chat", chat_impl)
+
+
+def test_ai_briefing_prepended(client, monkeypatch):
+    """With the setting on and AI enabled, the preview gets a 🌤️ opener."""
+    import app.llm as llm_mod  # noqa: E402
+
+    _mock_llm(
+        monkeypatch,
+        lambda session, messages, json_mode=False, timeout=None: (
+            "Good morning! Water the tomatoes first."
+        ),
+    )
+    try:
+        _set_settings_via_db(digest_ai_briefing="true")
+        res = client.get("/api/digest/preview")
+        assert res.status_code == 200
+        msg = res.json()["message"]
+        assert "🌤️ Good morning!" in msg
+        # Data message still follows after the briefing.
+        assert "Morning garden check" in msg
+    finally:
+        _set_settings_via_db(digest_ai_briefing="false")
+
+
+def test_ai_briefing_fallback_on_error(client, monkeypatch):
+    """A provider failure degrades to the data-only message — never an error."""
+    import app.llm as llm_mod  # noqa: E402
+
+    def boom(session, messages, json_mode=False, timeout=None):
+        raise llm_mod.LLMError("boom")
+
+    _mock_llm(monkeypatch, boom)
+    try:
+        _set_settings_via_db(digest_ai_briefing="true")
+        res = client.get("/api/digest/preview")
+        assert res.status_code == 200, res.text
+        msg = res.json()["message"]
+        assert "🌤️" not in msg
+        assert "Morning garden check" in msg
+    finally:
+        _set_settings_via_db(digest_ai_briefing="false")
+
+
+def test_ai_briefing_default_off(client, monkeypatch):
+    """Setting unset (env fallback) means no briefing, even with AI up."""
+    _mock_llm(
+        monkeypatch,
+        lambda session, messages, json_mode=False, timeout=None: "Should not appear.",
+    )
+    try:
+        _unset_ai_briefing_setting()
+        res = client.get("/api/digest/preview")
+        assert res.status_code == 200
+        msg = res.json()["message"]
+        assert "🌤️" not in msg
+        assert "Should not appear" not in msg
+    finally:
+        _set_settings_via_db(digest_ai_briefing="false")
+
+
+def test_ai_briefing_setting_round_trip(client):
+    """The new toggle saves via /api/settings and reads back."""
+    try:
+        res = client.put(
+            "/api/settings",
+            json={
+                "digest_ai_briefing": True,
+                "discord_webhook_url": "https://discord.com/api/webhooks/x",
+            },
+        )
+        assert res.status_code == 200, res.text
+        assert client.get("/api/settings").json()["digest_ai_briefing"] is True
+        # It must not re-arm the scheduler (digest is time-based only).
+        res = client.put("/api/settings", json={"digest_ai_briefing": False})
+        assert res.status_code == 200
+        assert client.get("/api/settings").json()["digest_ai_briefing"] is False
+    finally:
+        client.put(
+            "/api/settings",
+            json={"digest_ai_briefing": False, "discord_webhook_url": ""},
+        )
+
+
+def test_frost_alert_line(monkeypatch):
+    """Frost in ~5 days warns with the date; far-future frost warns nothing."""
+    from datetime import timedelta  # noqa: E402
+
+    import app.frost as frost_mod  # noqa: E402
+    from app.routers.digest import _frost_alert_line  # noqa: E402
+
+    today = date.today()
+    near = today + timedelta(days=5)
+    monkeypatch.setattr(
+        frost_mod,
+        "resolve_frost",
+        lambda session, which, today=None: (near, "zone", "6b"),
+    )
+    line = _frost_alert_line(None)
+    assert line is not None
+    assert "frost" in line.lower() and "5 days" in line
+    assert near.strftime("%a %b %d") in line
+    # Frost that already happened within the last week -> caution line.
+    past = today - timedelta(days=3)
+    monkeypatch.setattr(
+        frost_mod,
+        "resolve_frost",
+        lambda session, which, today=None: (past, "exact", None),
+    )
+    line = _frost_alert_line(None)
+    assert line is not None and "frost" in line.lower()
+    # Far away -> nothing.
+    far = today + timedelta(days=90)
+    monkeypatch.setattr(
+        frost_mod,
+        "resolve_frost",
+        lambda session, which, today=None: (far, "zone", "6b"),
+    )
+    assert _frost_alert_line(None) is None
+    # No frost data -> nothing.
+    monkeypatch.setattr(
+        frost_mod,
+        "resolve_frost",
+        lambda session, which, today=None: (None, None, None),
+    )
+    assert _frost_alert_line(None) is None

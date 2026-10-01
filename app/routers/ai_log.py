@@ -117,9 +117,11 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     history: list[ChatMessage] = []
+    image: Optional[str] = None  # data:image/... URI or https:// URL; vision-capable models can see it
 
 
 MAX_HISTORY = 8  # turns forwarded to the model; the client keeps the rest
+MAX_IMAGE_LEN = 7_000_000  # ~5 MB base64 — an image bigger than this is rejected
 
 
 def _chat_enabled(session: Session) -> bool:
@@ -246,10 +248,11 @@ def _draft_summary(d: dict) -> str:
     return " ".join(bits)
 
 
-def _chat_llm(session: Session, messages: list) -> str:
+def _chat_llm(session: Session, messages: list, images: list[str] | None = None) -> str:
     """One model call with the shared error contract."""
     try:
-        return llm_mod.chat(session, messages, json_mode=True, timeout=120)
+        return llm_mod.chat(session, messages, json_mode=True, timeout=120,
+                            images=images)
     except llm_mod.LLMError as e:
         msg = str(e)
         if e.hint:
@@ -270,6 +273,14 @@ def chat_endpoint(payload: ChatRequest, session: Session = Depends(get_session))
         raise HTTPException(400, "Say something first.")
     if len(message) > 2000:
         raise HTTPException(400, "That's a lot — try a shorter message.")
+    image = (payload.image or "").strip() or None
+    if image:
+        if not (image.startswith("data:image/") or image.startswith("https://")):
+            raise HTTPException(
+                400, "That image isn't usable — attach a photo as a data:image/... "
+                     "URI or an https:// URL.")
+        if len(image) > MAX_IMAGE_LEN:
+            raise HTTPException(400, "That image is too large — keep it under ~5 MB.")
     if not _chat_enabled(session):
         raise HTTPException(400, "The chat assistant is off — enable it on the Settings page.")
     if not llm_mod.get_config(session)["enabled"]:
@@ -282,6 +293,10 @@ def chat_endpoint(payload: ChatRequest, session: Session = Depends(get_session))
     system = _CHAT_SYSTEM.format(
         today=today.strftime("%A, %B %d, %Y"), zone=zone,
         tools=tools_json, context=context)
+    if image:
+        system += ("\n\nThe gardener attached a photo with this message — you CAN see it. "
+                   "Use what you see for pest ID, ripeness, or plant health, "
+                   "and mention what you observe in your reply.")
 
     history = [
         {"role": m.role, "content": (m.content or "")[:1500]}
@@ -290,11 +305,15 @@ def chat_endpoint(payload: ChatRequest, session: Session = Depends(get_session))
     ][-MAX_HISTORY:]
     messages = [{"role": "system", "content": system}, *history,
                 {"role": "user", "content": message}]
+    images = [image] if image else None
 
     drafts: list[dict] = []
     reply: Optional[str] = None
-    for _ in range(MAX_TOOL_ITERS):
-        content = _chat_llm(session, messages)
+    for turn in range(MAX_TOOL_ITERS):
+        # The photo rides with the first call only — later turns send the
+        # tool results, and re-sending the image would burn vision tokens
+        # for no new information.
+        content = _chat_llm(session, messages, images=images if turn == 0 else None)
         parsed = _extract_json_object(content)
         if parsed is None:
             reply = content.strip() or "…"
@@ -357,18 +376,12 @@ def ai_status(session: Session = Depends(get_session)) -> dict:
     return llm_mod.status(session)
 
 
-@router.post("/interpret")
-def interpret(payload: InterpretRequest, session: Session = Depends(get_session)) -> dict:
-    """Turn a sentence into draft log entries. Returns drafts only — the
-    caller writes them through the normal endpoints after user confirmation.
+def _interpret_text(session: Session, text: str) -> dict:
+    """Core of /interpret: turn validated prose into draft log entries.
+
+    Returns {"ok": True, "drafts": [...]} (plus a "message" when nothing was
+    parseable). Drafts only — nothing is saved without user confirmation.
     """
-    text = (payload.text or "").strip()
-    if not text:
-        raise HTTPException(400, "Tell me what you did first.")
-    if len(text) > 2000:
-        raise HTTPException(400, "That's a lot — try one or two sentences.")
-    if not llm_mod.get_config(session)["enabled"]:
-        raise HTTPException(400, "AI is off — enable it on the Settings page first.")
     plants = _plant_names(session)
     prompt = _build_prompt(text, plants)
     try:
@@ -396,3 +409,41 @@ def interpret(payload: InterpretRequest, session: Session = Depends(get_session)
         return {"ok": True, "drafts": [],
                 "message": "Nothing loggable in there — try e.g. 'watered the tomatoes and harvested 3 peppers'."}
     return {"ok": True, "drafts": drafts}
+
+
+@router.post("/interpret")
+def interpret(payload: InterpretRequest, session: Session = Depends(get_session)) -> dict:
+    """Turn a sentence into draft log entries. Returns drafts only — the
+    caller writes them through the normal endpoints after user confirmation.
+    """
+    text = (payload.text or "").strip()
+    if not text:
+        raise HTTPException(400, "Tell me what you did first.")
+    if len(text) > 2000:
+        raise HTTPException(400, "That's a lot — try one or two sentences.")
+    if not llm_mod.get_config(session)["enabled"]:
+        raise HTTPException(400, "AI is off — enable it on the Settings page first.")
+    return _interpret_text(session, text)
+
+
+class VoiceLogRequest(BaseModel):
+    transcript: str
+
+
+@router.post("/voice-log")
+def voice_log(payload: VoiceLogRequest, session: Session = Depends(get_session)) -> dict:
+    """AI-powered voice logging — the client does speech-to-text (Web Speech API)
+    and POSTs the transcript; the server parses it into drafts through the same
+    pipeline as /interpret. The existing client-side voice_log.js is the no-AI
+    sibling; this is the AI sibling for a future mic button.
+
+    Returns drafts only — nothing is saved without user confirmation.
+    """
+    transcript = (payload.transcript or "").strip()
+    if not transcript:
+        raise HTTPException(400, "Tell me what you did first.")
+    if len(transcript) > 2000:
+        raise HTTPException(400, "That's a lot — try one or two sentences.")
+    if not llm_mod.get_config(session)["enabled"]:
+        raise HTTPException(400, "AI is off — enable it on the Settings page first.")
+    return _interpret_text(session, transcript)

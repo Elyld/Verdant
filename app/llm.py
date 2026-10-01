@@ -130,12 +130,69 @@ def _http_error_detail(e: Exception) -> str:
 # --------------------------------------------------------------------------- #
 # Provider calls
 # --------------------------------------------------------------------------- #
+def _clean_images(images: list[str] | None) -> list[str]:
+    """Drop empty/blank image strings."""
+    return [img for img in (images or []) if isinstance(img, str) and img.strip()]
+
+
+def _data_uri_base64(img: str) -> str | None:
+    """The base64 payload of a data: URI, or None for anything else
+    (https:// URLs included — Ollama can't fetch remote URLs, so those
+    are skipped as best effort)."""
+    if not isinstance(img, str) or not img.startswith("data:"):
+        return None
+    marker = ";base64,"
+    idx = img.find(marker)
+    if idx < 0:
+        return None
+    return img[idx + len(marker):]
+
+
+def _attach_openrouter_images(messages: list[dict], images: list[str]) -> list[dict]:
+    """Copy the message list, rewriting the last user message's string
+    content into OpenAI content parts with each image attached. Only the
+    last message is touched, and only when it is a user message with
+    string content; everything else is left exactly as it was."""
+    if not images or not messages:
+        return messages
+    last = messages[-1]
+    if not isinstance(last, dict) or last.get("role") != "user":
+        return messages
+    text = last.get("content")
+    if not isinstance(text, str):
+        return messages
+    new_last = dict(last)
+    new_last["content"] = (
+        [{"type": "text", "text": text}]
+        + [{"type": "image_url", "image_url": {"url": img}} for img in images]
+    )
+    return [*messages[:-1], new_last]
+
+
+def _attach_ollama_images(messages: list[dict], images: list[str]) -> list[dict]:
+    """Copy the message list, setting an `images` array (base64 payloads)
+    on the last user message — Ollama's /api/chat shape. https:// URLs are
+    skipped (Ollama can't fetch them). Never mutates the caller's list."""
+    if not images or not messages:
+        return messages
+    last = messages[-1]
+    if not isinstance(last, dict) or last.get("role") != "user":
+        return messages
+    payloads = [b64 for b64 in (_data_uri_base64(i) for i in images) if b64]
+    if not payloads:
+        return messages
+    new_last = dict(last)
+    new_last["images"] = payloads
+    return [*messages[:-1], new_last]
+
+
 def _ollama_chat(base_url: str, model: str, messages: list[dict],
-                 json_mode: bool, timeout: int) -> str:
+                 json_mode: bool, timeout: int,
+                 images: list[str] | None = None) -> str:
     payload = {
         "model": model,
         "stream": False,
-        "messages": messages,
+        "messages": _attach_ollama_images(messages, _clean_images(images)),
     }
     if json_mode:
         payload["format"] = "json"
@@ -161,8 +218,10 @@ def _ollama_chat(base_url: str, model: str, messages: list[dict],
 
 
 def _openrouter_chat(api_key: str, model: str, messages: list[dict],
-                     json_mode: bool, timeout: int) -> str:
-    payload: dict = {"model": model, "messages": messages}
+                     json_mode: bool, timeout: int,
+                     images: list[str] | None = None) -> str:
+    payload: dict = {"model": model,
+                     "messages": _attach_openrouter_images(messages, _clean_images(images))}
     if json_mode:
         payload["response_format"] = {"type": "json_object"}
     headers = {
@@ -188,8 +247,12 @@ def _openrouter_chat(api_key: str, model: str, messages: list[dict],
 
 
 def chat(session, messages: list[dict], *, json_mode: bool = False,
-         timeout: int | None = None) -> str:
+         timeout: int | None = None, images: list[str] | None = None) -> str:
     """Send messages to the configured provider. Returns the assistant text.
+
+    images: optional list of data URIs (data:image/<type>;base64,...) or
+    https:// URLs. They are attached to the LAST user message so a
+    vision-capable model can see them.
 
     Raises LLMError with a user-friendly message on any failure.
     """
@@ -201,9 +264,9 @@ def chat(session, messages: list[dict], *, json_mode: bool = False,
         if not key:
             raise LLMError("OpenRouter is selected but there's no API key — add one on the Settings page.")
         return _openrouter_chat(key, cfg["openrouter_model"], messages,
-                                json_mode, timeout or 60)
+                                json_mode, timeout or 60, images=images)
     return _ollama_chat(cfg["ollama_base_url"], cfg["ollama_model"], messages,
-                        json_mode, timeout or 120)
+                        json_mode, timeout or 120, images=images)
 
 
 def status(session) -> dict:

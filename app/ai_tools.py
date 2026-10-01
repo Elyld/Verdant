@@ -14,6 +14,8 @@ from typing import Optional
 
 from sqlmodel import Session, select
 
+from app import frost as frost_mod
+from app import units as units_mod
 from app.models import (
     Container,
     FertilizationLog,
@@ -121,10 +123,44 @@ TOOLS = [
         "parameters": {"plant": "plant name", "to_container": "destination container name"},
         "required": ["plant", "to_container"],
     },
+    {
+        "name": "season_advice",
+        "description": "Seasonal guidance for the gardener's zone: first-frost countdown, "
+                       "what to plant and harvest right now, garlic planting reminder, "
+                       "seed-order hints. Advisory only — makes no garden changes.",
+        "parameters": {},
+        "required": [],
+    },
+    {
+        "name": "save_memory_note",
+        "description": "Save a memory note for future chats — a preference, idea, or "
+                       "reminder the gardener wants remembered. Creates a DRAFT the "
+                       "gardener confirms before anything is saved.",
+        "parameters": {"note": "the note text to remember",
+                       "plant": "optional plant name this relates to"},
+        "required": ["note"],
+    },
+    {
+        "name": "recall_notes",
+        "description": "Search previously saved memory notes and journal observations. "
+                       "Use when the gardener asks 'what did I note about…' or "
+                       "'remember when…'.",
+        "parameters": {"query": "words to search for"},
+        "required": ["query"],
+    },
+    {
+        "name": "variety_performance",
+        "description": "Year-over-year harvest performance per variety: harvest counts "
+                       "and total quantities from the harvest logs. "
+                       "Use for 'which variety did best' questions.",
+        "parameters": {"variety": "optional variety name filter"},
+        "required": [],
+    },
 ]
 
 READ_TOOLS = {"plant_care_history", "search_notes", "seed_stash",
-              "planner_overview", "reminders"}
+              "planner_overview", "reminders", "season_advice",
+              "recall_notes", "variety_performance"}
 
 WRITE_TOOL_ACTIONS = {
     "log_watering": "water",
@@ -135,6 +171,7 @@ WRITE_TOOL_ACTIONS = {
     "add_seed_packet": "seed",
     "update_plant": "plant_status",
     "move_planting": "plant_move",
+    "save_memory_note": "note",
 }
 
 
@@ -255,12 +292,115 @@ def _t_reminders(session: Session, args: dict) -> dict:
                     for r in due[:10]]}
 
 
+def _t_season_advice(session: Session, args: dict) -> dict:
+    today = Date.today()
+    month = today.strftime("%B")
+    zone = (frost_mod.get_setting(session, "zone") or "").strip() or "?"
+    frost = None
+    try:
+        frost, _src, _z = frost_mod.resolve_frost(session, "first", today=today)
+    except Exception:
+        frost = None
+    days_to_frost = (frost - today).days if frost else None
+
+    advice = []
+    if frost:
+        advice.append(
+            f"First frost is around {frost.strftime('%b %d')} — "
+            f"{days_to_frost} day{'s' if days_to_frost != 1 else ''} out (zone {zone}).")
+    else:
+        advice.append(
+            "No first-frost date on file — set your zone or frost date in Settings "
+            "for a countdown.")
+    # Garlic: user plants in late October, regardless of whether frost resolves.
+    if month == "October" and days_to_frost is not None and days_to_frost <= 31:
+        advice.append("Garlic goes in the ground in late October — get beds ready and "
+                      "cloves planted before the ground hardens.")
+    elif month == "October":
+        advice.append("Garlic goes in the ground in late October — order seed garlic "
+                      "now if you haven't yet.")
+    else:
+        advice.append("Garlic goes in the ground in late October — mark the calendar.")
+    if days_to_frost is not None and days_to_frost <= 21:
+        advice.append("Plant now: spinach and lettuce under row cover, or a cover crop "
+                      "to rest the beds over winter.")
+    else:
+        advice.append("Plant now: fall greens under cover, garlic in late October, and "
+                      "cover crops on empty beds.")
+    advice.append("Harvest: pull the last tomatoes and peppers before frost, dig sweet "
+                  "potatoes, and dry or freeze herbs for winter.")
+    advice.append("Seed-order hint: check the stash for packets ~3 years or older, "
+                  "or with poor germination — replace those first.")
+
+    def _fit(s: str) -> str:
+        return s if len(s) <= 140 else s[:137] + "..."
+
+    return {
+        "month": month,
+        "zone": zone,
+        "first_frost": frost.isoformat() if frost else None,
+        "days_to_frost": days_to_frost,
+        "advice": [_fit(a) for a in advice],
+    }
+
+
+def _t_recall_notes(session: Session, args: dict) -> dict:
+    q = (args.get("query") or "").strip().lower()
+    if not q:
+        return {"error": "query is required."}
+    rows = session.exec(select(ObservationLog)
+                        .order_by(ObservationLog.date.desc()).limit(300)).all()
+    memory_hits, regular_hits = [], []
+    for n in rows:
+        text = f"{n.plant_name} {n.notes or ''}".lower()
+        if q not in text:
+            continue
+        entry = {"date": n.date, "plant": n.plant_name,
+                 "notes": (n.notes or "")[:200],
+                 "memory": (n.plant_name or "") == "Notebook"}
+        (memory_hits if entry["memory"] else regular_hits).append(entry)
+    return {"matches": (memory_hits + regular_hits)[:10]}
+
+
+def _t_variety_performance(session: Session, args: dict) -> dict:
+    variety_filter = (args.get("variety") or "").strip().lower()
+    rows = session.exec(select(Harvest)
+                        .order_by(Harvest.date.desc()).limit(2000)).all()
+    per_variety: dict[str, dict] = {}
+    for h in rows:
+        variety = (h.plant.variety_name if h.plant else None) or "Unknown"
+        if variety_filter and variety_filter not in variety.lower():
+            continue
+        year = (h.date or "")[:4] or "unknown"
+        entry = per_variety.setdefault(variety, {})
+        y = entry.setdefault(year, {"harvests": 0, "quantity": 0, "weight_oz": 0.0})
+        y["harvests"] += 1
+        y["quantity"] += h.quantity or 0
+        oz = units_mod.to_oz(h.weight, h.weight_unit)
+        if oz is not None:
+            y["weight_oz"] += oz
+    varieties = []
+    for variety, years in per_variety.items():
+        total_harvests = sum(y["harvests"] for y in years.values())
+        total_quantity = sum(y["quantity"] for y in years.values())
+        for y in years.values():
+            y["weight_oz"] = round(y["weight_oz"], 2)
+        varieties.append({"variety": variety, "years": years,
+                          "total_harvests": total_harvests,
+                          "total_quantity": total_quantity})
+    varieties.sort(key=lambda v: v["total_quantity"], reverse=True)
+    return {"varieties": varieties[:20]}
+
+
 _READ_EXEC = {
     "plant_care_history": _t_plant_care_history,
     "search_notes": _t_search_notes,
     "seed_stash": _t_seed_stash,
     "planner_overview": _t_planner_overview,
     "reminders": _t_reminders,
+    "season_advice": _t_season_advice,
+    "recall_notes": _t_recall_notes,
+    "variety_performance": _t_variety_performance,
 }
 
 
@@ -351,6 +491,26 @@ def build_write_draft(session: Session, name: str, args: dict) -> Optional[dict]
                 "detail": f"{cur_name} → {dest.name}", "notes": None,
                 "to_container_id": dest.id,
                 "planting_id": cur.id if cur else None}
+
+    if action == "note":
+        notes = (args.get("note") or "").strip()
+        if not notes:
+            return None
+        raw = {
+            "action": "note",
+            "plant": args.get("plant"),
+            "amount": None,
+            "unit": None,
+            "detail": "memory note",
+            "notes": notes,
+        }
+        d = _clean_draft(raw, __plant_names(session))
+        if not d:
+            return None
+        # The confirm step saves note drafts via /api/observations, which needs a
+        # plant name — "Notebook" is the pseudo-plant for plant-less memories.
+        d["plant_name"] = d["plant_name"] or "Notebook"
+        return d
 
     return None
 

@@ -81,6 +81,7 @@
       $('#set-slideshow-interval').value = String(s.slideshow_interval || 5);
       $('#set-confirm-water-all').checked = s.confirm_water_all !== false;
       $('#set-digest-enabled').checked = !!s.digest_enabled;
+      $('#set-digest-ai-briefing').checked = !!s.digest_ai_briefing;
       $('#set-webhook').value = s.discord_webhook_url || '';
       $('#set-digest-time').value = s.digest_time || '08:00';
       // Blank stored timezone = browser's zone (what the scheduler will use).
@@ -212,6 +213,7 @@
           garden_lat: $('#set-lat').value.trim(),
           garden_lon: $('#set-lon').value.trim(),
           digest_enabled: $('#set-digest-enabled').checked,
+          digest_ai_briefing: $('#set-digest-ai-briefing').checked,
           discord_webhook_url: $('#set-webhook').value.trim(),
           digest_time: $('#set-digest-time').value || '08:00',
           digest_timezone: $('#set-digest-timezone').value.trim(),

@@ -28,6 +28,9 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
+from app import ai_context as ai_context_mod
+from app import frost as frost_mod
+from app import llm as llm_mod
 from app.database import get_session
 from app.models import Setting
 from app.routers.plants import ReminderRead, plant_reminders
@@ -38,6 +41,17 @@ log = logging.getLogger("verdant.digest")
 
 router = APIRouter(prefix="/api/digest", tags=["digest"])
 
+# Discord hard-caps a message at 2000 chars; stay well under it so a long
+# reminder list plus extras never silently fails to send.
+DISCORD_SAFE_CHARS = 1900
+
+AI_BRIEFING_SYSTEM = (
+    "You are Verdant, a warm, knowledgeable gardening neighbor writing the "
+    "opening lines of a morning garden briefing sent to Discord. Write 2-4 "
+    "short sentences, plain text, no headers, no markdown tables. Name the "
+    "top 1-2 priorities for the day and one encouraging line."
+)
+
 
 @dataclass
 class DigestConfig:
@@ -45,6 +59,7 @@ class DigestConfig:
     webhook_url: str
     time: str  # "HH:MM"
     timezone: str = ""  # IANA zone name; "" = server local time
+    ai_briefing: bool = False  # optional LLM-written opener on the message
 
 
 def resolve_digest_timezone(name: str):
@@ -74,6 +89,7 @@ def get_config() -> DigestConfig:
         webhook_url=os.getenv("DISCORD_WEBHOOK_URL", "").strip(),
         time=os.getenv("DIGEST_TIME", "08:00").strip() or "08:00",
         timezone=os.getenv("DIGEST_TIMEZONE", "").strip(),
+        ai_briefing=os.getenv("DIGEST_AI_BRIEFING", "").strip().lower() in ("1", "true", "yes", "on"),
     )
 
 
@@ -93,11 +109,16 @@ def effective_digest_config(session: Session) -> DigestConfig:
         enabled = stored["digest_enabled"].strip().lower() in ("1", "true", "yes", "on")
     else:
         enabled = env.enabled
+    if "digest_ai_briefing" in stored:
+        ai_briefing = stored["digest_ai_briefing"].strip().lower() in ("1", "true", "yes", "on")
+    else:
+        ai_briefing = env.ai_briefing
     return DigestConfig(
         enabled=enabled,
         webhook_url=pick("discord_webhook_url", env.webhook_url),
         time=pick("digest_time", env.time) or "08:00",
         timezone=pick("digest_timezone", env.timezone),
+        ai_briefing=ai_briefing,
     )
 
 
@@ -175,11 +196,91 @@ def send_discord_message(webhook_url: str, content: str, timeout: float = 15.0) 
         raise RuntimeError(f"Discord webhook returned {resp.status_code}: {resp.text[:200]}")
 
 
+def ai_briefing_text(session: Session, message: str) -> Optional[str]:
+    """Write a short LLM opening paragraph for the digest.
+
+    Returns the briefing text, or None when AI is off / the provider fails.
+    Never raises — the data-only message always survives.
+    """
+    try:
+        if not llm_mod.get_config(session)["enabled"]:
+            return None
+        context = ai_context_mod.build_context(session)
+        brief = llm_mod.chat(
+            session,
+            [
+                {"role": "system", "content": AI_BRIEFING_SYSTEM},
+                {
+                    "role": "user",
+                    "content": context
+                    + "\n\nToday's garden data:\n"
+                    + message
+                    + "\n\nWrite the briefing paragraph.",
+                },
+            ],
+            timeout=60,
+        )
+        brief = (brief or "").strip()
+        return brief or None
+    except Exception as exc:
+        log.warning("AI briefing failed; sending data-only digest: %s", exc)
+        return None
+
+
+def _frost_alert_line(session: Session) -> Optional[str]:
+    """One-line first-fall-frost alert when frost is near, or caution when it
+    may have just hit. Returns None when there's nothing to warn about.
+
+    Deliberately kept out of build_digest_message (that one is pure/tested
+    without a session); the caller inserts this right after the header line.
+    """
+    try:
+        frost, _src, _zone = frost_mod.resolve_frost(session, "first")
+        if frost is None:
+            return None
+        days = (frost - date.today()).days
+        if 0 <= days <= 14:
+            return (
+                f"❄️ First fall frost expected {frost.strftime('%a %b %d')} ({days} days) "
+                "— bring tender plants in and harvest what's left."
+            )
+        if -7 <= days < 0:
+            return (
+                f"❄️ First fall frost may have hit {frost.strftime('%a %b %d')} "
+                f"({abs(days)} days ago) — check tender plants and cover what's left."
+            )
+        return None
+    except Exception as exc:
+        log.warning("frost alert line failed: %s", exc)
+        return None
+
+
+def _message_with_extras(session: Session, message: str) -> str:
+    """Attach the optional extras to the data message: the AI briefing opener
+    (when the setting is on) and the frost alert line (when frost is near).
+    Final order: briefing, header, frost alert, then the reminder sections."""
+    cfg = effective_digest_config(session)
+    if cfg.ai_briefing:
+        brief = ai_briefing_text(session, message)
+        if brief:
+            candidate = "🌤️ " + brief.strip()[:600] + "\n\n" + message
+            # Discord caps messages at 2000 chars; a too-long message fails
+            # the whole send, so drop the briefing rather than the data.
+            if len(candidate) <= DISCORD_SAFE_CHARS:
+                message = candidate
+    frost_line = _frost_alert_line(session)
+    if frost_line:
+        header, _, rest = message.partition("\n")
+        message = header + "\n" + frost_line + ("\n" + rest if rest else "")
+    return message
+
+
 def run_digest(session: Session, webhook_url: str) -> str:
     """Build the digest from live reminder data and send it. Returns the message."""
     reminders = plant_reminders(session)
     sow_rows = seed_calendar_rows(session)
     message = build_digest_message(reminders, sow_rows=sow_rows)
+    message = _message_with_extras(session, message)
     send_discord_message(webhook_url, message)
     log.info("Digest sent (%d chars).", len(message))
     return message
@@ -188,7 +289,8 @@ def run_digest(session: Session, webhook_url: str) -> str:
 @router.get("/preview")
 def preview_digest(session: Session = Depends(get_session)):
     """Show the message text that would be sent right now (does not send)."""
-    return {"message": build_digest_message(plant_reminders(session), sow_rows=seed_calendar_rows(session))}
+    message = build_digest_message(plant_reminders(session), sow_rows=seed_calendar_rows(session))
+    return {"message": _message_with_extras(session, message)}
 
 
 @router.post("/send")
