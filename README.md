@@ -186,6 +186,62 @@ costs per variety.
 
 ![Season scorecard](docs/screenshots/scorecard.png)
 
+### 🏖️ Vacation caretaker sheet — hand the garden off
+Going away? The **🏖️ Caretaker sheet** button on the Today page opens a
+printable, phone-friendly page (`/api/caretaker-sheet`) built for the person
+watching your garden: 💧 what to water (with each plant's cadence and how
+overdue it is), 🧺 what's ready to pick, 🐛 pests to keep an eye on, 📝 your
+latest notes, and a spot for emergency contacts. Open it on their phone or
+print it for the fridge.
+
+![Caretaker sheet](docs/screenshots/caretaker-sheet.png)
+
+### 🕰️ This week last year — the garden's memory
+The morning digest now closes with a **🕰️ This week last year** section: what
+you were doing this exact week last year — journal notes, harvests, and the
+photos you took. The chat can answer it too ("what did I do this time last
+year?") via the `this_week_last_year` tool.
+
+### 🌱 Growth stall detector — "is it still growing?"
+Ask the chat "is my tomato still growing?" and the `growth_check` tool pulls
+the plant's photos from the last ~6 weeks and asks your vision-capable chat
+model to compare them: visible growth, stall, or can't tell — with likely
+causes when it stalls (pot-bound? light? nutrition?). Advisory only, and it
+says so when there aren't enough photos to judge.
+
+### 🎲 Frost-night gamble — one bold call
+When frost threatens tonight, hedging is for cowards. The digest carries a
+**🎲 Frost-night gamble** block with one bold call: 🌱 **COVER** the tender
+plants, or 🧺 **HARVEST NOW** what's ripe. It triggers on tonight's forecast
+low ≤ 38 °F or a first-frost date 0–3 days out; ≤ 32 °F with ripe harvests
+waiting means HARVEST NOW, otherwise COVER. Advisory — your garden, your call.
+Also available as the `frost_gamble` chat tool.
+
+### 📕 Season yearbook — the keepsake PDF
+The Review page's **📕 Yearbook** button downloads a keepsake PDF of the
+season: year stats, per-variety tables, and photo pages. Print it, shelve it
+next to the seed catalogs.
+
+![Yearbook button on the Review page](docs/screenshots/review-yearbook.png)
+
+### 💰 True cost — was it cheaper than the store?
+The Review page's **💰 True-cost verdict** section answers the question every
+gardener asks in October: total spend, total pounds grown, and homegrown $/lb
+vs. honest grocery-store estimates — per variety, with fun verdicts ("cheaper
+than the store! 🌱", "a labor of love 💚"). Grocery baselines are clearly
+labeled estimates. The chat's `true_cost` tool answers "was it worth it" the
+same way.
+
+![True-cost verdict](docs/screenshots/true-cost.png)
+
+### 💀 Plant autopsy — the coroner interview
+When a plant dies, the chat doesn't just log it — it plays coroner first: up
+to 3 quick questions (what did it look like at the end? sudden or gradual?
+weather or pests involved?), then files a structured autopsy note via the new
+`record_autopsy` tool (confirm-before-save, like every write). Death notes
+attach to the variety's performance history, so when the order assistant asks
+"grow again?" next winter, it remembers what killed it.
+
 ### 🗺️ Backyard Planner — build your backyard
 Lay out your actual growing space on a real grid (1 cell = 1 ft, resizable):
 grow bags, raised beds, pots, planters, cattle panel arches, pallets — each
@@ -417,7 +473,9 @@ Optional: turn on "Let the AI write a short morning briefing" in the same card
 2–4 sentence briefing on top of the data sections — it falls back to data-only
 if the provider is unreachable. The digest also flags the first fall frost
 when it's within two weeks, and includes a 🔔 Reminders section for any
-dated reminders you set via the chat assistant (due/overdue first).
+dated reminders you set via the chat assistant (due/overdue first). New in
+2.51.0: a 🎲 **Frost-night gamble** block (one bold call when frost threatens
+tonight) and a closing 🕰️ **This week last year** section.
 
 ### 🔌 Immich integration
 Browse albums on your own Immich server and import their photos straight into
@@ -773,6 +831,30 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.51.0** — **🤪 The "wild ideas" batch.** Seven outside-the-box features,
+  all advisory, all wired into the chat assistant as new tools:
+  **🏖️ Vacation caretaker sheet** — a printable, phone-friendly handoff page
+  (`/api/caretaker-sheet`, button on the Today page) with what to water, what's
+  ready to pick, pests to watch, and your notes + emergency contacts;
+  **🕰️ This week last year** — the morning digest now closes with what you were
+  doing this same week last year (notes, harvests, photos), and the chat can
+  answer "what did I do this time last year?";
+  **🌱 Growth stall detector** — ask "is my tomato still growing?" and the chat
+  compares the plant's recent photos with your vision model to spot a stall
+  and suggest likely causes;
+  **🎲 Frost-night gamble** — when frost threatens tonight the digest carries
+  one bold call (🌱 COVER or 🧺 HARVEST NOW), triggered by tonight's forecast
+  low ≤ 38 °F or a first-frost date 0–3 days out;
+  **📕 Season yearbook** — a 📕 Yearbook button on the Review page downloads a
+  keepsake PDF of the season (stats, per-variety tables, photo pages);
+  **💰 True cost** — a new Review section (and chat tool) that answers "was it
+  cheaper than the grocery store?": homegrown $/lb vs. honest grocery-store
+  estimates, per variety, with fun verdicts;
+  **💀 Plant autopsy** — when a plant dies, the chat plays coroner first (up to
+  3 quick questions: what did it look like at the end? sudden or gradual?
+  weather or pests involved?) then logs a structured autopsy note via the new
+  `record_autopsy` tool; death notes attach to the variety's performance
+  history so next year's "grow again?" decision remembers what killed it.
 - **2.50.0** — **🔔 Dated reminders.** The gap the gardener hit: the chat
   could save memory notes but had no way to schedule a reminder — it would
   say "I'll try to remind you" with no tool to do it. Fixed for real: new

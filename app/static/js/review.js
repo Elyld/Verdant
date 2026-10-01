@@ -110,10 +110,29 @@
           <td class="py-2 pr-3 text-right">$${r.direct_cost.toFixed(2)}</td>
           <td class="py-2 text-right">${r.cost_per_oz != null ? `$${r.cost_per_oz.toFixed(2)}` : '<span class="text-navy-400">—</span>'}</td>
         </tr>`).join('');
+
+      const tc = await api.get(`/api/true-cost?year=${year}`).catch(() => null);
+      $('#truecost-empty').classList.toggle('hidden', !!(tc && tc.has_data));
+      $('#truecost-summary').textContent = tc && tc.has_data
+        ? `💸 $${tc.total_spend.toFixed(2)} spent · 🧺 ${tc.total_harvest_lb.toFixed(1)} lb grown · $${tc.overall_per_lb.toFixed(2)}/lb overall`
+        : '';
+      $('#truecost-rows').innerHTML = tc && tc.has_data
+        ? tc.per_variety.map(v => `
+            <tr class="border-t border-beige-200">
+              <td class="py-2 pr-3 font-semibold text-navy-800">${esc(v.variety)}</td>
+              <td class="py-2 pr-3 text-right">${v.per_lb != null ? `$${v.per_lb.toFixed(2)}/lb` : '<span class="text-navy-400">—</span>'}</td>
+              <td class="py-2 pr-3 text-right">${esc(v.grocery_baseline)}</td>
+              <td class="py-2 text-right">${esc(v.verdict)}</td>
+            </tr>`).join('')
+        : '';
+      $('#truecost-disclaimer').textContent = tc ? tc.disclaimer : '';
     }
 
     $('#review-prev').addEventListener('click', () => { year -= 1; load().catch((e) => toast(e.message, 'err')); });
     $('#review-next').addEventListener('click', () => { year += 1; load().catch((e) => toast(e.message, 'err')); });
+    $('#review-yearbook').addEventListener('click', () => {
+      window.open(`/api/yearbook?year=${year}`, '_blank');
+    });
     load().catch((error) => toast(`Could not load review: ${error.message}`, 'err'));
     return {};
   }

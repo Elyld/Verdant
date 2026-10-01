@@ -117,6 +117,15 @@ TOOLS = [
         "required": ["plant", "status"],
     },
     {
+        "name": "record_autopsy",
+        "description": "Draft a plant autopsy note when a plant dies — cause of death "
+                       "plus what it looked like at the end (user confirms before saving).",
+        "parameters": {"plant": "plant name",
+                       "cause": "cause of death, e.g. 'damping off'",
+                       "notes": "optional extra detail, e.g. what it looked like at the end"},
+        "required": ["plant", "cause"],
+    },
+    {
         "name": "move_planting",
         "description": "Draft moving a plant to a different planner container "
                        "(user confirms before saving).",
@@ -187,12 +196,45 @@ TOOLS = [
         "parameters": {"plant": "plant name, e.g. 'Cherokee Purple' or 'tomatoes'"},
         "required": ["plant"],
     },
+    {
+        "name": "this_week_last_year",
+        "description": "What happened in the garden during this same week last year — "
+                       "journal notes, harvests, and photos. Use for 'what did I do "
+                       "this time last year' questions.",
+        "parameters": {},
+        "required": [],
+    },
+    {
+        "name": "growth_check",
+        "description": "Compare recent photos of one plant (last ~6 weeks) to see if "
+                       "it has visibly grown or stalled, with likely causes. "
+                       "Advisory only. Use for 'is my tomato still growing?'.",
+        "parameters": {"plant": "plant name, e.g. 'Cherokee Purple' or 'tomatoes'"},
+        "required": ["plant"],
+    },
+    {
+        "name": "frost_gamble",
+        "description": "When frost threatens tonight: one bold call — COVER the tender "
+                       "plants or HARVEST NOW what's ripe. Advisory only; nothing to "
+                       "run when there's no frost risk (returns empty).",
+        "parameters": {},
+        "required": [],
+    },
+    {
+        "name": "true_cost",
+        "description": "Was it cheaper than the grocery store? Total spend and $/lb "
+                       "homegrown vs. grocery-store estimates, per variety with "
+                       "fun, honest verdicts. Use for 'was it worth it' money questions.",
+        "parameters": {"year": "optional season year, e.g. 2025 (defaults to current year)"},
+        "required": [],
+    },
 ]
 
 READ_TOOLS = {"plant_care_history", "search_notes", "seed_stash",
               "planner_overview", "reminders", "season_advice",
               "recall_notes", "variety_performance", "season_recap",
-              "upcoming_reminders"}
+              "upcoming_reminders", "this_week_last_year", "growth_check",
+              "frost_gamble", "true_cost"}
 
 WRITE_TOOL_ACTIONS = {
     "log_watering": "water",
@@ -205,6 +247,7 @@ WRITE_TOOL_ACTIONS = {
     "move_planting": "plant_move",
     "save_memory_note": "note",
     "set_reminder": "reminder",
+    "record_autopsy": "note",
 }
 
 
@@ -395,6 +438,43 @@ def _t_recall_notes(session: Session, args: dict) -> dict:
     return {"matches": (memory_hits + regular_hits)[:10]}
 
 
+def _t_this_week_last_year(session: Session, args: dict) -> dict:
+    """What happened in the garden this same week last year (read-only)."""
+    import app.time_travel as time_travel_mod
+
+    return time_travel_mod.this_week_last_year(session)
+
+
+def _t_growth_check(session: Session, args: dict) -> dict:
+    """Compare a plant's recent photos for visible growth (read-only)."""
+    import app.stall as stall_mod
+
+    return stall_mod.growth_check(session, args.get("plant", ""))
+
+
+def _t_frost_gamble(session: Session, args: dict) -> dict:
+    """One bold frost call — COVER or HARVEST NOW (read-only)."""
+    import app.frost_gamble as frost_gamble_mod
+
+    verdict = frost_gamble_mod.frost_verdict(session)
+    if verdict is None:
+        return {"verdict": None,
+                "note": "No frost risk tonight — nothing to call."}
+    return verdict
+
+
+def _t_true_cost(session: Session, args: dict) -> dict:
+    """Homegrown $/lb vs grocery-store estimates (read-only)."""
+    import app.true_cost as true_cost_mod
+
+    year = args.get("year")
+    try:
+        year = int(year) if year else Date.today().year
+    except (TypeError, ValueError):
+        year = Date.today().year
+    return true_cost_mod.true_cost_report(session, year)
+
+
 def _t_season_recap(session: Session, args: dict) -> dict:
     """Narrate a plant's season from its photos (read-only)."""
     import app.season_recap as recap_mod
@@ -431,6 +511,14 @@ def _t_variety_performance(session: Session, args: dict) -> dict:
         varieties.append({"variety": variety, "years": years,
                           "total_harvests": total_harvests,
                           "total_quantity": total_quantity})
+    # --- 💀 plant autopsies: death notes ride along with performance ---
+    from app import autopsy as autopsy_mod
+
+    deaths = autopsy_mod.autopsy_deaths_by_variety(session)
+    if variety_filter:
+        deaths = {v: d for v, d in deaths.items()
+                  if variety_filter in v.lower()}
+    autopsy_mod.attach_deaths(varieties, deaths)
     varieties.sort(key=lambda v: v["total_quantity"], reverse=True)
     return {"varieties": varieties[:20]}
 
@@ -481,6 +569,10 @@ _READ_EXEC = {
     "variety_performance": _t_variety_performance,
     "season_recap": _t_season_recap,
     "upcoming_reminders": _t_upcoming_reminders,
+    "this_week_last_year": _t_this_week_last_year,
+    "growth_check": _t_growth_check,
+    "frost_gamble": _t_frost_gamble,
+    "true_cost": _t_true_cost,
 }
 
 
@@ -506,6 +598,16 @@ def build_write_draft(session: Session, name: str, args: dict) -> Optional[dict]
     action = WRITE_TOOL_ACTIONS.get(name)
     if not action:
         return None
+
+    if name == "record_autopsy":
+        # Autopsy rides the existing "note" draft flow (same as save_memory_note):
+        # compose the note text + plant, then fall through to the note branch.
+        from app import autopsy as autopsy_mod
+
+        args = autopsy_mod.resolve_autopsy_args(session, args.get("plant"),
+                                                args.get("cause"), args.get("notes"))
+        if args is None:
+            return None
 
     if action in ("water", "fertilize", "harvest", "observe", "pest"):
         raw = {
