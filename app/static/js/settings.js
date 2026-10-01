@@ -84,6 +84,7 @@
       $('#set-webhook').value = s.discord_webhook_url || '';
       $('#set-digest-time').value = s.digest_time || '08:00';
       $('#set-ai-enabled').checked = !!s.local_ai_enabled;
+      $('#set-ai-chat-enabled').checked = s.ai_chat_enabled !== false;
       $('#set-ai-provider').value = s.ai_provider === 'openrouter' ? 'openrouter' : 'ollama';
       $('#set-ai-base').value = s.local_ai_base_url || 'http://localhost:11434';
       $('#set-ai-model').value = s.local_ai_model || 'qwen3:4b';
@@ -162,6 +163,7 @@
           confirm_water_all: $('#set-confirm-water-all').checked,
           mobile_tabs: JSON.stringify(mobileTabPicks),
           local_ai_enabled: $('#set-ai-enabled').checked,
+          ai_chat_enabled: $('#set-ai-chat-enabled').checked,
           ai_provider: $('#set-ai-provider').value,
           local_ai_base_url: $('#set-ai-base').value.trim(),
           local_ai_model: $('#set-ai-model').value.trim(),

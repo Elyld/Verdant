@@ -10,12 +10,14 @@ at the caller.
 from __future__ import annotations
 
 import json
+from datetime import date as Date
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
+from app import frost as frost_mod
 from app import llm as llm_mod
 from app.database import get_session
 from app.models import Plant
@@ -105,6 +107,129 @@ def _clean_draft(item: dict, plants: list[str]) -> Optional[dict]:
 
 class InterpretRequest(BaseModel):
     text: str
+
+
+class ChatMessage(BaseModel):
+    role: str  # "user" | "assistant"
+    content: str = ""
+
+
+class ChatRequest(BaseModel):
+    message: str
+    history: list[ChatMessage] = []
+
+
+MAX_HISTORY = 8  # turns forwarded to the model; the client keeps the rest
+
+
+def _chat_enabled(session: Session) -> bool:
+    return (frost_mod.get_setting(session, "ai_chat_enabled") or "true") == "true"
+
+
+_CHAT_SYSTEM = """You are Verdant, the friendly assistant inside a gardener's personal garden journal app. \
+You answer questions about THEIR garden and help them log what they do. Be warm, concise, and practical — \
+a knowledgeable gardening neighbor, never a lecture. Keep replies short (a few sentences) unless they ask for detail.
+
+Rules:
+- Use ONLY the garden context below for facts about their plants, dates, and activity. Never invent plant names, varieties, dates, or numbers. If the context doesn't say, say you don't see it recorded.
+- Today is {today}. The gardener is in USDA zone {zone}.
+- When they describe something they DID (watered, fed, harvested, saw pests, noticed something), put structured drafts in "drafts" AND mention them briefly in "reply". Drafts use: {{"action": "<water|fertilize|observe|harvest|pest|note>", "plant": "<exact plant name from context, or null>", "amount": <number or null>, "unit": "<unit or null>", "detail": "<product for fertilize, pest name for pest, else null>", "notes": "<short note>"}}. One draft per distinct thing. Unknown plant → plant=null, name in notes.
+- For pure questions (advice, "when did I last…", planning), "drafts" is [].
+- Never claim to have saved anything — the gardener confirms every draft before it's written.
+- No markdown tables. Short paragraphs or a few bullets are fine.
+
+Respond with ONLY a JSON object: {{"reply": "<your answer>", "drafts": [<drafts or empty>]}}.
+
+Garden context:
+{context}"""
+
+
+def _extract_json_object(raw: str) -> Optional[dict]:
+    """Pull a JSON object out of model output. None if unparseable."""
+    import json as json_mod
+
+    text = (raw or "").strip()
+    if text.startswith("```"):
+        text = text.strip("`").strip()
+        if text.lower().startswith("json"):
+            text = text[4:].strip()
+    start = text.find("{")
+    end = text.rfind("}")
+    if start < 0 or end <= start:
+        return None
+    try:
+        parsed = json_mod.loads(text[start:end + 1])
+    except ValueError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+@router.get("/chat-status")
+def chat_status(session: Session = Depends(get_session)) -> dict:
+    """Should the floating chat assistant show? Combines the chat toggle
+    with the provider's own status. Never raises."""
+    st = llm_mod.status(session)
+    enabled = _chat_enabled(session) and bool(st.get("enabled"))
+    out = {"enabled": enabled, "provider": st.get("provider"),
+           "reachable": bool(st.get("reachable"))}
+    if enabled and not out["reachable"]:
+        out["hint"] = st.get("hint") or "The AI provider isn't reachable — check Settings → AI."
+    return out
+
+
+@router.post("/chat")
+def chat_endpoint(payload: ChatRequest, session: Session = Depends(get_session)) -> dict:
+    """Chat with the garden assistant. Returns {"reply", "drafts"} — drafts
+    are only ever written after the user confirms them in the UI."""
+    from app import ai_context as ai_context_mod
+
+    message = (payload.message or "").strip()
+    if not message:
+        raise HTTPException(400, "Say something first.")
+    if len(message) > 2000:
+        raise HTTPException(400, "That's a lot — try a shorter message.")
+    if not _chat_enabled(session):
+        raise HTTPException(400, "The chat assistant is off — enable it on the Settings page.")
+    if not llm_mod.get_config(session)["enabled"]:
+        raise HTTPException(400, "AI is off — enable it on the Settings page first.")
+
+    context = ai_context_mod.build_context(session)
+    today = Date.today()
+    zone = frost_mod.get_setting(session, "zone") or "?"
+    system = _CHAT_SYSTEM.format(
+        today=today.strftime("%A, %B %d, %Y"), zone=zone, context=context)
+
+    history = [
+        {"role": m.role, "content": (m.content or "")[:1500]}
+        for m in (payload.history or [])
+        if m.role in ("user", "assistant") and (m.content or "").strip()
+    ][-MAX_HISTORY:]
+    messages = [{"role": "system", "content": system}, *history,
+                {"role": "user", "content": message}]
+    try:
+        content = llm_mod.chat(session, messages, json_mode=True, timeout=120)
+    except llm_mod.LLMError as e:
+        msg = str(e)
+        if e.hint:
+            msg += f" {e.hint}"
+        raise HTTPException(502, msg)
+
+    parsed = _extract_json_object(content)
+    if parsed is None:
+        # Model didn't follow the JSON contract — show the raw text, no drafts.
+        return {"ok": True, "reply": content.strip() or "…", "drafts": []}
+    reply = str(parsed.get("reply") or "").strip() or "…"
+
+    plants = _plant_names(session)
+    raw_drafts = parsed.get("drafts") or []
+    drafts = [d for d in (_clean_draft(i, plants) for i in raw_drafts) if d]
+    if drafts:
+        stmt = select(Plant).where(Plant.status == "Growing")
+        by_name = {p.variety_name.lower(): p.id for p in session.exec(stmt).all()}
+        for d in drafts:
+            if d["plant_name"]:
+                d["plant_id"] = by_name.get(d["plant_name"].lower())
+    return {"ok": True, "reply": reply, "drafts": drafts}
 
 
 @router.get("/status")

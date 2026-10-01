@@ -1,0 +1,312 @@
+/* Floating garden-assistant chat. Bootstrapped on every page from base.html.
+ *
+ * The button appears when /api/ai/chat-status says the assistant is on.
+ * Conversation survives page navigation within the tab (sessionStorage).
+ * Draft log entries the assistant proposes render as confirm/discard cards
+ * and save through the normal log endpoints — nothing is written silently.
+ */
+(() => {
+  'use strict';
+
+  const ACTION_META = {
+    water: { label: 'Water', icon: '💧' },
+    fertilize: { label: 'Feed', icon: '🧪' },
+    harvest: { label: 'Harvest', icon: '🧺' },
+    observe: { label: 'Observe', icon: '👀' },
+    pest: { label: 'Pest', icon: '🐛' },
+    note: { label: 'Note', icon: '📝' },
+  };
+  const STORE_KEY = 'verdant-ai-chat';
+  const MAX_STORED = 30;
+  const HISTORY_SEND = 10;
+
+  let els = {};
+  let messages = [];
+  let plants = [];
+  let plantsById = {};
+  let sending = false;
+
+  function v() { return window.Verdant || {}; }
+  function $(sel, root) { return (root || document).querySelector(sel); }
+
+  function loadStored() {
+    try {
+      const raw = sessionStorage.getItem(STORE_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      messages = Array.isArray(arr) ? arr.slice(-MAX_STORED) : [];
+    } catch { messages = []; }
+  }
+
+  function store() {
+    try {
+      sessionStorage.setItem(STORE_KEY, JSON.stringify(messages.slice(-MAX_STORED)));
+    } catch { /* storage full or blocked — chat still works */ }
+  }
+
+  function esc(s) {
+    return (v().esc || ((x) => String(x == null ? '' : x)
+      .replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))))(s);
+  }
+
+  function todayLocal() {
+    return (v().todayLocal || (() => new Date().toISOString().slice(0, 10)))();
+  }
+
+  function build() {
+    const wrap = document.createElement('div');
+    wrap.id = 'ai-chat-root';
+    wrap.innerHTML = `
+      <button id="ai-chat-fab" type="button" aria-label="Chat with your garden assistant"
+        class="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-sage-700 text-2xl text-beige-50 shadow-botanical ring-1 ring-sage-500 transition hover:bg-sage-600">🌱</button>
+      <section id="ai-chat-panel" class="fixed bottom-24 right-6 z-40 hidden w-[22rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl bg-beige-50 shadow-botanical ring-1 ring-beige-300" style="height:min(32rem,70vh)">
+        <header class="flex items-center justify-between bg-navy-800 px-4 py-3 text-beige-50">
+          <div>
+            <p class="font-display text-base font-semibold">🌱 Garden assistant</p>
+            <p id="ai-chat-sub" class="text-xs text-beige-300">Knows your garden · drafts need your OK</p>
+          </div>
+          <button id="ai-chat-close" type="button" aria-label="Close chat" class="rounded-full px-2 py-1 text-xl leading-none hover:bg-navy-700">×</button>
+        </header>
+        <div id="ai-chat-msgs" class="flex-1 space-y-3 overflow-y-auto px-3 py-3"></div>
+        <form id="ai-chat-form" class="flex items-center gap-2 border-t border-beige-200 bg-beige-100 px-3 py-2">
+          <input id="ai-chat-input" type="text" class="inp flex-1" placeholder="Ask or tell me what you did…" maxlength="2000" autocomplete="off" />
+          <button id="ai-chat-send" type="submit" class="btn-primary shrink-0 px-3 py-2 text-sm">Send</button>
+        </form>
+      </section>`;
+    document.body.appendChild(wrap);
+    els = {
+      fab: $('#ai-chat-fab', wrap),
+      panel: $('#ai-chat-panel', wrap),
+      msgs: $('#ai-chat-msgs', wrap),
+      form: $('#ai-chat-form', wrap),
+      input: $('#ai-chat-input', wrap),
+      send: $('#ai-chat-send', wrap),
+      sub: $('#ai-chat-sub', wrap),
+      close: $('#ai-chat-close', wrap),
+    };
+    els.fab.addEventListener('click', toggle);
+    els.close.addEventListener('click', toggle);
+    els.form.addEventListener('submit', onSend);
+  }
+
+  function toggle() {
+    els.panel.classList.toggle('hidden');
+    els.panel.classList.toggle('flex');
+    if (!els.panel.classList.contains('hidden')) {
+      render();
+      els.input.focus();
+    }
+  }
+
+  function bubble(role, html, extraClass) {
+    const div = document.createElement('div');
+    div.className = role === 'user'
+      ? 'ml-10 rounded-2xl rounded-br-md bg-sage-700 px-3 py-2 text-sm text-beige-50'
+      : `mr-10 rounded-2xl rounded-bl-md bg-beige-100 px-3 py-2 text-sm text-navy-800 ring-1 ring-beige-200 ${extraClass || ''}`;
+    div.innerHTML = html;
+    return div;
+  }
+
+  function draftCard(d, msgIdx, idx) {
+    const meta = ACTION_META[d.action] || ACTION_META.note;
+    const el = document.createElement('div');
+    el.className = 'rounded-xl bg-beige-50 px-3 py-2 ring-1 ring-sage-300 space-y-1';
+    el.dataset.msg = msgIdx;
+    el.dataset.idx = idx;
+    const bits = [];
+    if (d.plant_name) bits.push(`<strong>${esc(d.plant_name)}</strong>`);
+    if (d.amount != null) bits.push(`${esc(String(d.amount))}${d.unit ? ' ' + esc(d.unit) : ''}`);
+    if (d.detail) bits.push(esc(d.detail));
+    let body = `<p class="text-sm text-navy-800">${meta.icon} ${meta.label}${bits.length ? ' — ' + bits.join(' · ') : ''}</p>`;
+    if (d.notes) body += `<p class="text-xs text-navy-500">${esc(d.notes)}</p>`;
+    if (!d.plant_id) {
+      const opts = plants.map((p) =>
+        `<option value="${p.id}">${esc(p.variety_name)}</option>`).join('');
+      body += `<select data-plant-pick class="inp mt-1 text-sm"><option value="">Pick a plant…</option>${opts}</select>`;
+    }
+    body += `<div class="flex justify-end"><button type="button" data-drop class="text-xs text-navy-400 underline">remove</button></div>`;
+    el.innerHTML = body;
+    return el;
+  }
+
+  function render() {
+    els.msgs.innerHTML = '';
+    if (!messages.length) {
+      els.msgs.appendChild(bubble('assistant',
+        `<p>Hi! I know your garden — plants, what's due, recent logs, the weather. Ask me anything, or just tell me what you did out there and I'll draft the log entries.</p>`));
+    }
+    messages.forEach((m, mi) => {
+      if (m.role === 'user') {
+        els.msgs.appendChild(bubble('user', `<p>${esc(m.content)}</p>`));
+      } else {
+        const md = v().markdown || ((s) => `<p>${esc(s)}</p>`);
+        els.msgs.appendChild(bubble('assistant', md(m.content)));
+        (m.drafts || []).forEach((d, i) => els.msgs.appendChild(draftCard(d, mi, i)));
+        if ((m.drafts || []).length) {
+          const actions = document.createElement('div');
+          actions.className = 'mr-10 flex gap-2';
+          actions.innerHTML = `
+            <button type="button" data-confirm class="btn-primary px-3 py-1.5 text-xs">Confirm &amp; save</button>
+            <button type="button" data-discard class="btn-ghost px-3 py-1.5 text-xs">Discard</button>`;
+          actions.dataset.msg = mi;
+          els.msgs.appendChild(actions);
+        }
+      }
+    });
+    els.msgs.scrollTop = els.msgs.scrollHeight;
+  }
+
+  function draftAt(card) {
+    const m = messages[Number(card.dataset.msg)];
+    const d = m && m.drafts ? m.drafts[Number(card.dataset.idx)] : null;
+    return { m, d };
+  }
+
+  // Draft card interactions (delegated — cards are re-rendered often).
+  function wireDraftClicks() {
+    els.msgs.addEventListener('click', async (event) => {
+      const drop = event.target.closest('[data-drop]');
+      if (drop) {
+        const card = drop.closest('[data-idx]');
+        if (card) {
+          const { m } = draftAt(card);
+          if (m) {
+            m.drafts.splice(Number(card.dataset.idx), 1);
+            store();
+            render();
+          }
+        }
+        return;
+      }
+      const confirm = event.target.closest('[data-confirm]');
+      if (confirm) { await confirmDrafts(confirm.parentElement); return; }
+      const discard = event.target.closest('[data-discard]');
+      if (discard) {
+        const m = messages[Number(discard.parentElement.dataset.msg)];
+        if (m) { m.drafts = []; store(); render(); }
+      }
+    });
+    els.msgs.addEventListener('change', (event) => {
+      const pick = event.target.closest('[data-plant-pick]');
+      if (!pick) return;
+      const card = pick.closest('[data-idx]');
+      if (!card) return;
+      const { d } = draftAt(card);
+      if (d) {
+        d.plant_id = pick.value ? Number(pick.value) : null;
+        const p = plantsById[d.plant_id];
+        d.plant_name = p ? p.variety_name : d.plant_name;
+        store();
+      }
+    });
+  }
+
+  async function confirmDrafts(actionsEl) {
+    const mi = Number(actionsEl.dataset.msg);
+    const m = messages[mi];
+    if (!m || !m.drafts.length) return;
+    const api = v().api;
+    const toast = v().toast || (() => {});
+    const today = todayLocal();
+    let saved = 0;
+    const problems = [];
+    for (const d of m.drafts) {
+      if (!d.plant_id && d.action !== 'note') {
+        problems.push(`${(ACTION_META[d.action] || {}).label || d.action}: pick a plant`);
+        continue;
+      }
+      try {
+        if (d.action === 'water') {
+          await api.post('/api/watering-logs/', { plant_id: d.plant_id, date: today });
+        } else if (d.action === 'fertilize') {
+          if (!d.detail) { problems.push('Feed: product is required'); continue; }
+          await api.post('/api/fertilizations', {
+            date: today, fertilizer_name: d.detail,
+            amount_used: [d.amount ?? '', d.unit ?? ''].filter((x) => x !== '').join(' '),
+            notes: d.notes || '', plant_id: d.plant_id,
+          });
+        } else if (d.action === 'harvest') {
+          await api.post('/api/harvests/', {
+            plant_id: d.plant_id, date: today,
+            quantity: Math.max(1, Math.round(d.amount || 1)), notes: d.notes || '',
+          });
+        } else if (d.action === 'pest') {
+          if (!d.detail) { problems.push('Pest: pest name is required'); continue; }
+          await api.post('/api/pests/', {
+            date: today, pest_name: d.detail, plant_id: d.plant_id, notes: d.notes || '',
+          });
+        } else { // observe / note
+          const pname = d.plant_name || (plantsById[d.plant_id] || {}).variety_name;
+          if (!pname) { problems.push('Note: pick a plant'); continue; }
+          await api.post('/api/observations', {
+            plant_id: d.plant_id, plant_name: pname, date: today,
+            notes: d.notes || '(no note)', health_scale: 7,
+          });
+        }
+        saved += 1;
+      } catch (error) {
+        problems.push(`${(ACTION_META[d.action] || {}).label || d.action}: ${error.message}`);
+      }
+    }
+    if (saved) toast(`Saved ${saved} entr${saved === 1 ? 'y' : 'ies'} ✓`, 'ok');
+    if (problems.length) toast(problems.join(' · '), 'err');
+    m.drafts = [];
+    store();
+    render();
+  }
+
+  async function onSend(event) {
+    event.preventDefault();
+    const text = els.input.value.trim();
+    if (!text || sending) return;
+    sending = true;
+    els.input.value = '';
+    messages.push({ role: 'user', content: text });
+    store();
+    render();
+    const typing = bubble('assistant', '<p class="text-navy-400">thinking…</p>');
+    els.msgs.appendChild(typing);
+    els.msgs.scrollTop = els.msgs.scrollHeight;
+    try {
+      const history = messages
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .slice(-HISTORY_SEND)
+        .map((m) => ({ role: m.role, content: m.content }));
+      const res = await v().api.post('/api/ai/chat', { message: text, history });
+      messages.push({ role: 'assistant', content: res.reply || '…', drafts: res.drafts || [] });
+    } catch (error) {
+      messages.push({ role: 'assistant', content: `Hmm — ${error.message}` });
+    } finally {
+      sending = false;
+      store();
+      render();
+      els.input.focus();
+    }
+  }
+
+  async function boot() {
+    let st = null;
+    try { st = await v().api.get('/api/ai/chat-status'); }
+    catch { return; }
+    if (!st || !st.enabled) return;
+    build();
+    wireDraftClicks();
+    loadStored();
+    if (!st.reachable && !messages.length) {
+      messages = [{ role: 'assistant',
+        content: st.hint || "The AI provider isn't reachable — check Settings → AI." }];
+    }
+    try {
+      plants = (await v().api.get('/api/plants/')).filter((p) => p.status === 'Growing');
+      plantsById = Object.fromEntries(plants.map((p) => [p.id, p]));
+    } catch { plants = []; plantsById = {}; }
+    if (st.provider === 'openrouter') {
+      els.sub.textContent = 'Knows your garden · via OpenRouter · drafts need your OK';
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
+})();

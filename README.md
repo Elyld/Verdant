@@ -284,6 +284,17 @@ Save. No model needed, so it works even when the local AI is offline.
 
 ![AI settings — OpenRouter provider](docs/screenshots/ai-openrouter.png)
 
+**🌱 Garden assistant.** A floating chat button lives on every page (toggle it
+on the Settings page) — an always-ready agent that knows your garden: what's
+growing and where, what's due, what's ready to harvest, recent activity, and
+today's weather. Ask it anything (“when did I last water the tomatoes?”) or
+just tell it what you did out there, and it drafts the log entries for you to
+confirm — same confirm-before-anything-is-saved contract as “Tell Verdant”.
+The conversation survives page navigation within the tab. It runs on whichever
+AI provider you've picked (Ollama or OpenRouter).
+
+![Garden assistant chat](docs/screenshots/ai-chat-drafts.png)
+
 ![Quick Log](docs/screenshots/quick.png)
 
 ![Quick Log undo](docs/screenshots/quick-undo.png)
@@ -724,6 +735,13 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.43.0** — **🌱 Garden assistant chat.** A floating chat button on every
+  page (toggle on the Settings page): an always-ready agent that knows your
+  garden — growing plants and where they live, what's due, what's ready to
+  harvest, the last 14 days of activity, and today's weather. Ask questions or
+  tell it what you did; it drafts log entries you confirm before anything is
+  saved. Runs on your chosen AI provider (Ollama or OpenRouter), keeps the
+  conversation across page navigation within the tab.
 - **2.41.0** — **🥫 Pantry & the post-harvest loop.** Log what you preserved
   (canned, frozen, dehydrated, fermented, gave away, ate fresh) with amounts
   in/out and storage location, optionally linked to the harvest; one checkbox

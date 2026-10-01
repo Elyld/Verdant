@@ -86,6 +86,7 @@ SETTING_KEYS = (
     "ai_provider",
     "openrouter_api_key",
     "openrouter_model",
+    "ai_chat_enabled",
 )
 
 # Set by app.main at startup so saving new digest settings re-arms the
@@ -119,6 +120,7 @@ class SettingsUpdate(BaseModel):
     ai_provider: str = "ollama"  # "ollama" (own machine) or "openrouter" (cloud)
     openrouter_api_key: str = ""  # OpenRouter key; only stored when a non-empty value is sent
     openrouter_model: str = "openai/gpt-4o-mini"  # OpenRouter model id, plain text
+    ai_chat_enabled: bool = True  # floating chat assistant on every page
     plantnet_api_key: str = ""  # PlantNet plant-ID key (free at my.plantnet.org); "" = off
 
 
@@ -251,6 +253,7 @@ def current_settings(session: Session) -> dict:
         "ai_provider": (frost_mod.get_setting(session, "ai_provider") or "ollama").strip().lower(),
         "openrouter_model": frost_mod.get_setting(session, "openrouter_model") or "openai/gpt-4o-mini",
         "openrouter_key_set": bool((frost_mod.get_setting(session, "openrouter_api_key") or "").strip()),
+        "ai_chat_enabled": (frost_mod.get_setting(session, "ai_chat_enabled") or "true") == "true",
         "plantnet_api_key": frost_mod.get_setting(session, "plantnet_api_key") or "",
         "digest_enabled": digest.enabled,
         "discord_webhook_url": digest.webhook_url,
@@ -336,6 +339,8 @@ def save_settings(payload: SettingsUpdate, session: Session = Depends(get_sessio
         # Only overwrite when a real value is sent — the form leaves the
         # password field blank when the saved key should stay untouched.
         set_setting(session, "openrouter_api_key", payload.openrouter_api_key.strip())
+    if "ai_chat_enabled" in provided:
+        set_setting(session, "ai_chat_enabled", "true" if payload.ai_chat_enabled else "false")
     if "plantnet_api_key" in provided:
         set_setting(session, "plantnet_api_key", (payload.plantnet_api_key or "").strip())
     session.commit()
