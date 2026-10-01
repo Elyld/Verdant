@@ -15,12 +15,13 @@
     observe: { label: 'Observe', icon: '👀' },
     pest: { label: 'Pest', icon: '🐛' },
     note: { label: 'Note', icon: '📝' },
+    reminder: { label: 'Reminder', icon: '🔔' },
     seed: { label: 'Seed packet', icon: '🌱' },
     plant_status: { label: 'Plant status', icon: '🔄' },
     plant_move: { label: 'Move plant', icon: '🪴' },
   };
   // Draft actions that don't involve picking a plant.
-  const NO_PLANT_NEEDED = new Set(['note', 'seed']);
+  const NO_PLANT_NEEDED = new Set(['note', 'seed', 'reminder']);
   const STORE_KEY = 'verdant-ai-chat';
   const MAX_STORED = 30;
   const HISTORY_SEND = 10;
@@ -217,11 +218,13 @@
     el.dataset.msg = msgIdx;
     el.dataset.idx = idx;
     const bits = [];
+    if (d.action === 'reminder' && d.reminder_title) bits.push(`<strong>${esc(d.reminder_title)}</strong>`);
     if (d.plant_name) bits.push(`<strong>${esc(d.plant_name)}</strong>`);
     if (d.amount != null) bits.push(`${esc(String(d.amount))}${d.unit ? ' ' + esc(d.unit) : ''}`);
     if (d.detail) bits.push(esc(d.detail));
     let body = `<p class="text-sm text-navy-800">${meta.icon} ${meta.label}${bits.length ? ' — ' + bits.join(' · ') : ''}</p>`;
     if (d.notes) body += `<p class="text-xs text-navy-500">${esc(d.notes)}</p>`;
+    if (d.action === 'note') body += `<p class="text-xs text-navy-400">Saves to Garden Logs under Notebook</p>`;
     if (!d.plant_id && !NO_PLANT_NEEDED.has(d.action)) {
       const opts = plants.map((p) =>
         `<option value="${p.id}">${esc(p.variety_name)}</option>`).join('');
@@ -358,6 +361,13 @@
           }
           await api.post('/api/containers/plantings', {
             container_id: d.to_container_id, plant_id: d.plant_id,
+          });
+        } else if (d.action === 'reminder') {
+          const title = (d.reminder_title || '').trim();
+          const due = (d.reminder_due || '').trim();
+          if (!title || !due) { problems.push('Reminder: title and date are required'); continue; }
+          await api.post('/api/user-reminders', {
+            title, due_date: due, notes: d.notes || '',
           });
         } else { // observe / note
           const pname = d.plant_name || (plantsById[d.plant_id] || {}).variety_name;

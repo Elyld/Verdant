@@ -20,7 +20,7 @@ from fastapi.templating import Jinja2Templates
 from app.database import UPLOAD_DIR, init_db
 from app.models import GardenTag, utcnow
 from app.security import RateLimitMiddleware, SecurityHeadersMiddleware, docs_enabled
-from app.routers import albums, backup, containers, digest, expenses, fertilizations, immich, import_csv, invoices, observations, order_assistant, pests, posts, seed_packets, settings as settings_router, stats, tags, weather, wishlist
+from app.routers import albums, backup, containers, digest, expenses, fertilizations, immich, import_csv, invoices, observations, order_assistant, pests, posts, seed_packets, settings as settings_router, stats, tags, user_reminders, weather, wishlist
 from app.routers import ai_log, crops, today
 from app.routers import pantry as pantry_router
 from app.routers import succession as succession_router
@@ -153,6 +153,7 @@ app.include_router(pests.router)
 app.include_router(settings_router.router)
 app.include_router(seed_packets.router)
 app.include_router(tags.router)
+app.include_router(user_reminders.router)
 app.include_router(containers.router)
 app.include_router(weather.router)
 app.include_router(ai_log.router)

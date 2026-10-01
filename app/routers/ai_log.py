@@ -139,6 +139,9 @@ season_advice, recall_notes, variety_performance, season_recap (photo season sto
 write tool (log_watering, log_fertilization, log_harvest, log_observation, log_pest, add_seed_packet, \
 update_plant, move_planting). These create DRAFTS the gardener confirms before anything is saved — \
 never claim you saved anything yourself.
+- When the gardener asks to be reminded at a time or date, call set_reminder — it drafts a dated \
+reminder they confirm. save_memory_note is only a note and can NEVER remind anyone; never promise \
+a reminder without calling set_reminder.
 
 Each turn, respond with ONLY one JSON object:
 - To use tools: {{"tool_calls": [{{"name": "<tool>", "args": {{...}}}}]}} (max 3 calls per turn)
@@ -240,7 +243,8 @@ def _draft_summary(d: dict) -> str:
     label = {"water": "watering", "fertilize": "feeding", "harvest": "harvest",
              "observe": "observation", "pest": "pest note", "note": "note",
              "seed": "seed packet", "plant_status": "status change",
-             "plant_move": "container move"}.get(d.get("action"), d.get("action"))
+             "plant_move": "container move",
+             "reminder": "reminder"}.get(d.get("action"), d.get("action"))
     bits = [label]
     if d.get("plant_name"):
         bits.append(f"for {d['plant_name']}")

@@ -441,6 +441,20 @@ class WishlistItem(SQLModel, table=True):
 
 
 # --------------------------------------------------------------------------- #
+# Dated reminders set via the AI chat ("remind me to plant carrots on Oct 12")
+# --------------------------------------------------------------------------- #
+class UserReminder(SQLModel, table=True):
+    __tablename__ = "user_reminders"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    title: str  # what to be reminded about
+    due_date: str = Field(index=True, default="")  # ISO YYYY-MM-DD
+    notes: Optional[str] = None
+    done: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+# --------------------------------------------------------------------------- #
 # NFC garden tags — tap a tag, jump straight to the right screen
 # --------------------------------------------------------------------------- #
 # Actions: plant (open plant profile), quick_plant (quick-log for a plant),

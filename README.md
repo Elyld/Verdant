@@ -295,7 +295,12 @@ plant to another container and it drafts that too — all under the same
 confirm-before-anything-is-saved contract as “Tell Verdant”. It also has
 seasonal coaching (frost countdown, what to plant/harvest now), a memory
 notebook it can save to and recall from (always confirm-before-save), and
-year-over-year variety performance from your harvest logs. Attach a photo to
+year-over-year variety performance from your harvest logs. Ask it to
+**remind you at a date** ("remind me to plant carrots on Oct 12") and it
+drafts a dated reminder — you confirm, and it shows up in the chat context,
+the morning digest, and the `upcoming_reminders` tool. Memory notes are just
+notes and can never schedule anything; the assistant knows the difference.
+Attach a photo to
 a message and a vision-capable model (e.g. DeepSeek v4.1 flash on OpenRouter)
 can see it for pest ID or ripeness checks. Ask it to “recap my tomatoes'
 season” and the new `season_recap` tool gathers that plant's photos across
@@ -411,7 +416,8 @@ Optional: turn on "Let the AI write a short morning briefing" in the same card
 (`DIGEST_AI_BRIEFING=true`) to have your configured AI provider write a warm
 2–4 sentence briefing on top of the data sections — it falls back to data-only
 if the provider is unreachable. The digest also flags the first fall frost
-when it's within two weeks.
+when it's within two weeks, and includes a 🔔 Reminders section for any
+dated reminders you set via the chat assistant (due/overdue first).
 
 ### 🔌 Immich integration
 Browse albums on your own Immich server and import their photos straight into
@@ -767,6 +773,20 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.50.0** — **🔔 Dated reminders.** The gap the gardener hit: the chat
+  could save memory notes but had no way to schedule a reminder — it would
+  say "I'll try to remind you" with no tool to do it. Fixed for real: new
+  `set_reminder` write tool (confirm-before-save, like everything else) —
+  "remind me to plant carrots on Oct 12" now drafts a real dated reminder
+  you confirm in the chat. Reminders live in a new `user_reminders` table
+  (auto-created on startup), surface proactively in the chat's garden context
+  (due/overdue/next 7 days), appear in the morning Discord digest under a
+  🔔 Reminders section (due/overdue first, trimmed to fit Discord's message
+  cap), and are listed by the new `upcoming_reminders` read tool. Past dates
+  and bad formats are rejected with a friendly message. Honesty fixes: the
+  note draft card now says "Saves to Garden Logs under Notebook" so it's
+  clear where memories live, and `save_memory_note`'s description says
+  plainly that memories are notes, not reminders.
 - **2.49.0** — **📖 Season recap.** Your garden photos tell the story: a new
   `season_recap` chat tool (and a 📖 Season recap button on each plant's
   detail card) gathers a plant's photos across the season — Immich album

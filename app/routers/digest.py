@@ -139,10 +139,30 @@ def _line(r: ReminderRead) -> str:
     return f"{icon} **{r.plant_name}** — {action} · {when}{last}{rain}"
 
 
+def _reminder_line(r, today: date) -> str:
+    """One dated user-reminder line. r is a UserReminder row."""
+    try:
+        due = date.fromisoformat(r.due_date) if r.due_date else None
+    except ValueError:
+        due = None
+    if due is None:
+        when = "no date set"
+    elif due < today:
+        n = (today - due).days
+        when = f"{n}d overdue" if n != 1 else "1d overdue"
+    elif due == today:
+        when = "due today"
+    else:
+        when = f"due {due.strftime('%a %b %d')}"
+    notes = f" — {(r.notes or '').strip()[:80]}" if (r.notes or "").strip() else ""
+    return f"• **{r.title}** · {when}{notes}"
+
+
 def build_digest_message(
     reminders: List[ReminderRead],
     today: Optional[date] = None,
     sow_rows: Optional[List[SowRow]] = None,
+    user_reminders: Optional[list] = None,
 ) -> str:
     """Compose the Discord message from reminder data. Always returns text;
     when nothing needs attention it's a short all-clear."""
@@ -165,7 +185,11 @@ def build_digest_message(
         ),
         key=lambda r: r.days_until,
     )
-    if not overdue and not due and not soon and not sow_due:
+    pending_rems = sorted(
+        (r for r in (user_reminders or []) if not r.done and r.due_date),
+        key=lambda r: (r.due_date >= today.isoformat(), r.due_date),
+    )
+    if not overdue and not due and not soon and not sow_due and not pending_rems:
         return f"{header}\n✅ All clear — nothing needs water or food today. Go enjoy the garden."
     parts = [header]
     if overdue:
@@ -184,7 +208,17 @@ def build_digest_message(
             + (" (today!)" if r.days_until == 0 else f" (in {r.days_until}d)")
             for r in sow_due
         )
-    return "\n".join(parts)
+    rem_lines = [_reminder_line(r, today) for r in pending_rems]
+    base = "\n".join(parts)
+    if rem_lines:
+        section = "\n🔔 **Reminders**\n" + "\n".join(rem_lines)
+        # Stay under Discord's cap: drop the latest-due reminder lines first.
+        while rem_lines and len(base + section) > DISCORD_SAFE_CHARS:
+            rem_lines.pop()
+            section = "\n🔔 **Reminders**\n" + "\n".join(rem_lines)
+        if rem_lines:
+            return base + section
+    return base
 
 
 def send_discord_message(webhook_url: str, content: str, timeout: float = 15.0) -> None:
@@ -275,11 +309,26 @@ def _message_with_extras(session: Session, message: str) -> str:
     return message
 
 
+def _pending_user_reminders(session: Session) -> list:
+    """Dated reminders the gardener confirmed via chat. Never raises."""
+    from app.models import UserReminder
+
+    try:
+        return session.exec(
+            select(UserReminder)
+            .where(UserReminder.done == False)  # noqa: E712
+            .order_by(UserReminder.due_date, UserReminder.id)).all()
+    except Exception as exc:
+        log.warning("user reminders fetch failed: %s", exc)
+        return []
+
+
 def run_digest(session: Session, webhook_url: str) -> str:
     """Build the digest from live reminder data and send it. Returns the message."""
     reminders = plant_reminders(session)
     sow_rows = seed_calendar_rows(session)
-    message = build_digest_message(reminders, sow_rows=sow_rows)
+    message = build_digest_message(reminders, sow_rows=sow_rows,
+                                   user_reminders=_pending_user_reminders(session))
     message = _message_with_extras(session, message)
     send_discord_message(webhook_url, message)
     log.info("Digest sent (%d chars).", len(message))
@@ -289,7 +338,9 @@ def run_digest(session: Session, webhook_url: str) -> str:
 @router.get("/preview")
 def preview_digest(session: Session = Depends(get_session)):
     """Show the message text that would be sent right now (does not send)."""
-    message = build_digest_message(plant_reminders(session), sow_rows=seed_calendar_rows(session))
+    message = build_digest_message(plant_reminders(session),
+                                   sow_rows=seed_calendar_rows(session),
+                                   user_reminders=_pending_user_reminders(session))
     return {"message": _message_with_extras(session, message)}
 
 

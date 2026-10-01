@@ -117,6 +117,36 @@ def build_context(session: Session) -> str:
     except Exception:
         pass
 
+    # Dated reminders the gardener set via chat ("remind me to…")
+    try:
+        from app.models import UserReminder
+
+        today_iso = today.isoformat()
+        week_out = (today + timedelta(days=7)).isoformat()
+        rems = session.exec(
+            select(UserReminder)
+            .where(UserReminder.done == False)  # noqa: E712
+            .order_by(UserReminder.due_date, UserReminder.id)).all()
+        bits = []
+        for r in rems:
+            if not r.due_date:
+                continue
+            if r.due_date < today_iso:
+                when = "overdue"
+            elif r.due_date == today_iso:
+                when = "due today"
+            elif r.due_date <= week_out:
+                when = f"due {r.due_date}"
+            else:
+                continue
+            bits.append(f"{r.title} ({when})")
+            if len(bits) >= MAX_ITEMS:
+                break
+        if bits:
+            lines.append("Reminders: " + "; ".join(bits) + ".")
+    except Exception:
+        pass
+
     # Ready to harvest (planted date + maturity timing)
     try:
         from app import planting as planting_mod
