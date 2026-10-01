@@ -133,12 +133,33 @@ TOOLS = [
     },
     {
         "name": "save_memory_note",
-        "description": "Save a memory note for future chats — a preference, idea, or "
-                       "reminder the gardener wants remembered. Creates a DRAFT the "
-                       "gardener confirms before anything is saved.",
+        "description": "Save a memory note for future chats — a preference or idea "
+                       "the gardener wants remembered. Stored as a Garden Log note "
+                       "under 'Notebook'. Creates a DRAFT the gardener confirms "
+                       "before anything is saved. NOT a reminder — it cannot "
+                       "schedule anything; for 'remind me…', use set_reminder.",
         "parameters": {"note": "the note text to remember",
                        "plant": "optional plant name this relates to"},
         "required": ["note"],
+    },
+    {
+        "name": "set_reminder",
+        "description": "Draft a dated reminder for the gardener (user confirms "
+                       "before saving). Use when they ask to be reminded at a "
+                       "time/date, e.g. 'remind me to plant carrots on Oct 12'. "
+                       "This is the ONLY way to schedule a reminder — memory "
+                       "notes cannot do it.",
+        "parameters": {"title": "what to be reminded about, e.g. 'plant carrots'",
+                       "due_date": "YYYY-MM-DD, today or a future date",
+                       "notes": "optional extra detail"},
+        "required": ["title", "due_date"],
+    },
+    {
+        "name": "upcoming_reminders",
+        "description": "List the gardener's pending dated reminders, overdue first. "
+                       "Use for 'what did I ask to be reminded about'.",
+        "parameters": {},
+        "required": [],
     },
     {
         "name": "recall_notes",
@@ -170,7 +191,8 @@ TOOLS = [
 
 READ_TOOLS = {"plant_care_history", "search_notes", "seed_stash",
               "planner_overview", "reminders", "season_advice",
-              "recall_notes", "variety_performance", "season_recap"}
+              "recall_notes", "variety_performance", "season_recap",
+              "upcoming_reminders"}
 
 WRITE_TOOL_ACTIONS = {
     "log_watering": "water",
@@ -182,6 +204,7 @@ WRITE_TOOL_ACTIONS = {
     "update_plant": "plant_status",
     "move_planting": "plant_move",
     "save_memory_note": "note",
+    "set_reminder": "reminder",
 }
 
 
@@ -412,6 +435,41 @@ def _t_variety_performance(session: Session, args: dict) -> dict:
     return {"varieties": varieties[:20]}
 
 
+def _parse_due_date(value: str) -> Optional[str]:
+    """Validate a YYYY-MM-DD due date: correct format and not in the past.
+    Returns the cleaned string, or None when invalid."""
+    text = (value or "").strip()
+    try:
+        parsed = Date.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed < Date.today():
+        return None
+    return text
+
+
+def _t_upcoming_reminders(session: Session, args: dict) -> dict:
+    from app.models import UserReminder
+
+    today = Date.today().isoformat()
+    rows = session.exec(
+        select(UserReminder)
+        .where(UserReminder.done == False)  # noqa: E712
+        .order_by(UserReminder.due_date, UserReminder.id)).all()
+    # Overdue first, then by date.
+    rows = sorted(rows, key=lambda r: (r.due_date >= today, r.due_date))
+    out = []
+    for r in rows[:15]:
+        days = (Date.fromisoformat(r.due_date) - Date.today()).days \
+            if r.due_date else None
+        out.append({"id": r.id, "title": r.title, "due_date": r.due_date,
+                    "notes": r.notes,
+                    "status": "overdue" if (days is not None and days < 0)
+                    else "due today" if days == 0
+                    else f"in {days}d" if days is not None else "unscheduled"})
+    return {"reminders": out}
+
+
 _READ_EXEC = {
     "plant_care_history": _t_plant_care_history,
     "search_notes": _t_search_notes,
@@ -422,6 +480,7 @@ _READ_EXEC = {
     "recall_notes": _t_recall_notes,
     "variety_performance": _t_variety_performance,
     "season_recap": _t_season_recap,
+    "upcoming_reminders": _t_upcoming_reminders,
 }
 
 
@@ -532,6 +591,19 @@ def build_write_draft(session: Session, name: str, args: dict) -> Optional[dict]
         # plant name — "Notebook" is the pseudo-plant for plant-less memories.
         d["plant_name"] = d["plant_name"] or "Notebook"
         return d
+
+    if action == "reminder":
+        title = (args.get("title") or "").strip()
+        due = _parse_due_date(args.get("due_date") or "")
+        if not title or not due:
+            # Bad format or a past date — the loop asks the gardener for a fix.
+            return None
+        notes = (args.get("notes") or "").strip()
+        return {"action": "reminder", "plant_id": None, "plant_name": None,
+                "amount": None, "unit": None,
+                "detail": f"due {due}",
+                "notes": notes or None,
+                "reminder_title": title[:200], "reminder_due": due}
 
     return None
 
