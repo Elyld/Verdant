@@ -3,7 +3,11 @@
 Configure with env vars (see .env.example):
   DIGEST_ENABLED=true            # off by default — nothing is sent unless you opt in
   DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...   # from Server Settings -> Integrations
-  DIGEST_TIME=08:00              # 24h HH:MM, server local time
+  DIGEST_TIME=08:00              # 24h HH:MM, in DIGEST_TIMEZONE
+  DIGEST_TIMEZONE=America/Chicago  # IANA zone for the send time; blank = server local
+
+Or set it on the /settings page (the timezone field defaults to your
+browser's timezone). Settings-page values always win over env vars.
 
 The message content comes from the plant-reminder engine (real data: what's
 overdue / due today / coming up), formatted as a plain template. No LLM needed.
@@ -40,6 +44,27 @@ class DigestConfig:
     enabled: bool
     webhook_url: str
     time: str  # "HH:MM"
+    timezone: str = ""  # IANA zone name; "" = server local time
+
+
+def resolve_digest_timezone(name: str):
+    """Return a tzinfo for the digest send time.
+
+    A configured IANA zone wins; anything blank or invalid falls back to the
+    server's local timezone (and logs a warning for the invalid case).
+    """
+    from datetime import datetime
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    fallback = datetime.now().astimezone().tzinfo
+    name = (name or "").strip()
+    if not name:
+        return fallback
+    try:
+        return ZoneInfo(name)
+    except ZoneInfoNotFoundError:
+        log.warning("Bad digest timezone %r; using server local time.", name)
+        return fallback
 
 
 def get_config() -> DigestConfig:
@@ -48,6 +73,7 @@ def get_config() -> DigestConfig:
         enabled=enabled,
         webhook_url=os.getenv("DISCORD_WEBHOOK_URL", "").strip(),
         time=os.getenv("DIGEST_TIME", "08:00").strip() or "08:00",
+        timezone=os.getenv("DIGEST_TIMEZONE", "").strip(),
     )
 
 
@@ -71,6 +97,7 @@ def effective_digest_config(session: Session) -> DigestConfig:
         enabled=enabled,
         webhook_url=pick("discord_webhook_url", env.webhook_url),
         time=pick("digest_time", env.time) or "08:00",
+        timezone=pick("digest_timezone", env.timezone),
     )
 
 

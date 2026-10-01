@@ -9,7 +9,6 @@ from app.routers.seed_sources import router as seed_sources_router
 from app.routers.harvests import router as harvests_router
 from app.routers.watering_logs import router as watering_logs_router
 from contextlib import asynccontextmanager
-from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -68,7 +67,11 @@ def _maybe_start_digest_scheduler():
     from sqlmodel import Session
 
     from app.database import engine
-    from app.routers.digest import effective_digest_config, run_digest
+    from app.routers.digest import (
+        effective_digest_config,
+        resolve_digest_timezone,
+        run_digest,
+    )
 
     log = logging.getLogger("verdant.digest")
     with Session(engine) as session:
@@ -95,11 +98,17 @@ def _maybe_start_digest_scheduler():
         except Exception:
             log.exception("Scheduled digest failed.")
 
-    local_tz = datetime.now().astimezone().tzinfo
-    scheduler = BackgroundScheduler(timezone=local_tz)
-    scheduler.add_job(_job, CronTrigger(hour=hour, minute=minute), id="morning-digest")
+    tz = resolve_digest_timezone(cfg.timezone)
+    tz_name = getattr(tz, "key", None) or str(tz)
+    scheduler = BackgroundScheduler(timezone=tz)
+    scheduler.add_job(
+        _job,
+        CronTrigger(hour=hour, minute=minute, timezone=tz),
+        id="morning-digest",
+        misfire_grace_time=3600,  # a restart around send time delays, not drops
+    )
     scheduler.start()
-    log.info("Morning digest scheduled daily at %02d:%02d (%s).", hour, minute, local_tz)
+    log.info("Morning digest scheduled daily at %02d:%02d (%s).", hour, minute, tz_name)
     return scheduler
 
 
