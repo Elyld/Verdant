@@ -31,6 +31,7 @@
     const tomorrow = days[1] || {};
     card.classList.remove('hidden');
     card.innerHTML = `
+      <p class="mb-2 text-[11px] font-semibold uppercase tracking-widest text-sage-600">Right now</p>
       <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
         <p class="font-display text-3xl font-semibold text-navy-800">${t(cur.temp_c ?? cur.temp_f)}</p>
         <p class="text-sm text-navy-500">${esc(cur.summary || '')}</p>
@@ -61,6 +62,15 @@
 
     const dueHost = $('#today-due');
     const due = data.due || [];
+    const dueCount = $('#today-due-count');
+    if (dueCount) {
+      if (due.length) {
+        dueCount.textContent = `${due.length} due`;
+        dueCount.classList.remove('hidden');
+      } else {
+        dueCount.classList.add('hidden');
+      }
+    }
     dueHost.innerHTML = due.length
       ? due.map((r) => {
           const what = r.kind === 'water' ? '💧 Water' : '🌱 Feed';
@@ -75,10 +85,22 @@
             <span>${what} <a class="font-semibold text-navy-700 underline decoration-sage-400" href="/plants">${esc(r.plant_name)}</a>${rain}</span>
             <span class="text-navy-500">${when}</span></li>`;
         }).join('')
-      : '<li class="text-navy-400">Nothing due — enjoy the garden. 🌱</li>';
+      : `<li class="rounded-xl bg-sage-50 px-4 py-5 text-center ring-1 ring-sage-200">
+           <p class="text-2xl">🌿</p>
+           <p class="mt-1 font-medium text-navy-700">Nothing due right now</p>
+           <p class="text-xs text-navy-400">Enjoy the garden.</p></li>`;
 
     const hvHost = $('#today-harvest');
     const fc = data.harvest_forecast || [];
+    const hvCount = $('#today-harvest-count');
+    if (hvCount) {
+      if (fc.length) {
+        hvCount.textContent = `${fc.length} on the way`;
+        hvCount.classList.remove('hidden');
+      } else {
+        hvCount.classList.add('hidden');
+      }
+    }
     hvHost.innerHTML = fc.length
       ? fc.map((f) => {
           const label = f.status === 'ready'
@@ -89,7 +111,10 @@
             ${f.crop_name ? `<span class="text-xs text-navy-400"> · ${esc(f.crop_name)} guide</span>` : ''}</span>
             <span class="text-sm text-navy-600">${label}</span></li>`;
         }).join('')
-      : '<li class="text-navy-400">No predictions yet — add planting dates to your plants and the crop guide does the rest.</li>';
+      : `<li class="rounded-xl bg-sage-50 px-4 py-5 text-center ring-1 ring-sage-200">
+           <p class="text-2xl">🧺</p>
+           <p class="mt-1 font-medium text-navy-700">No predictions yet</p>
+           <p class="text-xs text-navy-400">Add planting dates to your plants and the crop guide does the rest.</p></li>`;
 
     const frostHost = $('#today-frost');
     const frost = data.frost;

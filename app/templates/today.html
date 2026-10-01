@@ -4,35 +4,58 @@
 <main class="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
 {% block content %}
 <section class="space-y-6">
-  <header class="flex flex-wrap items-baseline justify-between gap-2">
-    <div>
-      <h2 id="today-greeting" class="font-display text-2xl font-semibold text-navy-800">☀️ Today</h2>
-      <p class="text-sm text-navy-500">What needs doing out there?</p>
+  <!-- Hero banner — greeting over the fern artwork -->
+  <header class="relative overflow-hidden rounded-2xl shadow-botanical ring-1 ring-navy-800">
+    <img src="/static/img/fern-hero.svg" alt="" aria-hidden="true"
+         class="absolute inset-0 h-full w-full object-cover" />
+    <div class="relative px-6 py-7 sm:px-8 sm:py-9">
+      <p id="today-date" class="pill bg-white/15 text-beige-100"></p>
+      <h2 id="today-greeting" class="mt-2 font-display text-2xl font-semibold text-white sm:text-3xl">☀️ Today</h2>
+      <p class="mt-1 text-sm text-beige-200/90">What needs doing out there?</p>
     </div>
-    <p id="today-date" class="pill"></p>
   </header>
 
   <section id="today-weather" class="card hidden"></section>
 
   <div id="today-alerts" class="space-y-2"></div>
 
+  <!-- Care due -->
   <section class="card">
-    <h3 class="font-display text-lg font-semibold text-navy-800">💧 Care due</h3>
-    <ul id="today-due" class="mt-2 space-y-1 text-sm text-navy-600">
-      <li class="text-navy-400">Checking…</li>
+    <div class="flex items-center justify-between gap-2">
+      <div>
+        <p class="text-[11px] font-semibold uppercase tracking-widest text-sage-600">Up next</p>
+        <h3 class="font-display text-lg font-semibold text-navy-800">💧 Care due</h3>
+      </div>
+      <span id="today-due-count" class="pill hidden"></span>
+    </div>
+    <ul id="today-due" class="mt-3 space-y-2 text-sm text-navy-600">
+      <li class="flex items-center gap-2 text-navy-400"><span class="animate-pulse">🌱</span> Checking…</li>
     </ul>
   </section>
 
+  <!-- Harvest forecast -->
   <section class="card">
-    <h3 class="font-display text-lg font-semibold text-navy-800">🧺 Harvest forecast</h3>
-    <p class="text-xs text-navy-400">Estimates from planting dates + the crop guide — your eyes are the final judge.</p>
-    <ul id="today-harvest" class="mt-2 space-y-1 text-sm text-navy-600">
-      <li class="text-navy-400">Checking…</li>
+    <div class="flex items-center justify-between gap-2">
+      <div>
+        <p class="text-[11px] font-semibold uppercase tracking-widest text-sage-600">Forecast</p>
+        <h3 class="font-display text-lg font-semibold text-navy-800">🧺 Harvest forecast</h3>
+      </div>
+      <span id="today-harvest-count" class="pill hidden"></span>
+    </div>
+    <p class="mt-1 text-xs text-navy-400">Estimates from planting dates + the crop guide — your eyes are the final judge.</p>
+    <ul id="today-harvest" class="mt-3 space-y-2 text-sm text-navy-600">
+      <li class="flex items-center gap-2 text-navy-400"><span class="animate-pulse">🌱</span> Checking…</li>
     </ul>
   </section>
 
+  <!-- First frost -->
   <section class="card">
-    <h3 class="font-display text-lg font-semibold text-navy-800">❄️ First frost</h3>
+    <div class="flex items-center justify-between gap-2">
+      <div>
+        <p class="text-[11px] font-semibold uppercase tracking-widest text-sage-600">Season</p>
+        <h3 class="font-display text-lg font-semibold text-navy-800">❄️ First frost</h3>
+      </div>
+    </div>
     <p id="today-frost" class="mt-2 text-sm text-navy-600">Checking…</p>
   </section>
 </section>
