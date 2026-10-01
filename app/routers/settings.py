@@ -83,6 +83,9 @@ SETTING_KEYS = (
     "local_ai_enabled",
     "local_ai_base_url",
     "local_ai_model",
+    "ai_provider",
+    "openrouter_api_key",
+    "openrouter_model",
 )
 
 # Set by app.main at startup so saving new digest settings re-arms the
@@ -113,6 +116,9 @@ class SettingsUpdate(BaseModel):
     local_ai_enabled: bool = False  # "Tell Verdant what you did" card on Quick Log
     local_ai_base_url: str = "http://localhost:11434"  # Ollama-compatible server
     local_ai_model: str = "qwen3:4b"  # small model name, plain text
+    ai_provider: str = "ollama"  # "ollama" (own machine) or "openrouter" (cloud)
+    openrouter_api_key: str = ""  # OpenRouter key; only stored when a non-empty value is sent
+    openrouter_model: str = "openai/gpt-4o-mini"  # OpenRouter model id, plain text
     plantnet_api_key: str = ""  # PlantNet plant-ID key (free at my.plantnet.org); "" = off
 
 
@@ -164,17 +170,35 @@ def _validate(payload: SettingsUpdate, provided: set[str], session: Session) -> 
     ai_on = payload.local_ai_enabled if "local_ai_enabled" in provided else (
         frost_mod.get_setting(session, "local_ai_enabled") == "true"
     )
+    provider = (payload.ai_provider if "ai_provider" in provided
+                else frost_mod.get_setting(session, "ai_provider") or "ollama")
+    provider = (provider or "ollama").strip().lower()
+    if provider not in ("ollama", "openrouter"):
+        raise HTTPException(400, f"Bad ai_provider {provider!r} (want 'ollama' or 'openrouter').")
     base = (payload.local_ai_base_url if "local_ai_base_url" in provided
             else frost_mod.get_setting(session, "local_ai_base_url"))
     base = (base or "").strip()
     model = (payload.local_ai_model if "local_ai_model" in provided
              else frost_mod.get_setting(session, "local_ai_model"))
     model = (model or "").strip()
+    or_model = (payload.openrouter_model if "openrouter_model" in provided
+                else frost_mod.get_setting(session, "openrouter_model"))
+    or_model = (or_model or "").strip()
+    or_key = (payload.openrouter_api_key if "openrouter_api_key" in provided
+              else None)
+    or_key = (or_key or "").strip() if or_key is not None else None
+    stored_key = (frost_mod.get_setting(session, "openrouter_api_key") or "").strip()
     if ai_on:
-        if not base or not base.startswith(("http://", "https://")):
-            raise HTTPException(400, f"Bad local_ai_base_url {base!r} (want an http(s) URL).")
-        if not model:
-            raise HTTPException(400, "Local AI is on but no model name was given.")
+        if provider == "ollama":
+            if not base or not base.startswith(("http://", "https://")):
+                raise HTTPException(400, f"Bad local_ai_base_url {base!r} (want an http(s) URL).")
+            if not model:
+                raise HTTPException(400, "Local AI is on but no model name was given.")
+        else:
+            if not or_model:
+                raise HTTPException(400, "OpenRouter is on but no model name was given.")
+            if not (or_key or stored_key):
+                raise HTTPException(400, "OpenRouter is on but there's no API key — add one below.")
 
 
 def _frost_preview(session: Session, which: str) -> dict:
@@ -224,6 +248,9 @@ def current_settings(session: Session) -> dict:
         "local_ai_enabled": (frost_mod.get_setting(session, "local_ai_enabled") or "false") == "true",
         "local_ai_base_url": frost_mod.get_setting(session, "local_ai_base_url") or "http://localhost:11434",
         "local_ai_model": frost_mod.get_setting(session, "local_ai_model") or "qwen3:4b",
+        "ai_provider": (frost_mod.get_setting(session, "ai_provider") or "ollama").strip().lower(),
+        "openrouter_model": frost_mod.get_setting(session, "openrouter_model") or "openai/gpt-4o-mini",
+        "openrouter_key_set": bool((frost_mod.get_setting(session, "openrouter_api_key") or "").strip()),
         "plantnet_api_key": frost_mod.get_setting(session, "plantnet_api_key") or "",
         "digest_enabled": digest.enabled,
         "discord_webhook_url": digest.webhook_url,
@@ -300,6 +327,15 @@ def save_settings(payload: SettingsUpdate, session: Session = Depends(get_sessio
         set_setting(session, "local_ai_base_url", (payload.local_ai_base_url or "").strip() or "http://localhost:11434")
     if "local_ai_model" in provided:
         set_setting(session, "local_ai_model", (payload.local_ai_model or "").strip() or "qwen3:4b")
+    if "ai_provider" in provided:
+        prov = (payload.ai_provider or "ollama").strip().lower()
+        set_setting(session, "ai_provider", prov if prov in ("ollama", "openrouter") else "ollama")
+    if "openrouter_model" in provided:
+        set_setting(session, "openrouter_model", (payload.openrouter_model or "").strip() or "openai/gpt-4o-mini")
+    if "openrouter_api_key" in provided and (payload.openrouter_api_key or "").strip():
+        # Only overwrite when a real value is sent — the form leaves the
+        # password field blank when the saved key should stay untouched.
+        set_setting(session, "openrouter_api_key", payload.openrouter_api_key.strip())
     if "plantnet_api_key" in provided:
         set_setting(session, "plantnet_api_key", (payload.plantnet_api_key or "").strip())
     session.commit()

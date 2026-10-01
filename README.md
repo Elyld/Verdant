@@ -265,9 +265,12 @@ NFC tags can drop you straight here. And when your hands are too dirty to tap
 through forms: **🤖 “Tell Verdant what you did”** — type a sentence like
 “watered the tomatoes and harvested 3 peppers”, or tap 🎤 **Talk** and just
 say it with dirty hands — the browser transcribes as you talk and keeps
-listening through pauses until you tap Stop. A small model running on
-*your own machine* then drafts the log entries for you to confirm. Nothing leaves
-your server; opt-in on the Settings page. (Voice needs a secure https
+listening through pauses until you tap Stop. Your chosen AI provider then
+drafts the log entries for you to confirm: a small model running on *your
+own machine* via **Ollama** (nothing leaves your network), or a cloud model
+through **OpenRouter** (your key stays in Verdant's database on your server,
+and it's only called when you ask it to interpret). Nothing is saved until
+you confirm; opt-in on the Settings page. (Voice needs a secure https
 connection, so on the LAN it works through the Cloudflare tunnel.)
 
 **🎙️ Voice quick-log** is the no-AI sibling: tap Talk, say “watered the
@@ -278,6 +281,8 @@ Save. No model needed, so it works even when the local AI is offline.
 ![Voice quick-log](docs/screenshots/quick-voice.png)
 
 ![Tell Verdant what you did](docs/screenshots/ai-log.png)
+
+![AI settings — OpenRouter provider](docs/screenshots/ai-openrouter.png)
 
 ![Quick Log](docs/screenshots/quick.png)
 
@@ -738,6 +743,17 @@ server local time. Test with `POST /api/digest/send`.
   cleanly. The installer is built automatically by GitHub Actions with every
   release (PyInstaller bundle + WiX Toolset, see `installer/`); the build
   script also runs by hand on any Windows machine with Python and WiX.
+- **2.42.0** — **🤖 OpenRouter provider for the AI features.** “Tell Verdant
+  what you did” now works with two providers: **Ollama** on your own machine
+  (unchanged default — nothing leaves your network) or **OpenRouter** cloud
+  models, picked from a new provider dropdown on the Settings page. For
+  OpenRouter you paste an API key (stored in Verdant's own database, never
+  shown back — leave the field blank to keep the saved key) and any model id
+  from openrouter.ai/models; Test connection validates the key through
+  OpenRouter's free key-check endpoint and reports what it finds. Interpret,
+  status, and the Quick Log card are all provider-aware, and the plumbing is
+  now a single `app/llm.py` module so future AI features don't care which
+  provider is behind them.
 - **2.39.0** — **Local AI: model dropdown + kinder timeouts.** The model name
   field on Settings is now a dropdown listing your Ollama server's installed
   models when it's reachable (falls back to typing when it's not). The

@@ -129,45 +129,75 @@
     </div>
 
     <div class="card space-y-4">
-      <h3 class="font-display text-lg font-semibold text-navy-800">🤖 Local AI</h3>
+      <h3 class="font-display text-lg font-semibold text-navy-800">🤖 AI</h3>
       <p class="text-sm text-navy-600">
-        Let a small model running on <strong>your own machine</strong> turn a
-        sentence like “watered the tomatoes and harvested 3 peppers” into log
-        entries. Nothing leaves your server — the app just talks to the model
-        over your local network. Off by default.
+        Let AI turn a sentence like “watered the tomatoes and harvested 3
+        peppers” into log entries — either a small model running on
+        <strong>your own machine</strong> (nothing leaves your network) or a
+        cloud model through <strong>OpenRouter</strong>. Off by default, and
+        nothing is ever saved without your confirmation.
       </p>
       <label class="flex items-center gap-2 text-sm text-navy-700">
         <input id="set-ai-enabled" type="checkbox" class="h-4 w-4 accent-sage-600" />
         Enable “Tell Verdant what you did” on Quick Log
       </label>
-      <div class="grid gap-4 sm:grid-cols-2">
-        <label class="block">
-          <span class="lbl">Model server URL</span>
-          <input id="set-ai-base" type="url" class="inp" placeholder="http://localhost:11434" maxlength="200" />
-        </label>
-        <label class="block">
-          <span class="lbl">Model name</span>
-          <input id="set-ai-model" type="text" class="inp" placeholder="qwen3:4b" maxlength="80" />
-          <select id="set-ai-model-select" class="inp hidden"></select>
-          <span class="mt-1 block text-xs text-navy-400">Detected from your Ollama server when it's reachable — otherwise type the name.</span>
-        </label>
+      <label class="block max-w-xs">
+        <span class="lbl">Provider</span>
+        <select id="set-ai-provider" class="inp">
+          <option value="ollama">Ollama — your own machine</option>
+          <option value="openrouter">OpenRouter — cloud models</option>
+        </select>
+      </label>
+      <div id="ai-ollama-block" class="space-y-4">
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="block">
+            <span class="lbl">Model server URL</span>
+            <input id="set-ai-base" type="url" class="inp" placeholder="http://localhost:11434" maxlength="200" />
+          </label>
+          <label class="block">
+            <span class="lbl">Model name</span>
+            <input id="set-ai-model" type="text" class="inp" placeholder="qwen3:4b" maxlength="80" />
+            <select id="set-ai-model-select" class="inp hidden"></select>
+            <span class="mt-1 block text-xs text-navy-400">Detected from your Ollama server when it's reachable — otherwise type the name.</span>
+          </label>
+        </div>
+        <p class="text-xs text-navy-400">
+          Verdant runs in Docker, so <code>localhost</code> here means the Verdant
+          container itself — not your PC. To reach Ollama on the same machine, use
+          <code>http://host.docker.internal:11434</code>, and set
+          <code>OLLAMA_HOST=0.0.0.0</code> on Ollama so it accepts the connection.
+          No <code>/v1</code> needed — the app adds the <code>/api/…</code> paths itself.
+        </p>
+        <p class="text-xs text-navy-400">
+          Works with any Ollama-compatible server (<code>/api/tags</code> and
+          <code>/api/chat</code>). A 3–4B model is plenty — it only parses
+          sentences into draft entries, which you confirm before anything is saved.
+        </p>
       </div>
-      <p class="text-xs text-navy-400">
-        Verdant runs in Docker, so <code>localhost</code> here means the Verdant
-        container itself — not your PC. To reach Ollama on the same machine, use
-        <code>http://host.docker.internal:11434</code>, and set
-        <code>OLLAMA_HOST=0.0.0.0</code> on Ollama so it accepts the connection.
-        No <code>/v1</code> needed — the app adds the <code>/api/…</code> paths itself.
-      </p>
+      <div id="ai-openrouter-block" class="hidden space-y-4">
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="block">
+            <span class="lbl">OpenRouter API key</span>
+            <input id="set-ai-or-key" type="password" class="inp" placeholder="sk-or-…" maxlength="200" autocomplete="off" />
+            <span id="set-ai-or-key-state" class="mt-1 block text-xs text-navy-400"></span>
+          </label>
+          <label class="block">
+            <span class="lbl">Model</span>
+            <input id="set-ai-or-model" type="text" class="inp" placeholder="openai/gpt-4o-mini" maxlength="80" />
+            <span class="mt-1 block text-xs text-navy-400">Any model id from <a class="underline" href="https://openrouter.ai/models" target="_blank" rel="noopener">openrouter.ai/models</a> — a cheap mini is plenty for parsing sentences.</span>
+          </label>
+        </div>
+        <p class="text-xs text-navy-400">
+          The key is stored in Verdant's own database on your server and is never
+          shown back — leave the field blank to keep the saved key. Verdant only
+          calls OpenRouter when you ask it to interpret a sentence. Get a key at
+          <a class="underline" href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>.
+        </p>
+      </div>
       <div class="flex items-center gap-3">
         <button type="button" id="ai-test" class="btn-ghost text-sm">Test connection</button>
         <span id="ai-test-status" class="text-sm text-navy-400"></span>
       </div>
-      <p class="text-xs text-navy-400">
-        Works with any Ollama-compatible server (<code>/api/tags</code> and
-        <code>/api/chat</code>). A 3–4B model is plenty — it only parses
-        sentences into draft entries, which you confirm before anything is saved.
-      </p>
     </div>
 
     <div class="card space-y-4">
