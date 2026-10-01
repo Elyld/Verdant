@@ -306,6 +306,23 @@ def _message_with_extras(session: Session, message: str) -> str:
     if frost_line:
         header, _, rest = message.partition("\n")
         message = header + "\n" + frost_line + ("\n" + rest if rest else "")
+    try:
+        from app import frost_gamble as frost_gamble_mod
+        gamble = frost_gamble_mod.digest_block(session)
+        if gamble:
+            header, _, rest = message.partition("\n")
+            message = header + "\n" + gamble + ("\n" + rest if rest else "")
+    except Exception as exc:
+        log.warning("frost gamble block failed: %s", exc)
+    try:
+        from app import time_travel as time_travel_mod
+        tt = time_travel_mod.digest_section(session)
+        if tt:
+            candidate = message + "\n\n" + tt
+            if len(candidate) <= DISCORD_SAFE_CHARS:
+                message = candidate
+    except Exception as exc:
+        log.warning("time travel section failed: %s", exc)
     return message
 
 
