@@ -72,6 +72,7 @@ SETTING_KEYS = (
     "digest_enabled",
     "discord_webhook_url",
     "digest_time",
+    "digest_timezone",
     "temperature_unit",
     "week_start",
     "default_weight_unit",
@@ -106,6 +107,7 @@ class SettingsUpdate(BaseModel):
     digest_enabled: bool = False
     discord_webhook_url: str = ""
     digest_time: str = "08:00"
+    digest_timezone: str = ""  # IANA zone for the digest send time; "" = browser/server local
     temperature_unit: str = "F"  # "F" or "C" — display unit for weather temps (stored Celsius)
     week_start: str = "0"  # "0" = Sunday, "1" = Monday — first column of the calendar
     default_weight_unit: str = "oz"  # prefill for the harvest form weight-unit select
@@ -139,6 +141,17 @@ def _validate(payload: SettingsUpdate, provided: set[str], session: Session) -> 
             raise HTTPException(400, f"Bad {label} {raw!r} (want YYYY-MM-DD or MM-DD).")
     if "digest_time" in provided and not TIME_RE.match((payload.digest_time or "").strip()):
         raise HTTPException(400, f"Bad digest_time {payload.digest_time!r} (want HH:MM, 24h).")
+    if "digest_timezone" in provided and (payload.digest_timezone or "").strip():
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+        try:
+            ZoneInfo(payload.digest_timezone.strip())
+        except ZoneInfoNotFoundError:
+            raise HTTPException(
+                400,
+                f"Bad digest_timezone {payload.digest_timezone!r} "
+                "(want an IANA zone like America/Chicago, or blank).",
+            )
     # Cross-field checks see the merged result, not just this payload.
     digest_on = payload.digest_enabled if "digest_enabled" in provided else (
         frost_mod.get_setting(session, "digest_enabled") == "true"
@@ -258,6 +271,7 @@ def current_settings(session: Session) -> dict:
         "digest_enabled": digest.enabled,
         "discord_webhook_url": digest.webhook_url,
         "digest_time": digest.time,
+        "digest_timezone": digest.timezone,
         "frost_preview": {
             "first": _frost_preview(session, "first"),
             "last": _frost_preview(session, "last"),
@@ -292,7 +306,6 @@ def save_settings(payload: SettingsUpdate, session: Session = Depends(get_sessio
     # PUT must never reset the rest to defaults.
     provided = set(payload.model_dump(exclude_unset=True))
     _validate(payload, provided, session)
-    old_time = frost_mod.get_setting(session, "digest_time")
     set_setting = frost_mod.set_setting
     if "zone" in provided:
         set_setting(session, "zone", payload.zone.strip())
@@ -308,6 +321,8 @@ def save_settings(payload: SettingsUpdate, session: Session = Depends(get_sessio
     if "digest_time" in provided:
         new_time = payload.digest_time.strip() or "08:00"
         set_setting(session, "digest_time", new_time)
+    if "digest_timezone" in provided:
+        set_setting(session, "digest_timezone", (payload.digest_timezone or "").strip())
     if "temperature_unit" in provided:
         set_setting(session, "temperature_unit", payload.temperature_unit)
     if "week_start" in provided:
@@ -344,10 +359,15 @@ def save_settings(payload: SettingsUpdate, session: Session = Depends(get_sessio
     if "plantnet_api_key" in provided:
         set_setting(session, "plantnet_api_key", (payload.plantnet_api_key or "").strip())
     session.commit()
-    if new_time is not None and _reschedule_digest is not None and new_time != old_time:
-        # Best-effort: the new time is already saved, so a scheduler hiccup
-        # must not turn this into a 500 (worst case the new time applies
-        # after the next restart).
+    digest_touched = bool(
+        {"digest_enabled", "discord_webhook_url", "digest_time", "digest_timezone"}
+        & provided
+    )
+    if digest_touched and _reschedule_digest is not None:
+        # Best-effort: the new values are already saved, so a scheduler hiccup
+        # must not turn this into a 500 (worst case they apply after the next
+        # restart). Re-arming on ANY digest field — not just the time — is what
+        # makes "enable + save" actually schedule the job.
         try:
             _reschedule_digest()
         except Exception:

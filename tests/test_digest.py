@@ -138,3 +138,109 @@ def test_send_endpoint_sends(client, monkeypatch):
     assert res.status_code == 200, res.text
     assert res.json()["sent"] is True
     assert sent["url"] == "https://discord.com/api/webhooks/abc"
+
+
+def _set_settings_via_db(**kwargs):
+    from sqlmodel import Session as _Session
+
+    from app import frost as frost_mod  # noqa: E402
+    from app.database import engine as _engine  # noqa: E402
+
+    with _Session(_engine) as s:
+        for k, v in kwargs.items():
+            frost_mod.set_setting(s, k, v)
+        s.commit()
+
+
+def test_effective_config_picks_timezone():
+    from app.routers.digest import effective_digest_config  # noqa: E402
+    from sqlmodel import Session as _Session  # noqa: E402
+
+    from app.database import engine as _engine  # noqa: E402
+
+    _set_settings_via_db(digest_timezone="America/Chicago")
+    try:
+        with _Session(_engine) as s:
+            assert effective_digest_config(s).timezone == "America/Chicago"
+    finally:
+        _set_settings_via_db(digest_timezone="")
+
+
+def test_resolve_digest_timezone():
+    from datetime import datetime  # noqa: E402
+
+    from app.routers.digest import resolve_digest_timezone  # noqa: E402
+
+    local = datetime.now().astimezone().tzinfo
+    assert resolve_digest_timezone("America/Chicago").key == "America/Chicago"
+    assert resolve_digest_timezone("") == local
+    # Invalid names fall back to server local instead of raising.
+    assert resolve_digest_timezone("Not/AZone") == local
+
+
+def test_save_rearms_scheduler_when_enabling(client):
+    """Enabling the digest (or changing its webhook) without touching the
+    time must still (re)start the scheduler — this was the 'never get
+    digests' bug."""
+    from app.routers import settings as settings_router  # noqa: E402
+
+    calls = []
+    old = settings_router._reschedule_digest
+    settings_router.register_digest_rescheduler(lambda: calls.append(1))
+    try:
+        res = client.put(
+            "/api/settings",
+            json={
+                "digest_enabled": True,
+                "discord_webhook_url": "https://discord.com/api/webhooks/x",
+                "digest_time": "08:00",
+            },
+        )
+        assert res.status_code == 200, res.text
+        assert calls, "saving digest settings did not re-arm the scheduler"
+        assert res.json()["digest_timezone"] == ""
+    finally:
+        settings_router.register_digest_rescheduler(old)
+        client.put(
+            "/api/settings",
+            json={"digest_enabled": False, "discord_webhook_url": ""},
+        )
+
+
+def test_save_rejects_bad_timezone(client):
+    res = client.put("/api/settings", json={"digest_timezone": "Mars/Olympus"})
+    assert res.status_code == 400
+    assert "digest_timezone" in res.json()["detail"]
+
+
+def test_scheduler_uses_configured_timezone():
+    """The scheduled job fires in the configured zone, not server local."""
+    from app.main import _maybe_start_digest_scheduler  # noqa: E402
+
+    _set_settings_via_db(
+        digest_enabled="true",
+        discord_webhook_url="https://discord.com/api/webhooks/x",
+        digest_time="08:00",
+        digest_timezone="America/Chicago",
+    )
+    sched = None
+    try:
+        sched = _maybe_start_digest_scheduler()
+        assert sched is not None
+        job = sched.get_job("morning-digest")
+        assert job is not None
+        tz = job.trigger.timezone
+        assert getattr(tz, "key", str(tz)) == "America/Chicago"
+    finally:
+        if sched is not None:
+            sched.shutdown(wait=False)
+        _set_settings_via_db(
+            digest_enabled="false", discord_webhook_url="", digest_timezone=""
+        )
+
+
+def test_scheduler_not_started_when_disabled():
+    from app.main import _maybe_start_digest_scheduler  # noqa: E402
+
+    _set_settings_via_db(digest_enabled="false")
+    assert _maybe_start_digest_scheduler() is None

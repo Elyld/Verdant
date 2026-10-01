@@ -237,17 +237,22 @@
         Send a morning garden check to Discord
       </label>
       <div class="grid gap-4 sm:grid-cols-2">
-        <label class="block">
+        <label class="block sm:col-span-2">
           <span class="lbl">Discord webhook URL</span>
           <input id="set-webhook" type="url" class="inp" placeholder="https://discord.com/api/webhooks/…" maxlength="500" />
         </label>
         <label class="block">
-          <span class="lbl">Send time <span class="font-normal text-navy-400">(server local time)</span></span>
+          <span class="lbl">Send time</span>
           <input id="set-digest-time" type="time" class="inp" value="08:00" />
+        </label>
+        <label class="block">
+          <span class="lbl">Timezone</span>
+          <input id="set-digest-timezone" type="text" class="inp" placeholder="America/Chicago" maxlength="60" />
         </label>
       </div>
       <p class="text-xs text-navy-400">
         In Discord: Server Settings → Integrations → Webhooks → New Webhook, pick a channel, then “Copy Webhook URL”.
+        The send time uses the timezone above — blank means your browser's timezone.
         Changes apply immediately — no restart needed.
       </p>
       <div>

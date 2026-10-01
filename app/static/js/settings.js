@@ -83,6 +83,9 @@
       $('#set-digest-enabled').checked = !!s.digest_enabled;
       $('#set-webhook').value = s.discord_webhook_url || '';
       $('#set-digest-time').value = s.digest_time || '08:00';
+      // Blank stored timezone = browser's zone (what the scheduler will use).
+      $('#set-digest-timezone').value = s.digest_timezone
+        || Intl.DateTimeFormat().resolvedOptions().timeZone || '';
       $('#set-ai-enabled').checked = !!s.local_ai_enabled;
       $('#set-ai-chat-enabled').checked = s.ai_chat_enabled !== false;
       $('#set-ai-provider').value = s.ai_provider === 'openrouter' ? 'openrouter' : 'ollama';
@@ -211,6 +214,7 @@
           digest_enabled: $('#set-digest-enabled').checked,
           discord_webhook_url: $('#set-webhook').value.trim(),
           digest_time: $('#set-digest-time').value || '08:00',
+          digest_timezone: $('#set-digest-timezone').value.trim(),
           temperature_unit: $('#set-temp-unit').value,
           week_start: $('#set-week-start').value,
           default_weight_unit: $('#set-weight-unit').value,

@@ -390,8 +390,10 @@ the timing and details.
 
 ### 🌅 Morning Digest — Discord
 An optional daily "morning garden check" sent to a Discord channel via webhook:
-what's overdue, what's due today, what's coming up. Off by default — set
-`DIGEST_ENABLED=true` and `DISCORD_WEBHOOK_URL` to turn it on.
+what's overdue, what's due today, what's coming up. Off by default — turn it on
+from the 🌅 Morning digest card on the Settings page (the send time uses the
+timezone you pick there, defaulting to your browser's zone), or set
+`DIGEST_ENABLED=true` and `DISCORD_WEBHOOK_URL` in the environment.
 
 ### 🔌 Immich integration
 Browse albums on your own Immich server and import their photos straight into
@@ -539,7 +541,8 @@ to `.env` (or set them in your Dockge stack) for the ones you want.
 | `GARDEN_LAT` / `GARDEN_LON` | (unset) | Fallback for your garden's coordinates — prefer the Settings page (📍 Use my location button). Stamps new observations with current weather + powers the site-wide weather ribbon (free Open-Meteo data, no key needed) |
 | `DIGEST_ENABLED` | `false` | Set `true` to enable the morning Discord digest |
 | `DISCORD_WEBHOOK_URL` | (unset) | Discord webhook URL (Server Settings → Integrations → Webhooks) |
-| `DIGEST_TIME` | `08:00` | When the digest sends (24h `HH:MM`, server local time) |
+| `DIGEST_TIME` | `08:00` | When the digest sends (24h `HH:MM`, in `DIGEST_TIMEZONE`) |
+| `DIGEST_TIMEZONE` | (unset) | IANA timezone for the digest send time, e.g. `America/Chicago`; blank = server local |
 
 ### Immich tips
 
@@ -568,9 +571,12 @@ strip. Free, no API key.
 
 1. In Discord: Server Settings → Integrations → Webhooks → New Webhook, pick
    a channel, copy the webhook URL.
-2. Set `DIGEST_ENABLED=true`, paste the URL into `DISCORD_WEBHOOK_URL`, and
-   optionally change `DIGEST_TIME`.
-3. Restart. Every morning you get overdue / due-today / coming-up care tasks.
+2. On Verdant's Settings page: tick the 🌅 Morning digest box, paste the URL,
+   pick a send time and timezone (blank = your browser's timezone).
+   Or use env vars: `DIGEST_ENABLED=true`, `DISCORD_WEBHOOK_URL`,
+   `DIGEST_TIME`, `DIGEST_TIMEZONE`.
+3. Save — no restart needed. Every morning you get overdue / due-today /
+   coming-up care tasks.
 4. Test anytime: `GET /api/digest/preview` to see the message,
    `POST /api/digest/send` to send one on demand.
 
@@ -743,6 +749,13 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.45.0** — **🌅 Digest fixes.** Two reasons the morning Discord digest
+  could silently never arrive: saving the digest settings only (re)started the
+  scheduler when the send *time* changed (enabling it or pasting the webhook
+  alone did nothing — now any digest field re-arms it), and the send time was
+  interpreted in the server's timezone (UTC in Docker, i.e. 3 AM Central).
+  The Settings page now has a timezone field that defaults to your browser's
+  zone, so 08:00 means 08:00 your time.
 - **2.44.0** — **🌱 Garden assistant, smarter.** The chat agent can now look
   things up on its own (per-plant care history, notes search, seed stash,
   planner, reminders) and take action beyond logging: adding seed packets,
