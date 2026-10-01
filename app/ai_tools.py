@@ -156,11 +156,21 @@ TOOLS = [
         "parameters": {"variety": "optional variety name filter"},
         "required": [],
     },
+    {
+        "name": "season_recap",
+        "description": "Narrate a plant's season from its photos: gathers the plant's "
+                       "photos across the season (matched album photos + observation "
+                       "photos) and has the vision model tell the story — growth "
+                       "milestones, health observations, harvest moments. "
+                       "Use for 'recap my tomatoes' season' type questions.",
+        "parameters": {"plant": "plant name, e.g. 'Cherokee Purple' or 'tomatoes'"},
+        "required": ["plant"],
+    },
 ]
 
 READ_TOOLS = {"plant_care_history", "search_notes", "seed_stash",
               "planner_overview", "reminders", "season_advice",
-              "recall_notes", "variety_performance"}
+              "recall_notes", "variety_performance", "season_recap"}
 
 WRITE_TOOL_ACTIONS = {
     "log_watering": "water",
@@ -362,6 +372,16 @@ def _t_recall_notes(session: Session, args: dict) -> dict:
     return {"matches": (memory_hits + regular_hits)[:10]}
 
 
+def _t_season_recap(session: Session, args: dict) -> dict:
+    """Narrate a plant's season from its photos (read-only)."""
+    import app.season_recap as recap_mod
+
+    p = _match_plant(session, args.get("plant", ""))
+    if p is None:
+        return {"error": f"No plant matched '{args.get('plant', '')}'. Name a plant from the Plants page."}
+    return recap_mod.build_recap(session, p)
+
+
 def _t_variety_performance(session: Session, args: dict) -> dict:
     variety_filter = (args.get("variety") or "").strip().lower()
     rows = session.exec(select(Harvest)
@@ -401,6 +421,7 @@ _READ_EXEC = {
     "season_advice": _t_season_advice,
     "recall_notes": _t_recall_notes,
     "variety_performance": _t_variety_performance,
+    "season_recap": _t_season_recap,
 }
 
 

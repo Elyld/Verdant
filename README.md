@@ -297,7 +297,15 @@ seasonal coaching (frost countdown, what to plant/harvest now), a memory
 notebook it can save to and recall from (always confirm-before-save), and
 year-over-year variety performance from your harvest logs. Attach a photo to
 a message and a vision-capable model (e.g. DeepSeek v4.1 flash on OpenRouter)
-can see it for pest ID or ripeness checks. The conversation
+can see it for pest ID or ripeness checks. Ask it to “recap my tomatoes'
+season” and the new `season_recap` tool gathers that plant's photos across
+the season (matched album photos + observation photos), picks up to 8 spread
+across the months, and has the vision model narrate the story — growth
+milestones, health, harvest moments. There's also a 📖 Season recap button
+on each plant's detail card that shows the story with its photo timeline;
+“Save as note” files it as an observation (it asks you to confirm first).
+Photos only ever go to your already-configured AI provider — the same one
+the chat uses. The conversation
 survives page navigation within the tab. It runs on whichever AI provider
 you've picked (Ollama or OpenRouter); the OpenRouter model picker lists every
 available model with free ones marked.
@@ -759,6 +767,18 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.49.0** — **📖 Season recap.** Your garden photos tell the story: a new
+  `season_recap` chat tool (and a 📖 Season recap button on each plant's
+  detail card) gathers a plant's photos across the season — Immich album
+  matches plus observation photos — picks up to 8 spread across the months,
+  and asks your vision-capable chat model to narrate it: growth milestones,
+  health observations, harvest moments, in a warm neighbor tone. The card
+  view shows the story with its photo timeline; “Save as note” files it as
+  an observation, confirm-before-save as always. Read-only otherwise, and it
+  degrades gracefully when a plant has no photos or the model can't do
+  vision. Privacy: photos only ever go to your already-configured LLM
+  provider — the same one the chat's photo-vision feature uses. (No new
+  screenshots: one small button + narrative.)
 - **2.48.0** — **🤖 AI powerhouse.** The assistant got eyes, a memory, and a
   coaching voice. **Eyes:** attach a photo to a chat message and the model
   can see it — pest ID, ripeness, plant health (works with vision models like
