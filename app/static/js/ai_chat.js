@@ -15,7 +15,12 @@
     observe: { label: 'Observe', icon: '👀' },
     pest: { label: 'Pest', icon: '🐛' },
     note: { label: 'Note', icon: '📝' },
+    seed: { label: 'Seed packet', icon: '🌱' },
+    plant_status: { label: 'Plant status', icon: '🔄' },
+    plant_move: { label: 'Move plant', icon: '🪴' },
   };
+  // Draft actions that don't involve picking a plant.
+  const NO_PLANT_NEEDED = new Set(['note', 'seed']);
   const STORE_KEY = 'verdant-ai-chat';
   const MAX_STORED = 30;
   const HISTORY_SEND = 10;
@@ -118,7 +123,7 @@
     if (d.detail) bits.push(esc(d.detail));
     let body = `<p class="text-sm text-navy-800">${meta.icon} ${meta.label}${bits.length ? ' — ' + bits.join(' · ') : ''}</p>`;
     if (d.notes) body += `<p class="text-xs text-navy-500">${esc(d.notes)}</p>`;
-    if (!d.plant_id) {
+    if (!d.plant_id && !NO_PLANT_NEEDED.has(d.action)) {
       const opts = plants.map((p) =>
         `<option value="${p.id}">${esc(p.variety_name)}</option>`).join('');
       body += `<select data-plant-pick class="inp mt-1 text-sm"><option value="">Pick a plant…</option>${opts}</select>`;
@@ -210,7 +215,7 @@
     let saved = 0;
     const problems = [];
     for (const d of m.drafts) {
-      if (!d.plant_id && d.action !== 'note') {
+      if (!d.plant_id && !NO_PLANT_NEEDED.has(d.action)) {
         problems.push(`${(ACTION_META[d.action] || {}).label || d.action}: pick a plant`);
         continue;
       }
@@ -233,6 +238,27 @@
           if (!d.detail) { problems.push('Pest: pest name is required'); continue; }
           await api.post('/api/pests/', {
             date: today, pest_name: d.detail, plant_id: d.plant_id, notes: d.notes || '',
+          });
+        } else if (d.action === 'seed') {
+          const year = d.seed_year ? parseInt(d.seed_year, 10) : null;
+          await api.post('/api/seed-packets', {
+            variety_name: d.plant_name,
+            species_type: d.seed_species || '',
+            vendor_name: d.seed_vendor || '',
+            year_acquired: Number.isFinite(year) ? year : null,
+            seed_count: d.amount ? Math.max(1, Math.round(d.amount)) : null,
+            notes: d.notes || '',
+          });
+        } else if (d.action === 'plant_status') {
+          const status = (d.detail || '').replace(/^→\s*/, '');
+          await api.patch(`/api/plants/${d.plant_id}`, { status });
+        } else if (d.action === 'plant_move') {
+          if (d.planting_id) {
+            try { await api.del(`/api/containers/plantings/${d.planting_id}`); }
+            catch (e) { /* already moved or gone — just add the new one */ }
+          }
+          await api.post('/api/containers/plantings', {
+            container_id: d.to_container_id, plant_id: d.plant_id,
           });
         } else { // observe / note
           const pname = d.plant_name || (plantsById[d.plant_id] || {}).variety_name;

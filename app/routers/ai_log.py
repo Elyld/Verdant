@@ -130,18 +130,34 @@ _CHAT_SYSTEM = """You are Verdant, the friendly assistant inside a gardener's pe
 You answer questions about THEIR garden and help them log what they do. Be warm, concise, and practical — \
 a knowledgeable gardening neighbor, never a lecture. Keep replies short (a few sentences) unless they ask for detail.
 
+You have TOOLS — use them instead of guessing:
+- Look things up with: plant_care_history, search_notes, seed_stash, planner_overview, reminders.
+- When the gardener describes something they DID, or asks you to change something, call the matching \
+write tool (log_watering, log_fertilization, log_harvest, log_observation, log_pest, add_seed_packet, \
+update_plant, move_planting). These create DRAFTS the gardener confirms before anything is saved — \
+never claim you saved anything yourself.
+
+Each turn, respond with ONLY one JSON object:
+- To use tools: {{"tool_calls": [{{"name": "<tool>", "args": {{...}}}}]}} (max 3 calls per turn)
+- When done: {{"reply": "<your answer to the gardener>"}}
+After tool calls you receive their results — then answer. If a tool errors, say what you couldn't find \
+and ask for the missing detail instead of inventing it.
+
 Rules:
-- Use ONLY the garden context below for facts about their plants, dates, and activity. Never invent plant names, varieties, dates, or numbers. If the context doesn't say, say you don't see it recorded.
+- Use ONLY the garden context and tool results for facts about their plants, dates, and activity. \
+Never invent plant names, varieties, dates, or numbers.
 - Today is {today}. The gardener is in USDA zone {zone}.
-- When they describe something they DID (watered, fed, harvested, saw pests, noticed something), put structured drafts in "drafts" AND mention them briefly in "reply". Drafts use: {{"action": "<water|fertilize|observe|harvest|pest|note>", "plant": "<exact plant name from context, or null>", "amount": <number or null>, "unit": "<unit or null>", "detail": "<product for fertilize, pest name for pest, else null>", "notes": "<short note>"}}. One draft per distinct thing. Unknown plant → plant=null, name in notes.
-- For pure questions (advice, "when did I last…", planning), "drafts" is [].
-- Never claim to have saved anything — the gardener confirms every draft before it's written.
+- One draft per distinct thing the gardener did. For pure questions, no write tools.
 - No markdown tables. Short paragraphs or a few bullets are fine.
 
-Respond with ONLY a JSON object: {{"reply": "<your answer>", "drafts": [<drafts or empty>]}}.
+Available tools:
+{tools}
 
 Garden context:
 {context}"""
+
+
+MAX_TOOL_ITERS = 3
 
 
 def _extract_json_object(raw: str) -> Optional[dict]:
@@ -164,6 +180,46 @@ def _extract_json_object(raw: str) -> Optional[dict]:
     return parsed if isinstance(parsed, dict) else None
 
 
+_OR_MODELS_CACHE = {"at": 0.0, "models": []}
+_OR_MODELS_TTL = 24 * 3600
+
+
+@router.get("/openrouter-models")
+def openrouter_models() -> dict:
+    """All OpenRouter model ids with free ones flagged, cached 24h.
+    Never raises — the Settings UI falls back to a text field on failure."""
+    import time
+    import urllib.request
+
+    now = time.time()
+    if _OR_MODELS_CACHE["models"] and now - _OR_MODELS_CACHE["at"] < _OR_MODELS_TTL:
+        return {"models": _OR_MODELS_CACHE["models"]}
+    models: list[dict] = []
+    try:
+        req = urllib.request.Request(
+            "https://openrouter.ai/api/v1/models",
+            headers={"User-Agent": "Verdant/1.0"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode("utf-8", "replace"))
+        for m in data.get("data", []):
+            mid = m.get("id") or ""
+            if not mid:
+                continue
+            pricing = m.get("pricing") or {}
+            try:
+                free = (mid.endswith(":free")
+                        or (float(pricing.get("prompt") or 1) == 0
+                            and float(pricing.get("completion") or 1) == 0))
+            except (TypeError, ValueError):
+                free = mid.endswith(":free")
+            models.append({"id": mid, "name": m.get("name") or mid, "free": free})
+        models.sort(key=lambda m: (not m["free"], m["name"].lower()))
+        _OR_MODELS_CACHE.update(at=now, models=models)
+    except Exception:
+        pass
+    return {"models": models}
+
+
 @router.get("/chat-status")
 def chat_status(session: Session = Depends(get_session)) -> dict:
     """Should the floating chat assistant show? Combines the chat toggle
@@ -177,11 +233,37 @@ def chat_status(session: Session = Depends(get_session)) -> dict:
     return out
 
 
+def _draft_summary(d: dict) -> str:
+    label = {"water": "watering", "fertilize": "feeding", "harvest": "harvest",
+             "observe": "observation", "pest": "pest note", "note": "note",
+             "seed": "seed packet", "plant_status": "status change",
+             "plant_move": "container move"}.get(d.get("action"), d.get("action"))
+    bits = [label]
+    if d.get("plant_name"):
+        bits.append(f"for {d['plant_name']}")
+    if d.get("detail"):
+        bits.append(f"({d['detail']})")
+    return " ".join(bits)
+
+
+def _chat_llm(session: Session, messages: list) -> str:
+    """One model call with the shared error contract."""
+    try:
+        return llm_mod.chat(session, messages, json_mode=True, timeout=120)
+    except llm_mod.LLMError as e:
+        msg = str(e)
+        if e.hint:
+            msg += f" {e.hint}"
+        raise HTTPException(502, msg)
+
+
 @router.post("/chat")
 def chat_endpoint(payload: ChatRequest, session: Session = Depends(get_session)) -> dict:
-    """Chat with the garden assistant. Returns {"reply", "drafts"} — drafts
-    are only ever written after the user confirms them in the UI."""
+    """Chat with the garden assistant. Runs a small tool-calling loop:
+    read tools execute immediately, write tools become drafts the user
+    confirms in the UI. Returns {"reply", "drafts"}."""
     from app import ai_context as ai_context_mod
+    from app import ai_tools as ai_tools_mod
 
     message = (payload.message or "").strip()
     if not message:
@@ -196,8 +278,10 @@ def chat_endpoint(payload: ChatRequest, session: Session = Depends(get_session))
     context = ai_context_mod.build_context(session)
     today = Date.today()
     zone = frost_mod.get_setting(session, "zone") or "?"
+    tools_json = json.dumps(ai_tools_mod.TOOLS)
     system = _CHAT_SYSTEM.format(
-        today=today.strftime("%A, %B %d, %Y"), zone=zone, context=context)
+        today=today.strftime("%A, %B %d, %Y"), zone=zone,
+        tools=tools_json, context=context)
 
     history = [
         {"role": m.role, "content": (m.content or "")[:1500]}
@@ -206,28 +290,63 @@ def chat_endpoint(payload: ChatRequest, session: Session = Depends(get_session))
     ][-MAX_HISTORY:]
     messages = [{"role": "system", "content": system}, *history,
                 {"role": "user", "content": message}]
-    try:
-        content = llm_mod.chat(session, messages, json_mode=True, timeout=120)
-    except llm_mod.LLMError as e:
-        msg = str(e)
-        if e.hint:
-            msg += f" {e.hint}"
-        raise HTTPException(502, msg)
 
-    parsed = _extract_json_object(content)
-    if parsed is None:
-        # Model didn't follow the JSON contract — show the raw text, no drafts.
-        return {"ok": True, "reply": content.strip() or "…", "drafts": []}
-    reply = str(parsed.get("reply") or "").strip() or "…"
+    drafts: list[dict] = []
+    reply: Optional[str] = None
+    for _ in range(MAX_TOOL_ITERS):
+        content = _chat_llm(session, messages)
+        parsed = _extract_json_object(content)
+        if parsed is None:
+            reply = content.strip() or "…"
+            break
+        calls = parsed.get("tool_calls") or []
+        if not calls:
+            reply = str(parsed.get("reply") or "").strip() or "…"
+            # Tolerate the old single-shot contract too.
+            for raw in parsed.get("drafts") or []:
+                d = _clean_draft(raw, _plant_names(session))
+                if d:
+                    drafts.append(d)
+            break
+        results = []
+        for call in calls[:3]:
+            name = (call or {}).get("name")
+            args = (call or {}).get("args") or {}
+            if name in ai_tools_mod.READ_TOOLS:
+                results.append({"tool": name,
+                                "result": ai_tools_mod.execute_read(session, name, args)})
+            elif name in ai_tools_mod.WRITE_TOOL_ACTIONS:
+                d = ai_tools_mod.build_write_draft(session, name, args)
+                if d:
+                    drafts.append(d)
+                    results.append({"tool": name, "result":
+                                    {"draft_created": _draft_summary(d)}})
+                else:
+                    results.append({"tool": name, "result":
+                                    {"error": "couldn't build that draft — "
+                                              "ask the gardener for the missing detail"}})
+            else:
+                results.append({"tool": name, "result":
+                                {"error": f"unknown tool '{name}'"}})
+        messages.append({"role": "assistant",
+                         "content": json.dumps({"tool_calls": calls})})
+        messages.append({"role": "user",
+                         "content": "Tool results:\n" + json.dumps(results)})
+    if reply is None:
+        # The model kept calling tools; nudge it to answer now.
+        messages.append({"role": "user", "content":
+                         "No more tool calls — reply to the gardener now "
+                         "with {\"reply\": \"...\"}."})
+        content = _chat_llm(session, messages)
+        parsed = _extract_json_object(content)
+        reply = (str((parsed or {}).get("reply") or "").strip()
+                 or content.strip() or "…")
 
-    plants = _plant_names(session)
-    raw_drafts = parsed.get("drafts") or []
-    drafts = [d for d in (_clean_draft(i, plants) for i in raw_drafts) if d]
     if drafts:
         stmt = select(Plant).where(Plant.status == "Growing")
         by_name = {p.variety_name.lower(): p.id for p in session.exec(stmt).all()}
         for d in drafts:
-            if d["plant_name"]:
+            if d["plant_name"] and not d["plant_id"]:
                 d["plant_id"] = by_name.get(d["plant_name"].lower())
     return {"ok": True, "reply": reply, "drafts": drafts}
 

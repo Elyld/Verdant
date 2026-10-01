@@ -187,8 +187,15 @@
           </label>
           <label class="block">
             <span class="lbl">Model</span>
-            <input id="set-ai-or-model" type="text" class="inp" placeholder="openai/gpt-4o-mini" maxlength="80" />
-            <span class="mt-1 block text-xs text-navy-400">Any model id from <a class="underline" href="https://openrouter.ai/models" target="_blank" rel="noopener">openrouter.ai/models</a> — a cheap mini is plenty for parsing sentences.</span>
+            <select id="set-ai-or-model-select" class="inp">
+              <option value="">Loading models…</option>
+            </select>
+            <span class="mt-2 flex items-center gap-2 text-xs text-navy-500">
+              <input type="checkbox" id="set-ai-or-free-only" class="h-4 w-4 accent-sage-600" />
+              Free models only
+            </span>
+            <input id="set-ai-or-model" type="text" class="inp mt-2 hidden" placeholder="openai/gpt-4o-mini" maxlength="120" />
+            <span class="mt-1 block text-xs text-navy-400">Pick from the list — free models are marked — or choose "Custom…" to type any model id from <a class="underline" href="https://openrouter.ai/models" target="_blank" rel="noopener">openrouter.ai/models</a>. A cheap mini is plenty.</span>
           </label>
         </div>
         <p class="text-xs text-navy-400">

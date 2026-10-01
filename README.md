@@ -286,14 +286,22 @@ Save. No model needed, so it works even when the local AI is offline.
 
 **🌱 Garden assistant.** A floating chat button lives on every page (toggle it
 on the Settings page) — an always-ready agent that knows your garden: what's
-growing and where, what's due, what's ready to harvest, recent activity, and
-today's weather. Ask it anything (“when did I last water the tomatoes?”) or
-just tell it what you did out there, and it drafts the log entries for you to
-confirm — same confirm-before-anything-is-saved contract as “Tell Verdant”.
-The conversation survives page navigation within the tab. It runs on whichever
-AI provider you've picked (Ollama or OpenRouter).
+growing and where, per-plant care history (last watered / fed / harvested),
+what's due, what's ready to harvest, recent activity, and today's weather.
+It can look things up on its own (care history, notes, seed stash, planner,
+reminders) and take action: tell it what you did and it drafts the log
+entries; ask it to add a seed packet, change a plant's status, or move a
+plant to another container and it drafts that too — all under the same
+confirm-before-anything-is-saved contract as “Tell Verdant”. The conversation
+survives page navigation within the tab. It runs on whichever AI provider
+you've picked (Ollama or OpenRouter); the OpenRouter model picker lists every
+available model with free ones marked.
+
+![OpenRouter model picker](docs/screenshots/ai-openrouter-models.png)
 
 ![Garden assistant chat](docs/screenshots/ai-chat-drafts.png)
+
+![Garden assistant drafting a seed packet](docs/screenshots/ai-chat-seed-draft.png)
 
 ![Quick Log](docs/screenshots/quick.png)
 
@@ -735,6 +743,13 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.44.0** — **🌱 Garden assistant, smarter.** The chat agent can now look
+  things up on its own (per-plant care history, notes search, seed stash,
+  planner, reminders) and take action beyond logging: adding seed packets,
+  changing a plant's status, moving plants between planner containers — every
+  write still a draft you confirm first. Per-plant care history (last watered
+  / fed / harvested) is now part of what it knows, and the OpenRouter model
+  field is a real dropdown listing every model with free ones marked.
 - **2.43.0** — **🌱 Garden assistant chat.** A floating chat button on every
   page (toggle on the Settings page): an always-ready agent that knows your
   garden — growing plants and where they live, what's due, what's ready to

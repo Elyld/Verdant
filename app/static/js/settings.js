@@ -89,6 +89,7 @@
       $('#set-ai-base').value = s.local_ai_base_url || 'http://localhost:11434';
       $('#set-ai-model').value = s.local_ai_model || 'qwen3:4b';
       $('#set-ai-or-model').value = s.openrouter_model || 'openai/gpt-4o-mini';
+      refreshOrModelOptions();
       $('#set-ai-or-key').value = '';
       $('#set-ai-or-key').placeholder = s.openrouter_key_set ? '•••••••• (saved — leave blank to keep)' : 'sk-or-…';
       $('#set-ai-or-key-state').textContent = s.openrouter_key_set
@@ -139,6 +140,60 @@
       sel.classList.remove('hidden');
       inp.classList.add('hidden');
     }
+    // OpenRouter: model dropdown from the public model list (cached server-side).
+    // Falls back to the text input when the list is unreachable; the select
+    // always syncs the (hidden) input so saving reads one field.
+    let orModelsCache = [];
+    async function refreshOrModelOptions() {
+      const sel = $('#set-ai-or-model-select');
+      const inp = $('#set-ai-or-model');
+      const freeOnly = $('#set-ai-or-free-only').checked;
+      try {
+        if (!orModelsCache.length) {
+          const data = await api.get('/api/ai/openrouter-models');
+          orModelsCache = (data && data.models) || [];
+        }
+      } catch { orModelsCache = []; }
+      const list = orModelsCache.filter((m) => !freeOnly || m.free);
+      if (!list.length) {
+        sel.classList.add('hidden');
+        inp.classList.remove('hidden');
+        return;
+      }
+      const current = inp.value.trim() || 'openai/gpt-4o-mini';
+      sel.innerHTML = '';
+      list.forEach((m) => {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        opt.textContent = m.free ? `${m.name} (free)` : m.name;
+        sel.appendChild(opt);
+      });
+      const custom = document.createElement('option');
+      custom.value = '__custom';
+      custom.textContent = 'Custom model id…';
+      sel.appendChild(custom);
+      if (list.some((m) => m.id === current)) {
+        sel.value = current;
+        inp.classList.add('hidden');
+      } else {
+        sel.value = '__custom';
+        inp.value = current;
+        inp.classList.remove('hidden');
+      }
+      sel.classList.remove('hidden');
+    }
+    $('#set-ai-or-model-select').addEventListener('change', (event) => {
+      const inp = $('#set-ai-or-model');
+      if (event.target.value === '__custom') {
+        inp.classList.remove('hidden');
+        inp.focus();
+      } else {
+        inp.value = event.target.value;
+        inp.classList.add('hidden');
+      }
+    });
+    $('#set-ai-or-free-only').addEventListener('change', refreshOrModelOptions);
+
     $('#set-ai-model-select').addEventListener('change', (event) => {
       $('#set-ai-model').value = event.target.value;
     });
