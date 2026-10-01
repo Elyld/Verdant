@@ -133,7 +133,8 @@ You answer questions about THEIR garden and help them log what they do. Be warm,
 a knowledgeable gardening neighbor, never a lecture. Keep replies short (a few sentences) unless they ask for detail.
 
 You have TOOLS — use them instead of guessing:
-- Look things up with: plant_care_history, search_notes, seed_stash, planner_overview, reminders.
+- Look things up with: plant_care_history, search_notes, seed_stash, planner_overview, reminders, \
+season_advice, recall_notes, variety_performance, season_recap (photo season story).
 - When the gardener describes something they DID, or asks you to change something, call the matching \
 write tool (log_watering, log_fertilization, log_harvest, log_observation, log_pest, add_seed_packet, \
 update_plant, move_planting). These create DRAFTS the gardener confirms before anything is saved — \
@@ -447,3 +448,31 @@ def voice_log(payload: VoiceLogRequest, session: Session = Depends(get_session))
     if not llm_mod.get_config(session)["enabled"]:
         raise HTTPException(400, "AI is off — enable it on the Settings page first.")
     return _interpret_text(session, transcript)
+
+
+class SeasonRecapRequest(BaseModel):
+    plant_id: Optional[int] = None
+    plant: Optional[str] = ""
+
+
+@router.post("/season-recap")
+def season_recap_endpoint(payload: SeasonRecapRequest,
+                          session: Session = Depends(get_session)) -> dict:
+    """Narrate one plant's season from its photos (read-only).
+
+    Gathers the plant's photos across the season (Immich album matches +
+    observation photos) and asks the configured vision-capable chat model to
+    tell the story. Photos only ever go to the gardener's already-configured
+    LLM provider — the same one the chat's photo-vision feature uses.
+    """
+    import app.ai_tools as ai_tools_mod
+    import app.season_recap as recap_mod
+
+    plant = session.get(Plant, payload.plant_id) if payload.plant_id else None
+    if plant is None:
+        plant = ai_tools_mod._match_plant(session, payload.plant or "")
+    if plant is None:
+        raise HTTPException(404, "Plant not found — name a plant from the Plants page.")
+    if not llm_mod.get_config(session)["enabled"]:
+        raise HTTPException(400, "AI is off — enable it on the Settings page first.")
+    return recap_mod.build_recap(session, plant)

@@ -78,10 +78,12 @@
           ${plant.notes ? `<p class="mt-2 text-sm text-navy-600">${esc(plant.notes)}</p>` : ''}
         </div>
         <div class="flex shrink-0 gap-2">
+          <button type="button" class="btn-ghost text-sm" data-season-recap="${plant.id}" title="Ask the AI to narrate this plant's season from its photos">📖 Season recap</button>
           <button type="button" class="btn-ghost text-sm" data-edit-plant="${plant.id}">Edit</button>
           <button type="button" class="btn-ghost" data-close aria-label="Close">×</button>
         </div>
       </div>
+      <div data-recap class="hidden"></div>
 
       <div class="grid gap-6 lg:grid-cols-5">
         <div class="space-y-6 lg:col-span-3">
@@ -335,12 +337,100 @@
       finally { button.disabled = false; }
     });
 
+    function recapHtml(recap) {
+      const photos = recap.photos || [];
+      const paras = String(recap.narrative || '')
+        .split(/\n\s*\n/)
+        .map((p) => p.trim())
+        .filter(Boolean)
+        .map((p) => `<p class="mb-2 text-sm leading-relaxed text-navy-700">${esc(p)}</p>`)
+        .join('');
+      return `
+        <section class="mb-6 rounded-xl border border-sage-200 bg-sage-50 p-4">
+          <div class="mb-2 flex items-center justify-between gap-2">
+            <h4 class="font-display text-lg font-semibold text-navy-800">📖 Season recap</h4>
+            <button type="button" class="btn-ghost text-xs" data-recap-save title="Save this story as an observation note (asks first)">💾 Save as note</button>
+          </div>
+          ${photos.length ? `<div class="mb-3 flex gap-2 overflow-x-auto pb-1">${photos.map((ph) => `
+            <figure class="w-24 shrink-0">
+              <img src="${esc(ph.file_path)}" class="h-24 w-24 rounded-lg object-cover" alt="" loading="lazy" />
+              <figcaption class="mt-1 text-center text-xs text-navy-400">${ph.date ? esc(fmtDate(ph.date)) : ''}</figcaption>
+            </figure>`).join('')}</div>` : ''}
+          <div>${paras}</div>
+          <p class="mt-2 text-xs text-navy-400">Photos only ever go to your configured AI provider — the same one the chat uses.</p>
+        </section>`;
+    }
+
+    function wireRecapSave(host, recap, plant) {
+      const btn = host.querySelector('[data-recap-save]');
+      if (!btn) return;
+      btn.addEventListener('click', async () => {
+        if (!btn.dataset.armed) {
+          // Confirm-before-save: first tap arms, second tap saves.
+          btn.dataset.armed = '1';
+          btn.textContent = 'Tap again to confirm save';
+          return;
+        }
+        btn.disabled = true;
+        btn.textContent = 'Saving…';
+        try {
+          await api.post('/api/observations', {
+            plant_id: plant.id,
+            plant_name: plant.variety_name,
+            date: today,
+            notes: `📖 Season recap:\n\n${recap.narrative}`,
+            health_scale: 7,
+          });
+          toast('Recap saved as a note 📝', 'ok');
+          btn.outerHTML = '<span class="text-xs text-sage-700">Saved ✓</span>';
+        } catch (error) {
+          toast(`Could not save: ${error.message}`, 'err');
+          btn.disabled = false;
+          btn.textContent = '💾 Save as note';
+          delete btn.dataset.armed;
+        }
+      });
+    }
+
+    async function runSeasonRecap(btn) {
+      const plantId = Number(btn.dataset.seasonRecap);
+      const modal = $('#plant-modal');
+      const host = modal ? modal.querySelector('[data-recap]') : null;
+      if (!host) return;
+      const plant = plants.find((p) => p.id === plantId);
+      btn.disabled = true;
+      const orig = btn.innerHTML;
+      btn.innerHTML = '📖 Reading photos…';
+      host.classList.remove('hidden');
+      host.innerHTML = '<p class="mb-6 text-sm text-navy-400">Gathering this season\u2019s photos and asking the AI to tell the story…</p>';
+      try {
+        const recap = await api.post('/api/ai/season-recap', { plant_id: plantId });
+        if (recap.error) {
+          host.innerHTML = `<p class="mb-6 text-sm text-navy-500">${esc(recap.error)}</p>`;
+          return;
+        }
+        host.innerHTML = recapHtml(recap);
+        wireRecapSave(host, recap, plant || { id: plantId, variety_name: (recap.plant || {}).name || '' });
+        host.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } catch (error) {
+        host.innerHTML = `<p class="mb-6 text-sm text-navy-500">Couldn\u2019t build the recap: ${esc(error.message)}</p>`;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = orig;
+      }
+    }
+
     document.addEventListener('click', async (event) => {
       const editBtn = event.target.closest('[data-edit-plant]');
       if (editBtn) {
         const plant = plants.find((p) => p.id === Number(editBtn.dataset.editPlant));
         closePlantModal();
         if (plant) fillForm(plant);
+        return;
+      }
+      const recapBtn = event.target.closest('[data-season-recap]');
+      if (recapBtn) {
+        await runSeasonRecap(recapBtn);
         return;
       }
       const waterBtn = event.target.closest('[data-water-plant]');
