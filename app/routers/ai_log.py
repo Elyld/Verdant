@@ -248,7 +248,8 @@ def _draft_summary(d: dict) -> str:
              "observe": "observation", "pest": "pest note", "note": "note",
              "seed": "seed packet", "plant_status": "status change",
              "plant_move": "container move",
-             "reminder": "reminder"}.get(d.get("action"), d.get("action"))
+             "reminder": "reminder",
+             "chaos_reroll": "chaos pick reroll"}.get(d.get("action"), d.get("action"))
     bits = [label]
     if d.get("plant_name"):
         bits.append(f"for {d['plant_name']}")
@@ -340,7 +341,17 @@ def chat_endpoint(payload: ChatRequest, session: Session = Depends(get_session))
         for call in calls[:3]:
             name = (call or {}).get("name")
             args = (call or {}).get("args") or {}
-            if name in ai_tools_mod.READ_TOOLS:
+            if name == "chaos_pick" and str(args.get("action") or "").lower() == "reroll":
+                # Reroll replaces the year's pick: draft it for confirmation.
+                d = ai_tools_mod.build_write_draft(session, name, args)
+                if d:
+                    drafts.append(d)
+                    results.append({"tool": name, "result":
+                                    {"draft_created": _draft_summary(d)}})
+                else:
+                    results.append({"tool": name, "result":
+                                    {"error": "couldn't draw a new pick — try again"}})
+            elif name in ai_tools_mod.READ_TOOLS:
                 results.append({"tool": name,
                                 "result": ai_tools_mod.execute_read(session, name, args)})
             elif name in ai_tools_mod.WRITE_TOOL_ACTIONS:

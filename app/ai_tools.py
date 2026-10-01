@@ -228,13 +228,22 @@ TOOLS = [
         "parameters": {"year": "optional season year, e.g. 2025 (defaults to current year)"},
         "required": [],
     },
+    {
+        "name": "chaos_pick",
+        "description": "The year's 🎲 chaos pick — one random experimental plant, "
+                       "always something the gardener has never grown. Use for "
+                       "'what's my chaos pick'. With action='reroll', DRAFT a new "
+                       "pick the gardener confirms before it replaces the current one.",
+        "parameters": {"action": "optional: 'reroll' to draw a new pick (drafted for confirmation)"},
+        "required": [],
+    },
 ]
 
 READ_TOOLS = {"plant_care_history", "search_notes", "seed_stash",
               "planner_overview", "reminders", "season_advice",
               "recall_notes", "variety_performance", "season_recap",
               "upcoming_reminders", "this_week_last_year", "growth_check",
-              "frost_gamble", "true_cost"}
+              "frost_gamble", "true_cost", "chaos_pick"}
 
 WRITE_TOOL_ACTIONS = {
     "log_watering": "water",
@@ -475,6 +484,17 @@ def _t_true_cost(session: Session, args: dict) -> dict:
     return true_cost_mod.true_cost_report(session, year)
 
 
+def _t_chaos_pick(session: Session, args: dict) -> dict:
+    """This year's 🎲 chaos pick (read-only query path)."""
+    import app.chaos as chaos_mod
+
+    pick = chaos_mod.current_pick(session, Date.today().year)
+    return {"year": pick["year"], "variety": pick["variety"],
+            "pitch": pick.get("pitch", ""), "kind": pick.get("kind", ""),
+            "accepted": bool(pick.get("accepted")),
+            "rerolls": len(pick.get("rerolled") or [])}
+
+
 def _t_season_recap(session: Session, args: dict) -> dict:
     """Narrate a plant's season from its photos (read-only)."""
     import app.season_recap as recap_mod
@@ -573,6 +593,7 @@ _READ_EXEC = {
     "growth_check": _t_growth_check,
     "frost_gamble": _t_frost_gamble,
     "true_cost": _t_true_cost,
+    "chaos_pick": _t_chaos_pick,
 }
 
 
@@ -595,6 +616,14 @@ def build_write_draft(session: Session, name: str, args: dict) -> Optional[dict]
     from app.routers.ai_log import _clean_draft
 
     args = args or {}
+    if name == "chaos_pick":
+        # Reroll is a write: draft the exact candidate pick so the gardener
+        # confirms it in chat before it replaces the current one.
+        from app import chaos as chaos_mod
+
+        preview = chaos_mod.preview_reroll(session, Date.today().year)
+        return {"action": "chaos_reroll", "plant_name": preview["variety"],
+                "notes": preview["pitch"]}
     action = WRITE_TOOL_ACTIONS.get(name)
     if not action:
         return None

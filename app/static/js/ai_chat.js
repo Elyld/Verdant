@@ -19,9 +19,10 @@
     seed: { label: 'Seed packet', icon: '🌱' },
     plant_status: { label: 'Plant status', icon: '🔄' },
     plant_move: { label: 'Move plant', icon: '🪴' },
+    chaos_reroll: { label: 'Chaos pick', icon: '🎲' },
   };
   // Draft actions that don't involve picking a plant.
-  const NO_PLANT_NEEDED = new Set(['note', 'seed', 'reminder']);
+  const NO_PLANT_NEEDED = new Set(['note', 'seed', 'reminder', 'chaos_reroll']);
   const STORE_KEY = 'verdant-ai-chat';
   const MAX_STORED = 30;
   const HISTORY_SEND = 10;
@@ -369,6 +370,9 @@
           await api.post('/api/user-reminders', {
             title, due_date: due, notes: d.notes || '',
           });
+        } else if (d.action === 'chaos_reroll') {
+          if (!d.plant_name) { problems.push('Chaos pick: no variety drawn'); continue; }
+          await api.post('/api/chaos-pick/reroll', { variety: d.plant_name });
         } else { // observe / note
           const pname = d.plant_name || (plantsById[d.plant_id] || {}).variety_name;
           if (!pname) { problems.push('Note: pick a plant'); continue; }

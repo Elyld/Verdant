@@ -164,6 +164,15 @@ from your invoices). Tick the varieties you want and they roll up into an
 order list per vendor. No new state to maintain: ratings live on the packets,
 the wishlist is its own list, and invoices are the source of truth.
 
+At the top of the tab sits the **🎲 Chaos pick** card: one random experimental
+plant per year, always something you've never grown (32 curated oddballs —
+cucamelon, salsify, orach, luffa…), drawn from a list that excludes your whole
+growing history and every prior year's pick. One pick per year, stable until
+you hit **Reroll** — no vetoes, but rerolls are unlimited and never repeat
+within the year. **Add to my order** drops it onto the order list as a checked
+wishlist item. The chat knows it too: ask "what's my chaos pick?" or say
+"reroll my chaos pick" (it confirms in chat before replacing the pick).
+
 ![Order assistant](docs/screenshots/order-assistant.png)
 
 ### ✍️ Blog — garden stories
@@ -831,6 +840,14 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.52.0** — **🎲 Chaos garden pick.** One random experimental plant per year,
+  always something you've never grown: 32 curated oddballs (cucamelon, salsify,
+  orach, luffa, crosne…), with the whole growing history and every prior year's
+  pick excluded. New 🎲 Chaos pick card on the Order assistant tab with Reroll
+  (never repeats within the year) and "Add to my order" (lands on the order
+  list as a checked wishlist item); `GET/POST /api/chaos-pick` endpoints; new
+  `chaos_pick` chat tool ("what's my chaos pick?", "reroll my chaos pick" —
+  reroll confirms in chat before replacing). No LLM needed, works offline.
 - **2.51.0** — **🤪 The "wild ideas" batch.** Seven outside-the-box features,
   all advisory, all wired into the chat assistant as new tools:
   **🏖️ Vacation caretaker sheet** — a printable, phone-friendly handoff page
