@@ -394,6 +394,17 @@ your data lives in the `./data` and `./uploads` folders next to the compose
 file, so it survives rebuilds and restarts. Paste the same file into Dockge
 or Portainer and it just works there too.
 
+### 🪟 Windows installer (.msi)
+
+No Docker? Grab `Verdant-<version>-x64.msi` from the latest
+[release](https://github.com/Elyld/Verdant/releases), double-click it, and
+follow the prompts — no Python or Docker needed. It installs Verdant to
+Program Files, adds a Start menu shortcut, and opens your garden journal at
+<http://127.0.0.1:3113>. Your garden data lives in your own
+`%LOCALAPPDATA%\Verdant` folder, so uninstalling never touches it and
+installing a newer `.msi` upgrades cleanly. The installer is built
+automatically with every release (see `installer/`).
+
 ### Reaching Verdant outside your LAN (Cloudflare Tunnel)
 
 Verdant is tunnel-ready: no sign-on inside the app, Cloudflare handles
@@ -678,6 +689,15 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.40.0** — **🪟 Windows installer (.msi).** No Docker? Download
+  `Verdant-<version>-x64.msi` from the release page, double-click, follow the
+  prompts. It installs Verdant to Program Files with a Start menu shortcut —
+  no Python or Docker needed — and opens the journal at
+  <http://127.0.0.1:3113>. Garden data lives in the user's own
+  `%LOCALAPPDATA%\Verdant` folder, and installing a newer `.msi` upgrades
+  cleanly. The installer is built automatically by GitHub Actions with every
+  release (PyInstaller bundle + WiX Toolset, see `installer/`); the build
+  script also runs by hand on any Windows machine with Python and WiX.
 - **2.39.0** — **Local AI: model dropdown + kinder timeouts.** The model name
   field on Settings is now a dropdown listing your Ollama server's installed
   models when it's reachable (falls back to typing when it's not). The

@@ -1,0 +1,69 @@
+# Builds the Windows .msi installer and attaches it to the GitHub release.
+#
+# Runs on every version tag push (the auto-release workflow creates the tag
+# when a version bump lands on main) and can also be started by hand from the
+# Actions tab. Needs a Windows runner: PyInstaller bundles the Python app,
+# WiX Toolset v3 packages the .msi, and the .msi is uploaded to the release
+# next to the Docker image.
+#
+# Manual runs upload the .msi as a workflow artifact instead of touching a
+# release.
+
+name: Windows installer
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-msi:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Install WiX Toolset
+        run: choco install wixtoolset -y --no-progress
+
+      - name: Build the .msi
+        shell: pwsh
+        run: ./installer/build.ps1
+
+      - name: Attach the .msi to the release
+        if: github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $msi = Get-ChildItem installer/dist/Verdant-*-x64.msi | Select-Object -First 1
+          # The auto-release workflow creates the release from the same tag
+          # push; the build takes a while, but wait for it just in case.
+          for ($i = 0; $i -lt 30; $i++) {
+            if (gh release view $tag --repo ${{ github.repository }} 2>$null) { break }
+            Write-Host "Waiting for release $tag ..."
+            Start-Sleep -Seconds 30
+          }
+          gh release upload $tag $msi.FullName --repo ${{ github.repository }} --clobber
+
+      - name: Upload the .msi as an artifact (manual runs)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Verdant-windows-installer
+          path: installer/dist/Verdant-*-x64.msi
