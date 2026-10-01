@@ -104,7 +104,14 @@ globalThis.Verdant = {
 
 const tick = (ms) => new Promise((r) => setTimeout(r, ms));
 const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev || { preventDefault: () => {} }));
-const fakeTarget = (btn) => ({ closest: (sel) => btn });
+// Emulate Element.closest('[data-x-y]') against the fake button's dataset,
+// so clicks on non-chaos buttons don't get swallowed by the chaos branch.
+const fakeTarget = (btn) => ({ closest: (sel) => {
+  const m = /\[data-([a-z-]+)\]/.exec(sel || '');
+  if (!m) return btn;
+  const key = m[1].replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+  return (btn.dataset && btn.dataset[key] !== undefined) ? btn : null;
+}});
 
 (async () => {
   require(path.join(__dirname, '..', 'app/static/js/order_assistant.js'));

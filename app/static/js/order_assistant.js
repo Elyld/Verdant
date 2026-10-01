@@ -98,6 +98,37 @@
       renderSpend();
       renderRatings();
       renderWishlist();
+      renderChaos();
+    }
+
+    let chaos = null;
+
+    function renderChaos() {
+      const body = $('#oa-chaos-body');
+      if (!body) return;
+      if (!chaos) { body.innerHTML = '<p class="text-sm text-navy-500">No chaos pick yet.</p>'; return; }
+      $('#oa-chaos-year').textContent = chaos.year ? `· ${chaos.year}` : '';
+      const accepted = chaos.accepted
+        ? '<span class="rounded-full bg-sage-100 px-2 py-0.5 text-xs font-semibold text-sage-700">✓ In your order</span>'
+        : '';
+      body.innerHTML = `
+        <p class="text-base font-semibold text-navy-800">${esc(chaos.variety)} ${accepted}</p>
+        ${chaos.kind ? `<p class="text-xs text-navy-400">${esc(chaos.kind)}</p>` : ''}
+        <p class="text-sm text-navy-600">${esc(chaos.pitch || '')}</p>
+        <div class="flex flex-wrap gap-2 pt-1">
+          <button type="button" data-oa-chaos="reroll" class="btn-ghost text-sm">🎲 Reroll</button>
+          ${chaos.accepted ? '' : '<button type="button" data-oa-chaos="accept" class="btn-primary text-sm">Add to my order</button>'}
+        </div>
+        <p class="text-xs text-navy-400">One per year, always something new. Reroll as much as you like — no vetoes here.</p>`;
+    }
+
+    async function loadChaos() {
+      try {
+        chaos = await api.get('/api/chaos-pick');
+      } catch (err) {
+        chaos = null;
+      }
+      renderChaos();
     }
 
     async function setRating(packetId, value) {
@@ -113,6 +144,23 @@
     }
 
     host.addEventListener('click', async (event) => {
+      const chaosBtn = event.target.closest('[data-oa-chaos]');
+      if (chaosBtn) {
+        const action = chaosBtn.dataset.oaChaos;
+        try {
+          chaos = action === 'accept'
+            ? await api.post('/api/chaos-pick/accept')
+            : await api.post('/api/chaos-pick/reroll');
+          renderChaos();
+          if (action === 'accept') {
+            await load(); // refresh wishlist so the order list shows it
+            toast(`"${chaos.variety}" added to your order list.`);
+          }
+        } catch (err) {
+          toast(err.message || 'Could not update the chaos pick.', 'error');
+        }
+        return;
+      }
       const rateBtn = event.target.closest('[data-oa-rate]');
       if (rateBtn) {
         await setRating(Number(rateBtn.dataset.packet), rateBtn.dataset.oaRate);
@@ -185,6 +233,7 @@
     $('#seed-tabbtn-assistant').addEventListener('click', load);
 
     load();
+    loadChaos();
     return {};
   }
 
