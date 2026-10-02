@@ -39,6 +39,14 @@ def create_watering_log(
     payload: WateringCreate,
     session: Session = Depends(get_session),
 ) -> WateringLog:
+    """Log a watering.
+
+    A watering must attach to a location: pass ``location_id`` directly, or
+    pass ``plant_id`` for a plant that has one (the plant's location is
+    used). Fails with 422 + field-level detail when neither resolves to a
+    location — the precondition can't be expressed in the flat OpenAPI
+    ``required`` list, so it is documented here instead.
+    """
     location_id = payload.location_id
     if payload.plant_id:
         plant = session.get(Plant, payload.plant_id)
@@ -50,8 +58,14 @@ def create_watering_log(
         raise HTTPException(status_code=404, detail=f"Location {location_id} not found")
     if location_id is None:
         raise HTTPException(
-            status_code=400,
-            detail="Watering needs a location: pass location_id or use a plant that has one.",
+            status_code=422,
+            detail=[
+                {
+                    "loc": ["body", "location_id"],
+                    "msg": "Watering needs a location: pass location_id, or plant_id for a plant that has one.",
+                    "type": "value_error",
+                }
+            ],
         )
 
     log = WateringLog(

@@ -99,10 +99,11 @@ def test_watering_log_with_plant_inherits_location(client, location):
     assert log["plant_id"] == plant["id"]
     assert log["location_id"] == location["id"]
 
-    # plant with no location at all is rejected
+    # plant with no location at all is rejected with 422 + field detail
     loner = make_plant(client, "Lonely Cactus")
     bad = client.post("/api/watering-logs/", json={"plant_id": loner["id"], "date": str(TODAY)})
-    assert bad.status_code == 400
+    assert bad.status_code == 422
+    assert bad.json()["detail"][0]["loc"] == ["body", "location_id"]
 
 
 def test_observation_linked_has_weather_fields(client):
