@@ -142,6 +142,7 @@
     { key: 'fertilizers', href: '/fertilizers', icon: '🧪', label: 'Fertilizers' },
     { key: 'planner', href: '/planner', icon: '🗺️', label: 'Planner' },
     { key: 'tags', href: '/tags', icon: '🏷️', label: 'Tags' },
+    { key: 'agent', href: '/agent', icon: '🌱', label: 'Garden Assistant' },
     { key: 'settings', href: '/settings', icon: '⚙️', label: 'Settings' },
   ];
   const DEFAULT_MOBILE_TABS = ['quick', 'plants', 'calendar', 'planner', 'settings'];

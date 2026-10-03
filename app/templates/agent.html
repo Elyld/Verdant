@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Verdant · Garden Assistant{% endblock %}
+{% block main %}
+<main class="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+{% block content %}
+<section id="agent-root" class="space-y-6">
+  <header class="flex flex-wrap items-baseline justify-between gap-2">
+    <div>
+      <h2 class="font-display text-2xl font-semibold text-navy-800">🌱 Garden Assistant</h2>
+      <p class="text-sm text-navy-500">It remembers now — threads, drafts, and everything you tell it to keep survive a refresh.</p>
+    </div>
+    <p id="agent-status-pill" class="pill hidden"></p>
+  </header>
+
+  <div id="agent-off" class="card hidden">
+    <p class="text-sm text-navy-600">The assistant is off. Turn it on under <a class="underline decoration-sage-400" href="/settings">⚙️ Settings → AI</a> first.</p>
+  </div>
+
+  <div id="agent-grid" class="grid gap-4 md:grid-cols-[15rem_1fr]">
+    <aside class="card flex max-h-[32rem] flex-col gap-2 overflow-hidden p-3">
+      <button type="button" id="agent-new" class="btn-primary w-full px-3 py-2 text-sm">＋ New chat</button>
+      <div id="agent-threads" class="flex-1 space-y-1 overflow-y-auto"></div>
+    </aside>
+
+    <div class="card flex min-h-[24rem] max-h-[42rem] flex-col overflow-hidden p-0">
+      <div class="flex items-center justify-between border-b border-beige-200 px-4 py-2">
+        <p id="agent-thread-title" class="font-display text-base font-semibold text-navy-800">New chat</p>
+        <button type="button" id="agent-delete" class="hidden text-xs text-navy-400 underline hover:text-navy-600">delete thread</button>
+      </div>
+      <div id="agent-msgs" class="flex-1 space-y-3 overflow-y-auto px-4 py-3"></div>
+      <form id="agent-form" class="flex items-center gap-2 border-t border-beige-200 bg-beige-100 px-3 py-2">
+        <input id="agent-input" type="text" class="inp flex-1" placeholder="Ask or tell me what you did…" maxlength="2000" autocomplete="off" />
+        <button id="agent-send" type="submit" class="btn-primary shrink-0 px-3 py-2 text-sm">Send</button>
+      </form>
+    </div>
+  </div>
+
+  <section class="card space-y-4">
+    <div>
+      <h3 class="font-display text-lg font-semibold text-navy-800">About this agent</h3>
+      <p class="text-sm text-navy-500">Three files it reads every turn — who it is, what it's learned, what you've told it to remember. Edit them directly, or just tell it things in chat and confirm the drafts it proposes.</p>
+    </div>
+    <div id="agent-files" class="grid gap-3 md:grid-cols-3"></div>
+  </section>
+</section>
+{% endblock %}
+</main>
+{% endblock %}

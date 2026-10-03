@@ -649,3 +649,54 @@ def apply_patch(obj: SQLModel, payload: Dict[str, Any], exclude: tuple = ()) -> 
         if col.primary_key or key in excluded:
             continue
         setattr(obj, key, _coerce_patch_value(key, value, col))
+
+
+# --------------------------------------------------------------------------- #
+# Agent self — the chat assistant's persistent identity, memory, threads, drafts
+# --------------------------------------------------------------------------- #
+# The assistant is no longer a stateless chatbot: it keeps three text files
+# (persona / operating_notes / memory — its soul.md, agents.md, memory.md),
+# full conversation threads, and every confirm-before-save draft server-side,
+# so a browser refresh never loses progress.
+
+AGENT_FILES = ("persona", "operating_notes", "memory")
+
+
+class AgentFile(SQLModel, table=True):
+    __tablename__ = "agent_files"
+
+    name: str = Field(primary_key=True, max_length=32)  # one of AGENT_FILES
+    content: str = Field(default="")
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class AgentConversation(SQLModel, table=True):
+    __tablename__ = "agent_conversations"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    title: str = Field(default="New chat", max_length=120)
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class AgentMessage(SQLModel, table=True):
+    __tablename__ = "agent_messages"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    conversation_id: int = Field(
+        foreign_key="agent_conversations.id", index=True, ondelete="CASCADE")
+    role: str = Field(max_length=16)  # "user" | "assistant"
+    content: str = Field(default="")
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class AgentDraft(SQLModel, table=True):
+    __tablename__ = "agent_drafts"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    conversation_id: Optional[int] = Field(
+        default=None, foreign_key="agent_conversations.id", index=True,
+        ondelete="CASCADE")
+    kind: str = Field(max_length=32, index=True)  # water | fertilize | … | chaos_reroll | memory_write
+    payload_json: str = Field(default="{}")  # the draft dict the UI confirms
+    created_at: datetime = Field(default_factory=utcnow)

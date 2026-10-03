@@ -29,6 +29,7 @@ def init_db() -> None:
 
     SQLModel.metadata.create_all(engine)
     _apply_column_migrations()
+    _seed_agent_files()
     if DATABASE_URL.startswith("sqlite"):
         with engine.connect() as conn:
             conn.exec_driver_sql("PRAGMA journal_mode=WAL")
@@ -188,3 +189,52 @@ def _relax_not_null_constraints(target_engine, present: set[str]) -> None:
 def get_session() -> Iterator[Session]:
     with Session(engine) as session:
         yield session
+
+
+# --------------------------------------------------------------------------- #
+# Agent files — seed the assistant's three identity files on first boot.
+# --------------------------------------------------------------------------- #
+_AGENT_FILE_DEFAULTS = {
+    "persona": (
+        "You are Verdant, the assistant inside a gardener's personal garden "
+        "journal. Warm, concise, practical — a knowledgeable gardening "
+        "neighbor, never a lecture. Short replies unless asked for detail. "
+        "You read the garden's data through your tools and you never invent "
+        "plant names, dates, or numbers. Anything you want saved — a log "
+        "entry, a reminder, a memory — becomes a draft the gardener "
+        "confirms first. Nothing is ever written silently."
+    ),
+    "operating_notes": (
+        "# Operating notes — lessons you learn about this garden and how "
+        "the gardener likes things done. Add lines here (via confirmed "
+        "drafts) as you learn them; read them every turn.\n"
+    ),
+    "memory": (
+        "# Memory — durable facts: varieties grown, preferences, past "
+        "decisions. Add lines here (via confirmed drafts) when the gardener "
+        "tells you something worth keeping.\n"
+    ),
+}
+
+
+def _seed_agent_files(target_engine=None) -> None:
+    """Insert the three default agent files when they're missing.
+
+    Runs on every init_db() but only writes what's absent, so gardener
+    edits are never clobbered. Also called defensively by the agent API
+    before reading.
+    """
+    from datetime import datetime
+
+    from sqlmodel import Session
+
+    import app.models as models_mod
+
+    target_engine = target_engine or engine
+    with Session(target_engine) as session:
+        for name, content in _AGENT_FILE_DEFAULTS.items():
+            if session.get(models_mod.AgentFile, name) is None:
+                session.add(models_mod.AgentFile(
+                    name=name, content=content,
+                    updated_at=datetime.now()))
+        session.commit()

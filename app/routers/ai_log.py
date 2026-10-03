@@ -128,6 +128,35 @@ def _chat_enabled(session: Session) -> bool:
     return (frost_mod.get_setting(session, "ai_chat_enabled") or "true") == "true"
 
 
+def agent_identity_block(session: Session) -> str:
+    """The assistant's persistent self: persona + operating notes + memory.
+
+    Read into the system prompt every turn so the agent remembers who it
+    is, what it has learned, and what the gardener told it to keep —
+    across chats, refreshes, and restarts.
+    """
+    from app import database as database_mod
+    from app.models import AgentFile
+
+    database_mod._seed_agent_files()  # never clobbers existing content
+    files = {f.name: (f.content or "") for f in session.exec(select(AgentFile)).all()}
+    persona = files.get("persona", "").strip()
+    notes = files.get("operating_notes", "").strip()
+    memory = files.get("memory", "").strip()
+    block = "\n\nYour persistent self (you keep these across chats — read them every turn):"
+    if persona:
+        block += f"\n\nWho you are:\n{persona}"
+    if notes:
+        block += f"\n\nWhat you've learned about this garden:\n{notes}"
+    if memory:
+        block += f"\n\nWhat the gardener asked you to remember:\n{memory}"
+    block += ("\n\nWhen the gardener tells you something worth keeping — a preference, "
+              "a lesson about their garden, a fact for later — call propose_memory_write "
+              "so it becomes a draft they confirm. Never claim you remembered something "
+              "you didn't write down.")
+    return block
+
+
 _CHAT_SYSTEM = """You are Verdant, the friendly assistant inside a gardener's personal garden journal app. \
 You answer questions about THEIR garden and help them log what they do. Be warm, concise, and practical — \
 a knowledgeable gardening neighbor, never a lecture. Keep replies short (a few sentences) unless they ask for detail.
@@ -146,6 +175,9 @@ a reminder without calling set_reminder.
 - When the gardener says a plant died (or asks to mark one Done because it died), play coroner first: \
 ask up to 3 quick questions — what did it look like at the end? sudden or gradual? weather or pests \
 involved? — then call record_autopsy with the answers. Never log a death as a bare status change.
+- When the gardener tells you something worth remembering — a preference, a fact about their garden, \
+a lesson for next season — call propose_memory_write. It drafts the addition for their confirmation; \
+never claim you saved a memory yourself.
 
 Each turn, respond with ONLY one JSON object:
 - To use tools: {{"tool_calls": [{{"name": "<tool>", "args": {{...}}}}]}} (max 3 calls per turn)
@@ -249,7 +281,8 @@ def _draft_summary(d: dict) -> str:
              "seed": "seed packet", "plant_status": "status change",
              "plant_move": "container move",
              "reminder": "reminder",
-             "chaos_reroll": "chaos pick reroll"}.get(d.get("action"), d.get("action"))
+             "chaos_reroll": "chaos pick reroll",
+             "memory_write": "memory note"}.get(d.get("action"), d.get("action"))
     bits = [label]
     if d.get("plant_name"):
         bits.append(f"for {d['plant_name']}")
@@ -274,10 +307,12 @@ def _chat_llm(session: Session, messages: list, images: list[str] | None = None)
 def chat_endpoint(payload: ChatRequest, session: Session = Depends(get_session)) -> dict:
     """Chat with the garden assistant. Runs a small tool-calling loop:
     read tools execute immediately, write tools become drafts the user
-    confirms in the UI. Returns {"reply", "drafts"}."""
-    from app import ai_context as ai_context_mod
-    from app import ai_tools as ai_tools_mod
+    confirms in the UI. Returns {"reply", "drafts"}.
 
+    Stateless legacy contract: the caller passes recent history. The Agent
+    tab (POST /api/agent/conversations/{id}/messages) is the persistent
+    version — it loads history from the DB and saves both sides.
+    """
     message = (payload.message or "").strip()
     if not message:
         raise HTTPException(400, "Say something first.")
@@ -296,6 +331,29 @@ def chat_endpoint(payload: ChatRequest, session: Session = Depends(get_session))
     if not llm_mod.get_config(session)["enabled"]:
         raise HTTPException(400, "AI is off — enable it on the Settings page first.")
 
+    history = [
+        {"role": m.role, "content": (m.content or "")[:1500]}
+        for m in (payload.history or [])
+        if m.role in ("user", "assistant") and (m.content or "").strip()
+    ][-MAX_HISTORY:]
+    result = run_agent_turn(session, message, history, image=image)
+    return {"ok": True, **result}
+
+
+def run_agent_turn(session: Session, message: str,
+                   history: list[dict] | None = None,
+                   image: str | None = None) -> dict:
+    """One assistant turn: build the prompt (garden context + the agent's
+    persistent identity files), run the tool-calling loop, and return
+    {"reply": str, "drafts": [draft dicts]}.
+
+    Shared by the legacy /api/ai/chat endpoint and the persistent Agent
+    tab. Drafts are validated but never applied here — the caller persists
+    them (agent_drafts) and the gardener confirms each one.
+    """
+    from app import ai_context as ai_context_mod
+    from app import ai_tools as ai_tools_mod
+
     context = ai_context_mod.build_context(session)
     today = Date.today()
     zone = frost_mod.get_setting(session, "zone") or "?"
@@ -303,17 +361,18 @@ def chat_endpoint(payload: ChatRequest, session: Session = Depends(get_session))
     system = _CHAT_SYSTEM.format(
         today=today.strftime("%A, %B %d, %Y"), zone=zone,
         tools=tools_json, context=context)
+    system += agent_identity_block(session)
     if image:
         system += ("\n\nThe gardener attached a photo with this message — you CAN see it. "
                    "Use what you see for pest ID, ripeness, or plant health, "
                    "and mention what you observe in your reply.")
 
-    history = [
-        {"role": m.role, "content": (m.content or "")[:1500]}
-        for m in (payload.history or [])
-        if m.role in ("user", "assistant") and (m.content or "").strip()
+    clean_history = [
+        {"role": h["role"], "content": (h.get("content") or "")[:1500]}
+        for h in (history or [])
+        if h.get("role") in ("user", "assistant") and (h.get("content") or "").strip()
     ][-MAX_HISTORY:]
-    messages = [{"role": "system", "content": system}, *history,
+    messages = [{"role": "system", "content": system}, *clean_history,
                 {"role": "user", "content": message}]
     images = [image] if image else None
 
@@ -341,7 +400,20 @@ def chat_endpoint(payload: ChatRequest, session: Session = Depends(get_session))
         for call in calls[:3]:
             name = (call or {}).get("name")
             args = (call or {}).get("args") or {}
-            if name == "chaos_pick" and str(args.get("action") or "").lower() == "reroll":
+            if name == "propose_memory_write":
+                # Memory additions are writes too: drafted for confirmation,
+                # never applied silently.
+                d = ai_tools_mod.build_write_draft(session, name, args)
+                if d:
+                    drafts.append(d)
+                    results.append({"tool": name, "result":
+                                    {"draft_created": _draft_summary(d)}})
+                else:
+                    results.append({"tool": name, "result":
+                                    {"error": "couldn't build that memory draft — "
+                                              "say which file (memory, operating_notes, "
+                                              "or persona) and what to add"}})
+            elif name == "chaos_pick" and str(args.get("action") or "").lower() == "reroll":
                 # Reroll replaces the year's pick: draft it for confirmation.
                 d = ai_tools_mod.build_write_draft(session, name, args)
                 if d:
@@ -385,9 +457,9 @@ def chat_endpoint(payload: ChatRequest, session: Session = Depends(get_session))
         stmt = select(Plant).where(Plant.status == "Growing")
         by_name = {p.variety_name.lower(): p.id for p in session.exec(stmt).all()}
         for d in drafts:
-            if d["plant_name"] and not d["plant_id"]:
+            if d.get("plant_name") and not d.get("plant_id"):
                 d["plant_id"] = by_name.get(d["plant_name"].lower())
-    return {"ok": True, "reply": reply, "drafts": drafts}
+    return {"reply": reply, "drafts": drafts}
 
 
 @router.get("/status")

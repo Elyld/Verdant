@@ -349,8 +349,19 @@ Save. No model needed, so it works even when the local AI is offline.
 
 ![AI settings — OpenRouter provider](docs/screenshots/ai-openrouter.png)
 
-**🌱 Garden assistant.** A floating chat button lives on every page (toggle it
-on the Settings page) — an always-ready agent that knows your garden: what's
+**🌱 Garden assistant.** The **Garden Assistant tab** (nav → Assistant) is a
+proper home for the chat agent — no more floating bubble. It keeps full
+**conversation threads** on the server, so a browser refresh never loses
+your place, and every confirm-before-save **draft** persists too: drafts
+waiting on you sit in a “⏳ Waiting on you” strip until you confirm or
+discard each one. The agent also has a **persistent self** — three files it
+reads into its prompt every turn: **Persona** (who it is, how it talks),
+**Operating notes** (lessons it learns about your garden), and **Memory**
+(durable facts you've told it to keep). Tell it something worth keeping
+and it proposes the addition through the new `propose_memory_write` tool —
+still confirm-before-save, never silent. You can read and edit all three
+files directly in the “About this agent” section on the tab.
+An always-ready agent that knows your garden: what's
 growing and where, per-plant care history (last watered / fed / harvested),
 what's due, what's ready to harvest, recent activity, and today's weather.
 It can look things up on its own (care history, notes, seed stash, planner,
@@ -375,16 +386,15 @@ milestones, health, harvest moments. There's also a 📖 Season recap button
 on each plant's detail card that shows the story with its photo timeline;
 “Save as note” files it as an observation (it asks you to confirm first).
 Photos only ever go to your already-configured AI provider — the same one
-the chat uses. The conversation
-survives page navigation within the tab. It runs on whichever AI provider
+the chat uses. Threads and drafts live server-side, so the
+conversation survives a browser refresh — not just page navigation within
+the tab. It runs on whichever AI provider
 you've picked (Ollama or OpenRouter); the OpenRouter model picker lists every
 available model with free ones marked.
 
 ![OpenRouter model picker](docs/screenshots/ai-openrouter-models.png)
 
-![Garden assistant chat](docs/screenshots/ai-chat-drafts.png)
-
-![Garden assistant drafting a seed packet](docs/screenshots/ai-chat-seed-draft.png)
+![Garden Assistant tab — threads, drafts, and the agent's memory](docs/screenshots/agent-tab.png)
 
 ![Quick Log](docs/screenshots/quick.png)
 
@@ -840,6 +850,20 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.53.0** — **🌱 The assistant grows a memory.** The chat agent is now a
+  persistent agent instead of a stateless chatbot: it keeps three files it
+  reads every turn — **Persona** (who it is), **Operating notes** (lessons
+  about your garden), and **Memory** (durable facts) — editable on the new
+  tab or via the `propose_memory_write` chat tool (confirm-before-save, as
+  always; the agent can never write silently). Conversations are full
+  **threads** stored server-side, and every draft persists until you confirm
+  or discard it — a browser refresh loses nothing. The floating 🌱 chat
+  bubble is gone, replaced by a proper **Garden Assistant tab** (nav →
+  Assistant) with a thread list, a "⏳ Waiting on you" draft strip, and an
+  "About this agent" section. New `agent_files`, `agent_conversations`,
+  `agent_messages`, and `agent_drafts` tables (auto-migrated) plus
+  `GET/PUT /api/agent/files` and the `/api/agent/conversations|drafts`
+  endpoints.
 - **2.52.0** — **🎲 Chaos garden pick.** One random experimental plant per year,
   always something you've never grown: 32 curated oddballs (cucamelon, salsify,
   orach, luffa, crosne…), with the whole growing history and every prior year's
