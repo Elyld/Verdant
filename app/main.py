@@ -21,7 +21,7 @@ from app.database import UPLOAD_DIR, init_db
 from app.models import GardenTag, utcnow
 from app.security import RateLimitMiddleware, SecurityHeadersMiddleware, docs_enabled
 from app.routers import albums, backup, caretaker, chaos, containers, digest, expenses, fertilizations, immich, import_csv, invoices, observations, order_assistant, pests, posts, seed_packets, settings as settings_router, stats, tags, user_reminders, weather, wishlist, yearbook
-from app.routers import ai_log, crops, today
+from app.routers import agent, ai_log, crops, today
 from app.routers import pantry as pantry_router
 from app.routers import succession as succession_router
 from app.routers import pest_guide as pest_guide_router
@@ -160,6 +160,7 @@ app.include_router(yearbook.router)
 app.include_router(containers.router)
 app.include_router(weather.router)
 app.include_router(ai_log.router)
+app.include_router(agent.router)
 app.include_router(pest_guide_router.router)
 app.include_router(crops.router)
 app.include_router(today.router)
@@ -249,6 +250,12 @@ def import_page(request: Request) -> HTMLResponse:
 def slideshow_page(request: Request) -> HTMLResponse:
     """Full-screen photo slideshow (?album=<id> to start with an album)."""
     return templates.TemplateResponse(request, "slideshow.html", {"__version__": __version__})
+
+
+@app.get("/agent", include_in_schema=False)
+def agent_page(request: Request) -> HTMLResponse:
+    """The garden assistant: persistent threads, drafts, and its memory."""
+    return templates.TemplateResponse(request, "agent.html", {"__version__": __version__})
 
 
 @app.get("/quick", include_in_schema=False)

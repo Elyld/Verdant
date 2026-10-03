@@ -237,6 +237,19 @@ TOOLS = [
         "parameters": {"action": "optional: 'reroll' to draw a new pick (drafted for confirmation)"},
         "required": [],
     },
+    {
+        "name": "propose_memory_write",
+        "description": "Propose adding a line to one of your persistent files: "
+                       "'memory' (a durable fact — variety, preference, past decision), "
+                       "'operating_notes' (a lesson about this garden or how the gardener "
+                       "likes things done), or 'persona' (how you talk). "
+                       "Creates a DRAFT the gardener confirms before anything is saved — "
+                       "never writes silently. Use when the gardener tells you something "
+                       "worth keeping beyond this chat.",
+        "parameters": {"file": "which file: memory, operating_notes, or persona",
+                       "addition": "the exact line(s) to append"},
+        "required": ["file", "addition"],
+    },
 ]
 
 READ_TOOLS = {"plant_care_history", "search_notes", "seed_stash",
@@ -616,6 +629,8 @@ def build_write_draft(session: Session, name: str, args: dict) -> Optional[dict]
     from app.routers.ai_log import _clean_draft
 
     args = args or {}
+    if name == "propose_memory_write":
+        return build_memory_write_draft(args)
     if name == "chaos_pick":
         # Reroll is a write: draft the exact candidate pick so the gardener
         # confirms it in chat before it replaces the current one.
@@ -737,6 +752,29 @@ def build_write_draft(session: Session, name: str, args: dict) -> Optional[dict]
                 "reminder_title": title[:200], "reminder_due": due}
 
     return None
+
+
+def build_memory_write_draft(args: dict) -> Optional[dict]:
+    """Validate a propose_memory_write call into a memory_write draft.
+
+    Returns a draft dict (or None when invalid). The draft is confirmed in
+    the UI and applied by the agent API — the file itself is never touched
+    here, so the tool can never write silently.
+    """
+    from app.models import AGENT_FILES
+
+    args = args or {}
+    which = (args.get("file") or "").strip().lower()
+    addition = (args.get("addition") or "").strip()
+    if which not in AGENT_FILES or not addition:
+        return None
+    if len(addition) > 2000:
+        addition = addition[:2000]
+    return {"action": "memory_write", "plant_id": None, "plant_name": None,
+            "amount": None, "unit": None,
+            "detail": f"→ {which}",
+            "notes": addition,
+            "memory_file": which, "memory_addition": addition}
 
 
 def __plant_names(session: Session):
