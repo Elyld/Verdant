@@ -84,6 +84,22 @@
       $('#set-digest-ai-briefing').checked = !!s.digest_ai_briefing;
       $('#set-webhook').value = s.discord_webhook_url || '';
       $('#set-digest-time').value = s.digest_time || '08:00';
+      // Last-sent status for the morning digest (server-recorded, ISO UTC).
+      const lastWrap = $('#digest-last-sent-wrap');
+      if (lastWrap && s.digest_enabled) {
+        lastWrap.hidden = false;
+        const el = $('#digest-last-sent');
+        if (s.digest_last_sent) {
+          const d = new Date(s.digest_last_sent);
+          el.textContent = isNaN(d) ? s.digest_last_sent : d.toLocaleString();
+        } else {
+          el.textContent = 'never';
+        }
+        const errEl = $('#digest-last-error');
+        if (errEl) errEl.textContent = s.digest_last_error ? ` — last error: ${s.digest_last_error}` : '';
+      } else if (lastWrap) {
+        lastWrap.hidden = true;
+      }
       // Blank stored timezone = browser's zone (what the scheduler will use).
       $('#set-digest-timezone').value = s.digest_timezone
         || Intl.DateTimeFormat().resolvedOptions().timeZone || '';
@@ -253,6 +269,18 @@
       try {
         await api.post('/api/digest/send');
         toast('Test digest sent — check Discord 💬', 'ok');
+        // Refresh the "last sent" line with the fresh server timestamp.
+        try {
+          const s = await api.get('/api/settings');
+          const el = $('#digest-last-sent');
+          if (el && s.digest_last_sent) {
+            const d = new Date(s.digest_last_sent);
+            el.textContent = isNaN(d) ? s.digest_last_sent : d.toLocaleString();
+            $('#digest-last-sent-wrap').hidden = false;
+            const errEl = $('#digest-last-error');
+            if (errEl) errEl.textContent = '';
+          }
+        } catch { /* status line is best-effort */ }
       } catch (error) {
         toast(`Could not send: ${error.message}`, 'error');
       }

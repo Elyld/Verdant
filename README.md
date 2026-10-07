@@ -208,7 +208,8 @@ print it for the fridge.
 ### 🕰️ This week last year — the garden's memory
 The morning digest now closes with a **🕰️ This week last year** section: what
 you were doing this exact week last year — journal notes, harvests, and the
-photos you took. The chat can answer it too ("what did I do this time last
+photos you took (attached as real images in the Discord message, not
+filenames). The chat can answer it too ("what did I do this time last
 year?") via the `this_week_last_year` tool.
 
 ### 🌱 Growth stall detector — "is it still growing?"
@@ -489,12 +490,27 @@ timezone you pick there, defaulting to your browser's zone), or set
 `DIGEST_ENABLED=true` and `DISCORD_WEBHOOK_URL` in the environment.
 Optional: turn on "Let the AI write a short morning briefing" in the same card
 (`DIGEST_AI_BRIEFING=true`) to have your configured AI provider write a warm
-2–4 sentence briefing on top of the data sections — it falls back to data-only
+1–2 sentence briefing on top of the data sections — it falls back to data-only
 if the provider is unreachable. The digest also flags the first fall frost
 when it's within two weeks, and includes a 🔔 Reminders section for any
 dated reminders you set via the chat assistant (due/overdue first). New in
 2.51.0: a 🎲 **Frost-night gamble** block (one bold call when frost threatens
 tonight) and a closing 🕰️ **This week last year** section.
+
+Digest reliability notes:
+- **Photos, not filenames**: the "this week last year" photos are attached as
+  real image files (up to 4; oversized phone photos are downscaled, missing
+  files are skipped quietly).
+- **Tidy by design**: near-duplicate reminders are collapsed, reminders about
+  the same plant are grouped under one heading, and text is never cut
+  mid-word. If a busy day would exceed Discord's 2000-character limit, the
+  least-urgent sections (AI briefing, then time-travel) are dropped instead of
+  failing the send.
+- **Skips are handled**: the webhook send retries once on transient failures;
+  a failure in one section degrades to a partial digest rather than no digest;
+  and if the app restarts past send time with no successful send recorded that
+  day, a catch-up digest goes out immediately. The Settings page shows "Last
+  digest sent" (and the last error, if any) next to the digest controls.
 
 ### 🔌 Immich integration
 Browse albums on your own Immich server and import their photos straight into
