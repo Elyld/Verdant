@@ -56,7 +56,7 @@ global.document = {
 global.confirm = () => true;
 
 const calls = { post: [], patch: [], del: [] };
-const OLD = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10); // 30 days ago
+const OLD = '2026-08-27'; // fixed: 30 days before the mocked todayLocal ('2026-09-26') — must stay >= 21 days back for the stale-nudge check. (Was Date.now()-relative and rotted on 2026-10-06.)
 global.fetch = async (url, options) => {
   const method = (options && options.method) || 'GET';
   const body = options && options.body && typeof options.body === 'string' ? JSON.parse(options.body) : null;
