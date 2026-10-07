@@ -275,6 +275,8 @@ def current_settings(session: Session) -> dict:
         "digest_time": digest.time,
         "digest_timezone": digest.timezone,
         "digest_ai_briefing": digest.ai_briefing,
+        "digest_last_sent": frost_mod.get_setting(session, "digest_last_sent"),
+        "digest_last_error": frost_mod.get_setting(session, "digest_last_error"),
         "frost_preview": {
             "first": _frost_preview(session, "first"),
             "last": _frost_preview(session, "last"),

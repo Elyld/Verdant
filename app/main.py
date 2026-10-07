@@ -109,7 +109,61 @@ def _maybe_start_digest_scheduler():
     )
     scheduler.start()
     log.info("Morning digest scheduled daily at %02d:%02d (%s).", hour, minute, tz_name)
+    _catch_up_missed_digest(cfg, tz, hour, minute)
     return scheduler
+
+
+def _catch_up_missed_digest(cfg, tz, hour: int, minute: int):
+    """Send immediately when today's digest was missed.
+
+    If the container was down (or restarting) at send time and comes back
+    more than misfire_grace_time later, APScheduler drops that day's run —
+    the digest would silently skip a day. Instead, when startup finds the
+    digest enabled, today's send time already past, and no successful send
+    recorded today, fire one catch-up digest now (in a background thread so
+    startup isn't blocked).
+    """
+    import logging
+    import threading
+    from datetime import datetime
+
+    from sqlmodel import Session
+
+    from app import frost as frost_mod
+    from app.database import engine
+    from app.routers.digest import effective_digest_config, run_digest
+
+    log = logging.getLogger("verdant.digest")
+    try:
+        with Session(engine) as session:
+            last_sent = frost_mod.get_setting(session, "digest_last_sent")
+        now = datetime.now(tz)
+        sent_today = False
+        if last_sent:
+            try:
+                sent_today = datetime.fromisoformat(last_sent).astimezone(tz).date() == now.date()
+            except ValueError:
+                pass
+        if sent_today:
+            return
+        if (now.hour, now.minute) < (hour, minute):
+            return  # today's send time hasn't come yet; the scheduler has it
+        log.info("Today's digest send time passed with no successful send; "
+                 "sending a catch-up digest now.")
+
+        def _run():
+            try:
+                with Session(engine) as session:
+                    live = effective_digest_config(session)
+                    if not live.enabled or not live.webhook_url:
+                        return
+                    run_digest(session, live.webhook_url)
+            except Exception:
+                log.exception("Catch-up digest failed.")
+
+        threading.Thread(target=_run, daemon=True, name="digest-catchup").start()
+    except Exception:
+        log.exception("Digest catch-up check failed.")
 
 
 app = FastAPI(
