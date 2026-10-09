@@ -703,3 +703,24 @@ class AgentDraft(SQLModel, table=True):
     kind: str = Field(max_length=32, index=True)  # water | fertilize | … | chaos_reroll | memory_write
     payload_json: str = Field(default="{}")  # the draft dict the UI confirms
     created_at: datetime = Field(default_factory=utcnow)
+
+
+# --------------------------------------------------------------------------- #
+# Books integrity
+# --------------------------------------------------------------------------- #
+class BookCheck(SQLModel, table=True):
+    """Latest email-ledger reconciliation report (posted by the host reconciler).
+
+    The structural audit of Verdant's own records runs live on every request;
+    this table only stores the email-vs-books comparison, which needs the host
+    mail ledger. The Costs page reads both and shows one integrity badge.
+    """
+
+    __tablename__ = "book_checks"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    checked_at: str = Field(default="", index=True)  # ISO timestamp
+    source: str = Field(default="host")  # host | internal
+    level: str = Field(default="ok")  # ok | warn | error
+    summary_json: str = Field(default="{}")
+    findings_json: str = Field(default="[]")

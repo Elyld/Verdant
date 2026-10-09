@@ -72,6 +72,39 @@
     return true;
   }
 
+  // ---- Books integrity badge ----
+  // Structural checks run live in the app; the email-vs-books comparison is
+  // posted by the host reconciler. One badge, worst-severity colour.
+  async function renderBooksBadge() {
+    const host = document.getElementById('books-badge');
+    if (!host) return;
+    let r;
+    try { r = await api.get('/api/books/check'); } catch { return; }
+    const findings = [...(r.structural || []), ...(r.ledger || [])];
+    if (!findings.length) {
+      host.className = 'card flex items-center gap-2 text-sm text-sage-800';
+      host.innerHTML = '✅ Books reconcile — invoices, expenses and email all agree.';
+      return;
+    }
+    const c = r.counts || {};
+    const level = r.level || 'warn';
+    const tone = level === 'error' ? 'border-red-300 bg-red-50 text-red-800'
+               : level === 'unknown' ? 'border-beige-300 bg-beige-50 text-navy-700'
+               : 'border-amber-300 bg-amber-50 text-amber-900';
+    const head = level === 'error' ? '❗' : level === 'unknown' ? '❔' : '⚠️';
+    const sevIcon = (s) => (s === 'error' ? '❗' : s === 'warn' ? '⚠️' : '·');
+    const rows = findings.map((f) => {
+      const fix = f.invoice_id ? ` <a href="/costs" class="underline">review invoice #${f.invoice_id}</a>`
+                : f.expense_id ? ` <a href="/costs" class="underline">review expense #${f.expense_id}</a>` : '';
+      return `<li class="flex gap-2 py-0.5">${sevIcon(f.severity)}<span>${esc(f.message)}${fix}</span></li>`;
+    }).join('');
+    const stamp = r.ledger_checked_at ? esc(r.ledger_checked_at) : 'never';
+    host.className = `card ${tone}`;
+    host.innerHTML = `<details><summary class="cursor-pointer font-semibold">${head} Books check: ${c.error || 0} error(s), ${c.warn || 0} warning(s), ${c.info || 0} note(s)</summary>
+      <ul class="mt-2 text-sm">${rows}</ul>
+      <p class="mt-2 text-xs opacity-70">Structural checks run live; the email comparison last ran ${stamp}.</p></details>`;
+  }
+
   function initCosts() {
     const form = $('#cost-form');
     if (!form) return;
@@ -195,6 +228,7 @@
     });
 
     load().catch((error) => toast(`Could not load expenses: ${error.message}`, 'err'));
+    renderBooksBadge();
     initInvoices();
   }
 

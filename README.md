@@ -866,6 +866,18 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.55.0** — **✅ Books integrity check.** The Costs page now carries an
+  integrity badge that answers "do these numbers actually add up?". Two layers,
+  one report (`GET /api/books/check`): a **structural audit** that runs live
+  against Verdant's own records — invoices with no backing expense, invoice
+  totals that disagree with their linked expense, $0 expenses, unknown
+  categories, invoices that came from email but lost their link, and duplicate
+  order numbers — plus an **email-vs-books reconciliation** posted by the host
+  mail reconciler (`POST /api/books/ledger`, stored in the new `book_checks`
+  table). The badge colour is the worst severity present (error/warn/info) and
+  expands to a per-finding list, each linking to the invoice or expense to fix.
+  New `app/books_audit.py`, new `app/routers/books.py`.
+
 - **2.54.0** — **🌱 Invoices grow the seed stash.** An invoice's line items can
   now be turned into seed packets in one click: on the Costs page, **➕ seed
   packets from items** reads the invoice's items, normalizes each variety

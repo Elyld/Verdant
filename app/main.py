@@ -21,7 +21,7 @@ from app.database import UPLOAD_DIR, init_db
 from app.models import GardenTag, utcnow
 from app.security import RateLimitMiddleware, SecurityHeadersMiddleware, docs_enabled
 from app.routers import albums, backup, caretaker, chaos, containers, digest, expenses, fertilizations, immich, import_csv, invoices, observations, order_assistant, pests, posts, seed_packets, settings as settings_router, stats, tags, user_reminders, weather, wishlist, yearbook
-from app.routers import agent, ai_log, crops, today
+from app.routers import agent, ai_log, books, crops, today
 from app.routers import pantry as pantry_router
 from app.routers import succession as succession_router
 from app.routers import pest_guide as pest_guide_router
@@ -203,6 +203,7 @@ app.include_router(digest.router)
 app.include_router(import_csv.router)
 app.include_router(expenses.router)
 app.include_router(invoices.router)
+app.include_router(books.router)
 app.include_router(pests.router)
 app.include_router(settings_router.router)
 app.include_router(seed_packets.router)
