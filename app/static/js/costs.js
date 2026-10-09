@@ -76,7 +76,7 @@
   // Structural checks run live in the app; the email-vs-books comparison is
   // posted by the host reconciler. One badge, worst-severity colour.
   async function renderBooksBadge() {
-    const host = document.getElementById('books-badge');
+    const host = $('#books-badge');
     if (!host) return;
     let r;
     try { r = await api.get('/api/books/check'); } catch { return; }

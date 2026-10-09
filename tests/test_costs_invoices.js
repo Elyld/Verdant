@@ -53,8 +53,9 @@ const namedAll = {};
 ['cost-form', 'cost-form-title', 'cost-submit', 'cost-cancel', 'cost-date', 'cost-category', 'cost-desc', 'cost-amount', 'cost-notes',
  'cost-plant', 'costs-rows', 'costs-empty', 'costs-total', 'costs-by-cat',
  'invoice-form', 'inv-vendor', 'inv-date', 'inv-order', 'inv-total', 'inv-items',
- 'inv-expense', 'inv-notes', 'inv-pdf', 'invoices-rows', 'invoices-empty',
- 'toasts'].forEach((id) => {
+  'inv-expense', 'inv-notes', 'inv-pdf', 'invoices-rows', 'invoices-empty',
+  'books-badge',
+  'toasts'].forEach((id) => {
   named[`#${id}`] = makeEl();
 });
 named['#costs-empty'].classList.add('hidden');
@@ -116,6 +117,14 @@ global.fetch = async (url, options = {}) => {
   if (url === '/api/invoices/') body = invoices;
   else if (url === '/api/expenses/') body = expenses;
   else if (url === '/api/seed-packets/') body = packets;
+  else if (url === '/api/books/check') body = {
+    level: 'error',
+    counts: { error: 1, warn: 0, info: 0 },
+    structural: [{ severity: 'error', code: 'INVOICE_EXPENSE_MISMATCH', message: 'Invoice 9 total mismatch', invoice_id: 9 }],
+    ledger: [],
+    ledger_summary: {},
+    ledger_checked_at: '2026-10-09T20:00:00Z',
+  };
   else if ((options.method === 'POST' || options.method === 'DELETE')
            && /^\/api\/(invoices|expenses)\/\d+\/packets(\/\d+)?$/.test(url)) {
     body = options.method === 'POST'
@@ -299,6 +308,14 @@ const tick = (ms) => new Promise((r) => setTimeout(r, ms));
     deriveCalls.length === 2
     && !String(deriveCalls[0].body).includes('"apply":true')
     && String(deriveCalls[1].body).includes('"apply":true'));
+
+  // 15. Books integrity badge renders from /api/books/check.
+  const badge = named['#books-badge'].innerHTML;
+  check('books badge fetched the check endpoint',
+    fetchCalls.some((c) => c.url === '/api/books/check'));
+  check('books badge shows an error summary', badge.includes('Books check') && badge.includes('1 error'));
+  check('books badge lists the finding with a fix link',
+    badge.includes('Invoice 9 total mismatch') && badge.includes('review invoice #9'));
 
   process.exit(failures ? 1 : 0);
 })();
