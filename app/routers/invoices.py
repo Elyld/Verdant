@@ -64,6 +64,7 @@ def create_invoice(
         total=payload.total,
         items_summary=payload.items_summary,
         notes=payload.notes,
+        email_link=payload.email_link,
         source=payload.source,
         expense_id=payload.expense_id,
     )

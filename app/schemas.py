@@ -452,6 +452,7 @@ class InvoiceCreate(BaseModel):
     total: float = Field(default=0.0, ge=0)
     items_summary: str = ""
     notes: str = ""
+    email_link: Optional[str] = Field(default=None, max_length=500)
     source: str = Field(default="manual", max_length=20)
     expense_id: Optional[int] = None
 
@@ -467,6 +468,7 @@ class InvoiceRead(BaseModel):
     items_summary: str = ""
     pdf_path: Optional[str] = None
     notes: str = ""
+    email_link: Optional[str] = None
     source: str = "manual"
     expense_id: Optional[int] = None
     expense_auto_created: bool = False

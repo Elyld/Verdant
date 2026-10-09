@@ -241,7 +241,7 @@
           <td class="py-2 pr-3">${esc(inv.items_summary || '—')}${inv.notes ? `<span class="block text-xs text-navy-400">${esc(inv.notes)}</span>` : ''}${packetBlock(inv)}</td>
           <td class="py-2 pr-3 text-right font-semibold">${money(inv.total)}</td>
           <td class="py-2 text-right whitespace-nowrap">
-            ${inv.pdf_path ? `<a href="${esc(inv.pdf_path)}" target="_blank" rel="noopener" class="text-xs text-sage-700 underline">PDF</a> ` : ''}
+            ${inv.email_link ? `<a href="${esc(inv.email_link)}" target="_blank" rel="noopener" class="text-xs text-sage-700 underline" title="Open the source email">✉️ email</a> ` : ''}${inv.pdf_path ? `<a href="${esc(inv.pdf_path)}" target="_blank" rel="noopener" class="text-xs text-sage-700 underline">PDF</a> ` : ''}
             <button type="button" data-del-inv="${inv.id}" class="text-xs text-red-700 underline">delete</button>
           </td>
         </tr>`).join('');
@@ -257,6 +257,7 @@
           total: Number($('#inv-total').value) || 0,
           items_summary: $('#inv-items').value.trim(),
           notes: $('#inv-notes').value.trim(),
+          email_link: $('#inv-email') && $('#inv-email').value.trim() ? $('#inv-email').value.trim() : null,
           expense_id: $('#inv-expense').value ? Number($('#inv-expense').value) : null,
         });
         const pdfInput = $('#inv-pdf');
@@ -266,7 +267,7 @@
           await api.upload(`/api/invoices/${created.id}/pdf`, data);
         }
         toast('Invoice saved 🧾', 'ok');
-        ['#inv-vendor', '#inv-order', '#inv-total', '#inv-items', '#inv-notes'].forEach((s) => { $(s).value = ''; });
+        ['#inv-vendor', '#inv-order', '#inv-total', '#inv-items', '#inv-notes', '#inv-email'].forEach((s) => { if ($(s)) $(s).value = ''; });
         $('#inv-expense').value = '';
         pdfInput.value = '';
         load();

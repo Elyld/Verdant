@@ -323,6 +323,9 @@ class Invoice(SQLModel, table=True):
     items_summary: Optional[str] = None  # short human-readable list of what was ordered
     pdf_path: Optional[str] = None  # /uploads/invoices/<id>/xxxx.pdf
     notes: Optional[str] = None
+    # Deep link back to the source email this invoice came from (e.g. a Gmail
+    # permalink). Set when source="gmail"; the Costs page renders it as a link.
+    email_link: Optional[str] = None
     source: str = Field(default="manual")  # manual | csv | gmail
     expense_id: Optional[int] = Field(default=None, foreign_key="expenses.id", index=True)
     # True when the linked expense was auto-created from this invoice (see
