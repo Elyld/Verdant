@@ -238,7 +238,7 @@
           <td class="py-2 pr-3 whitespace-nowrap">${fmtDate(inv.order_date)}</td>
           <td class="py-2 pr-3 font-semibold">${esc(inv.vendor || '—')}</td>
           <td class="py-2 pr-3">${esc(inv.order_number || '—')}${inv.expense_id && expNames.get(inv.expense_id) ? `<span class="block text-xs text-sage-700">💸 ${esc(expNames.get(inv.expense_id))}</span>` : (inv.expense_id ? '' : `<button type="button" data-create-expense="${inv.id}" class="block text-xs text-sage-700 underline">➕ Create expense</button>`)}</td>
-          <td class="py-2 pr-3">${esc(inv.items_summary || '—')}${inv.notes ? `<span class="block text-xs text-navy-400">${esc(inv.notes)}</span>` : ''}${packetBlock(inv)}</td>
+          <td class="py-2 pr-3">${esc(inv.items_summary || '—')}${inv.notes ? `<span class="block text-xs text-navy-400">${esc(inv.notes)}</span>` : ''}${packetBlock(inv)}${inv.items_summary ? `<button type="button" data-derive="${inv.id}" class="mt-1 block text-xs text-sage-700 underline" title="Turn these line items into seed packets (new ones are created, existing ones linked)">➕ seed packets from items</button>` : ''}</td>
           <td class="py-2 pr-3 text-right font-semibold">${money(inv.total)}</td>
           <td class="py-2 text-right whitespace-nowrap">
             ${inv.email_link ? `<a href="${esc(inv.email_link)}" target="_blank" rel="noopener" class="text-xs text-sage-700 underline" title="Open the source email">✉️ email</a> ` : ''}${inv.pdf_path ? `<a href="${esc(inv.pdf_path)}" target="_blank" rel="noopener" class="text-xs text-sage-700 underline">PDF</a> ` : ''}
@@ -283,6 +283,21 @@
           toast('Expense created 💸', 'ok');
           load();
         } catch (error) { toast(`Could not create expense: ${error.message}`, 'err'); }
+        return;
+      }
+      const deriveBtn = event.target.closest('[data-derive]');
+      if (deriveBtn) {
+        const id = deriveBtn.dataset.derive;
+        try {
+          const preview = await api.post(`/api/invoices/${id}/derive-packets`, {});
+          const plan = preview.plan || [];
+          if (!plan.length) { toast('No seed-like line items found on this invoice.', 'err'); return; }
+          const lines = plan.map((p) => `${p.action === 'create' ? 'new ' : 'link'}  ${p.variety_name}${p.category ? ` (${p.category})` : ''}`).join('\n');
+          if (!window.confirm(`Seed packets from this invoice:\n\n${lines}\n\nCreate the new ones and link all of them?`)) return;
+          const res = await api.post(`/api/invoices/${id}/derive-packets`, { apply: true });
+          toast(`Linked ${plan.length} packet(s), created ${res.created.length} 🌱`, 'ok');
+          load();
+        } catch (error) { toast(`Could not derive packets: ${error.message}`, 'err'); }
         return;
       }
       const btn = event.target.closest('[data-del-inv]');

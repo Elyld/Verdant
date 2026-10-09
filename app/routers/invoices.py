@@ -1,7 +1,7 @@
 """API router for purchase invoices (seed & garden supplier receipts)."""
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
 from sqlmodel import select
 
@@ -12,8 +12,9 @@ from app.invoice_expenses import (
     sync_auto_expense,
 )
 from app.models import Expense, Invoice, InvoiceSeedPacket, SeedPacket, apply_patch
-from app.packet_match import suggest_packets
+from app.packet_match import best_packet_match, suggest_packets
 from app.schemas import InvoiceCreate, InvoiceRead
+from app.seed_extract import candidates_from_invoice
 from app.storage import delete_stored, save_pdf_upload
 
 router = APIRouter(prefix="/api/invoices", tags=["invoices"])
@@ -262,3 +263,83 @@ def invoice_packet_suggestions(
     )
     packets = session.exec(select(SeedPacket).order_by(SeedPacket.variety_name)).all()
     return suggest_packets(invoice.items_summary or "", packets, exclude_ids=linked_ids)
+
+
+@router.post("/{invoice_id}/derive-packets")
+def derive_invoice_packets(
+    invoice_id: int,
+    payload: Optional[dict] = Body(default=None),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Grow the seed stash from this invoice's line items.
+
+    Every seed-like line item is normalized to a variety. An item that already
+    matches a packet in the stash is linked to that packet; anything new is
+    created and linked to the invoice. A container/tool/supply line (pots, grow
+    bags, soil) is never turned into a packet.
+
+    ``apply`` defaults to false, returning the plan without writing — the UI
+    previews it, then re-calls with ``apply: true``. Idempotent: re-running
+    links the same packets and creates nothing new.
+    """
+    invoice = _get_or_404(session, invoice_id)
+    apply = bool((payload or {}).get("apply"))
+    linked_ids = {
+        link.seed_packet_id
+        for link in session.exec(
+            select(InvoiceSeedPacket).where(InvoiceSeedPacket.invoice_id == invoice_id)
+        ).all()
+    }
+    stash = session.exec(select(SeedPacket).order_by(SeedPacket.variety_name)).all()
+    candidates = candidates_from_invoice(
+        invoice.items_summary or "", invoice.vendor or "", invoice.order_date or ""
+    )
+
+    plan: List[dict] = []
+    created_ids: List[int] = []
+    for cand in candidates:
+        match, score = best_packet_match(cand["variety_name"], stash)
+        if match is not None:
+            action = "already_linked" if match.id in linked_ids else "link"
+            packet_id = match.id
+        else:
+            action = "create"
+            packet_id = None
+        plan.append({
+            "variety_name": cand["variety_name"],
+            "category": cand["category"],
+            "quantity": cand["quantity"],
+            "source_item": cand["source_item"],
+            "action": action,
+            "packet_id": packet_id,
+            "match_score": round(score, 2),
+        })
+        if not apply or action == "already_linked":
+            continue
+        if packet_id is None:
+            packet = SeedPacket(
+                variety_name=cand["variety_name"],
+                category=cand["category"],
+                species_type=cand["species_type"],
+                vendor_name=cand["vendor_name"],
+                year_acquired=cand["year_acquired"],
+                quantity=cand["quantity"],
+                notes=f"From invoice #{invoice.id} — {invoice.vendor} {invoice.order_date}".strip(),
+            )
+            session.add(packet)
+            session.flush()  # assign packet.id for the link below
+            stash.append(packet)  # so later dupes in the same run link to it
+            packet_id = packet.id
+            created_ids.append(packet_id)
+        session.add(InvoiceSeedPacket(invoice_id=invoice.id, seed_packet_id=packet_id))
+
+    if apply:
+        session.commit()
+
+    return {
+        "invoice_id": invoice.id,
+        "vendor": invoice.vendor,
+        "applied": apply,
+        "created": created_ids,
+        "plan": plan,
+    }

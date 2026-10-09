@@ -866,6 +866,19 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.54.0** — **🌱 Invoices grow the seed stash.** An invoice's line items can
+  now be turned into seed packets in one click: on the Costs page, **➕ seed
+  packets from items** reads the invoice's items, normalizes each variety
+  (handling the Seed Savers "Category, Variety", Territorial "- SEED / size",
+  and "– 50 Seeds" formats), infers a category, and shows a preview before
+  writing anything. Varieties already in the stash — including near-matches
+  like "Patio Baby" vs "Patio Baby Eggplant" — are **linked** to the existing
+  packet instead of duplicated; genuinely new ones are **created** and linked
+  to the invoice, so each packet carries its order date, vendor, and cost
+  provenance. Containers, grow bags, and supplies are never turned into
+  packets. New `POST /api/invoices/{id}/derive-packets` (preview by default,
+  `apply: true` to write; idempotent). New `app/seed_extract.py` extractor.
+
 - **2.53.0** — **🌱 The assistant grows a memory.** The chat agent is now a
   persistent agent instead of a stateless chatbot: it keeps three files it
   reads every turn — **Persona** (who it is), **Operating notes** (lessons

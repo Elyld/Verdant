@@ -121,6 +121,13 @@ global.fetch = async (url, options = {}) => {
     body = options.method === 'POST'
       ? { id: 11, variety_name: 'Habanero', vendor_name: "Matt's Peppers" }
       : null;
+  } else if (/^\/api\/invoices\/\d+\/derive-packets$/.test(url)) {
+    const apply = String(options.body || '').includes('"apply":true');
+    body = {
+      invoice_id: 1, vendor: 'Territorial Seed', applied: apply,
+      created: apply ? [99] : [],
+      plan: [{ variety_name: 'Fall Garlic Festival', category: 'Garlic', action: 'create', packet_id: null, match_score: 0 }],
+    };
   } else {
     const m = url.match(/^\/api\/(invoices|expenses)\/(\d+)\/(packets|packet-suggestions)$/);
     if (m) {
@@ -139,6 +146,8 @@ eval(fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'js', 'core.js'
 // boot()'s nav/frost wiring, which needs a fuller DOM).
 const bootFns = [];
 globalThis.Verdant.onBoot = (fn) => bootFns.push(fn);
+globalThis.window = globalThis.window || {};
+globalThis.window.confirm = () => true;
 eval(fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'js', 'costs.js'), 'utf8')); // eslint-disable-line no-eval
 
 let failures = 0;
@@ -279,6 +288,17 @@ const tick = (ms) => new Promise((r) => setTimeout(r, ms));
   await tick(80);
   const expAttachCall = fetchCalls.filter((c) => c.url === '/api/expenses/3/packets' && c.method === 'POST').pop();
   check('expense suggestion attach POSTs to expense packets endpoint', !!expAttachCall && JSON.parse(expAttachCall.body).seed_packet_id === 10);
+
+  // 14. "Seed packets from items" derives packets: preview (no apply), then apply.
+  check('derive button rendered for an invoice with items', rows.includes('data-derive="1"'));
+  const fakeDerive = { target: { closest: (sel) => (sel === '[data-derive]' ? { dataset: { derive: '1' } } : null) } };
+  await Promise.all(clickFns.map((fn) => fn(fakeDerive)));
+  await tick(120);
+  const deriveCalls = fetchCalls.filter((c) => c.url === '/api/invoices/1/derive-packets' && c.method === 'POST');
+  check('derive posts a preview then an apply',
+    deriveCalls.length === 2
+    && !String(deriveCalls[0].body).includes('"apply":true')
+    && String(deriveCalls[1].body).includes('"apply":true'));
 
   process.exit(failures ? 1 : 0);
 })();

@@ -65,6 +65,24 @@ def _score(item_tokens: frozenset, packet_tokens: frozenset) -> float:
     return round(jaccard, 2) if jaccard >= 0.34 else 0.0
 
 
+def best_packet_match(variety: str, packets: List[Any], threshold: float = 0.9):
+    """Best-matching packet for a variety name, or ``(None, 0.0)``.
+
+    Used when deriving packets from a receipt: a derived variety that already
+    exists in the stash (a subset/superset token match, score >= threshold) is
+    linked to the existing packet instead of creating a near-duplicate.
+    """
+    vtokens = _tokens(variety)
+    best, best_score = None, 0.0
+    for p in packets:
+        score = _score(vtokens, _tokens(getattr(p, "variety_name", "")))
+        if score > best_score:
+            best, best_score = p, score
+    if best_score >= threshold:
+        return best, best_score
+    return None, best_score
+
+
 def suggest_packets(
     items_summary: str,
     packets: List[Any],
