@@ -1,5 +1,5 @@
-/* Navigation refresh (v2.28.0, v2.53.0):
-   - desktop grouped nav: 18 links, 5 labeled groups, no dropdowns, icon on every tab
+/* Navigation refresh (v2.28.0, v2.53.0, v2.57.0):
+   - sidebar grouped nav: 18 links, 5 labeled groups, no dropdowns, icon on every row
    - mobile bottom tab bar: renders mobile_tabs picks (tap order) + fixed More,
      defaults when unset/invalid; More sheet lists everything else, no duplicates
    - Settings chip picker: toggles with max-5 enforcement, order numbers, PUT saves
@@ -66,21 +66,22 @@ const BASE = path.join(__dirname, '..');
 const CORE = BASE + '/app/static/js/core.js';
 const SETTINGS_JS = BASE + '/app/static/js/settings.js';
 const baseHtml = fs.readFileSync(BASE + '/app/templates/base.html', 'utf8');
-const desktopNavHtml = baseHtml.match(/<nav id="desktop-nav"[\s\S]*?<\/nav>/)[0];
+// Sidebar: grab the aside through its inner </nav> (whole rail nav block).
+const sidebarNavHtml = baseHtml.match(/<aside id="sidebar-nav"[\s\S]*?<\/nav>/)[0];
 
 /* ---------------- Phase A: template checks (no boot) ---------------- */
 {
-  const hrefs = [...desktopNavHtml.matchAll(/<a\s[^>]*href="([^"]+)"/g)].map((m) => m[1]);
+  const hrefs = [...sidebarNavHtml.matchAll(/<a\s[^>]*href="([^"]+)"/g)].map((m) => m[1]);
   const expected = ['/', '/blog', '/observations', '/calendar', '/photos', '/plants', '/seeds',
     '/seedlings', '/review', '/import', '/quick', '/costs', '/pests',
     '/fertilizers', '/planner', '/tags', '/pantry', '/agent'];
-  check('desktop nav has all 18 links', hrefs.length === 18 && expected.every((h) => hrefs.includes(h)));
-  check('desktop nav has no dropdowns', !/<select/i.test(desktopNavHtml) && !/dropdown/i.test(desktopNavHtml));
-  const labels = [...desktopNavHtml.matchAll(/nav-group-label">([^<]+)</g)].map((m) => m[1]);
-  check('desktop nav has 5 labeled groups', JSON.stringify(labels) === JSON.stringify(['Grow', 'Track', 'Manage', 'Assistant', 'Read']));
-  const linkTexts = [...desktopNavHtml.matchAll(/<a\s[^>]*>([\s\S]*?)<\/a>/g)].map((m) => m[1]);
+  check('sidebar nav has all 18 links', hrefs.length === 18 && expected.every((h) => hrefs.includes(h)));
+  check('sidebar nav has no dropdowns', !/<select/i.test(sidebarNavHtml) && !/dropdown/i.test(sidebarNavHtml));
+  const labels = [...sidebarNavHtml.matchAll(/side-group-label">([^<]+)</g)].map((m) => m[1]);
+  check('sidebar nav has 5 labeled groups', JSON.stringify(labels) === JSON.stringify(['Grow', 'Track', 'Manage', 'Assistant', 'Read']));
+  const linkTexts = [...sidebarNavHtml.matchAll(/<a\s[^>]*>([\s\S]*?)<\/a>/g)].map((m) => m[1]);
   const emojiRe = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u;
-  check('every desktop tab has an icon', linkTexts.length === 18 && linkTexts.every((t) => emojiRe.test(t)));
+  check('every sidebar row has an icon', linkTexts.length === 18 && linkTexts.every((t) => emojiRe.test(t)));
   const mobileBlock = baseHtml.match(/<nav id="mobile-tabs"[\s\S]*?<\/nav>/)[0];
   check('mobile bar markup: no dropdowns', !/<select/i.test(mobileBlock) && !/dropdown/i.test(mobileBlock));
   const sheetBlock = baseHtml.match(/<div id="mobile-sheet"[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/);
@@ -112,13 +113,13 @@ function resetDom() {
   linkCache = {};
   global.document.body = makeEl('body');
   capturedPut = null;
-  const ids = ['#desktop-nav', '#mobile-tabs', '#mobile-tab-links', '#mobile-nav-more',
+  const ids = ['#sidebar-nav', '#mobile-tabs', '#mobile-tab-links', '#mobile-nav-more',
     '#mobile-sheet', '#mobile-sheet-backdrop', '#mobile-sheet-close', '#mobile-sheet-grid',
     '#frost-countdown', '#weather-ribbon', '#weather-ribbon-inner', '#app-version', '#toasts',
     '#settings-form', '#settings-status', '#mobile-tab-chips', '#mobile-tab-count',
     '#frost-preview', '#digest-test'];
   for (const id of ids) named[id] = makeEl('div');
-  named['#desktop-nav'].innerHTML = desktopNavHtml;
+  named['#sidebar-nav'].innerHTML = sidebarNavHtml;
   named['#mobile-sheet'].classList.add('hidden');
   fetchImpl = async (url, options = {}) => {
     if (url === '/api/settings' && (options.method || 'GET') === 'PUT') {
@@ -133,7 +134,7 @@ global.document = {
   querySelector: (sel) => named[sel] || makeEl('div'),
   querySelectorAll: (sel) => {
     if (sel === 'nav a') {
-      return [...parseLinks(named['#desktop-nav'].innerHTML, 'd'), ...parseLinks(named['#mobile-tab-links'].innerHTML, 'm')];
+      return [...parseLinks(named['#sidebar-nav'].innerHTML, 'd'), ...parseLinks(named['#mobile-tab-links'].innerHTML, 'm')];
     }
     return [];
   },
@@ -225,9 +226,9 @@ function sheetOpen() { return !named['#mobile-sheet'].classList.contains('hidden
     const mobile = parseLinks(named['#mobile-tab-links'].innerHTML, 'm');
     const plants = mobile.find((l) => l.getAttribute('href') === '/plants');
     check('mobile Plants tab marked active', plants.classList.contains('bg-sage-600'));
-    const desktop = parseLinks(named['#desktop-nav'].innerHTML, 'd');
+    const desktop = parseLinks(named['#sidebar-nav'].innerHTML, 'd');
     const dPlants = desktop.find((l) => l.getAttribute('href') === '/plants');
-    check('desktop Plants tab still marked active', dPlants.classList.contains('bg-sage-600'));
+    check('sidebar Plants row still marked active', dPlants.classList.contains('bg-sage-600'));
   }
   resetDom(); currentMobileTabs = ''; window.location.pathname = '/costs';
   await bootFresh(false);

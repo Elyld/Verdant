@@ -27,12 +27,14 @@ all in a single Docker container. FastAPI + SQLite, no build step, no cloud.
 
 ## Features
 
-### 🧭 Navigation — grouped tabs, custom mobile bar
-The desktop nav is grouped into four labeled sections — **Grow** (Today,
-Plants, Seeds, Seedlings, Planner), **Track** (Garden Logs, Calendar, Quick
-Log, Photos), **Manage** (Costs, Pests, Fertilizers, Review, Import, Tags),
-and **Read** (Blog & Stories) — over a faint fern watermark, with no dropdown
-menus anywhere. On your phone you get a bottom tab bar instead: pick up to
+### 🧭 Navigation — sidebar, custom mobile bar
+On a desktop the nav is a slim left sidebar grouped into five labeled
+sections — **Grow** (Today, Plants, Seeds, Seedlings, Planner), **Track**
+(Garden Logs, Calendar, Quick Log, Photos, Pantry), **Manage** (Costs, Pests,
+Fertilizers, Review, Import, Tags), **Assistant** (Garden Assistant), and
+**Read** (Blog & Stories) — with no dropdown menus anywhere. The header stays
+slim: logo, the season picker, and the weather strip with any active NOAA
+alerts up top. On your phone you get a bottom tab bar instead: pick up to
 **5** of your own sections in the order you tap them, right on the
 📱 *Mobile tab bar* card of the Settings page (tap a chip to add it, tap
 again to remove — no dropdowns there either), and everything else stays one
@@ -40,6 +42,7 @@ tap away under **More**, which opens a bottom sheet of the remaining
 sections. Out of the box the bar is Quick Log, Plants, Calendar, Planner,
 and Settings — so Settings is always one tap away on your phone.
 
+![Desktop sidebar navigation](docs/screenshots/nav-sidebar.png)
 ![Mobile tab bar](docs/screenshots/nav-mobile.png)
 
 ### ☀️ Today — your garden's morning brief
@@ -886,6 +889,13 @@ correct, and the container's clock/timezone matches yours — `DIGEST_TIME` is
 server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
+
+- **2.57.0** — **🧭 The big taskbar is gone.** The desktop nav moves out of
+  the header into a slim left sidebar — same five groups (**Grow**, **Track**,
+  **Manage**, **Assistant**, **Read**), each page a full-width row with room
+  to breathe, the current page highlighted. The header is just logo (a touch
+  bigger now), season picker, and the weather strip — notifications and NOAA
+  alerts stay up top where they were. Phones keep the same bottom tab bar.
 
 - **2.56.0** — **🧾 Invoices grow up, backups you can trust.** **💾 Backup fixed:** the backup auto-discovers every table, but
   its photo detection only knew two filename columns — so **seed packet
