@@ -21,9 +21,6 @@
         const btn = $(`#seed-tabbtn-${t}`);
         if (btn) for (const cls of TAB_ON) btn.classList.toggle(cls, active);
       }
-      const onSources = which === 'sources';
-      $('#seed-vendor-filter').classList.toggle('hidden', !onSources);
-      $('#seed-add-toggle').classList.toggle('hidden', !onSources);
       if (which === 'catalog') load();
     }
 

@@ -1,10 +1,12 @@
 """API router for purchase invoices (seed & garden supplier receipts)."""
+import base64
 from typing import List, Optional
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
 from sqlmodel import select
 
+from app import llm as llm_mod
 from app.database import get_session
 from app.invoice_expenses import (
     auto_create_expense,
@@ -13,6 +15,7 @@ from app.invoice_expenses import (
 )
 from app.models import Expense, Invoice, InvoiceSeedPacket, SeedPacket, apply_patch
 from app.packet_match import best_packet_match, suggest_packets
+from app.receipt_scan import SCAN_IMAGE_TYPES, SCAN_MAX_BYTES, extract_receipt
 from app.schemas import InvoiceCreate, InvoiceRead
 from app.seed_extract import candidates_from_invoice
 from app.storage import delete_stored, save_pdf_upload
@@ -40,11 +43,38 @@ def _get_or_404(session: Session, invoice_id: int) -> Invoice:
 @router.get("/", response_model=List[InvoiceRead])
 def list_invoices(
     vendor: Optional[str] = Query(None, description="Filter by vendor (substring)"),
+    q: Optional[str] = Query(
+        None, description="Search vendor, order number, and items (substring)"
+    ),
+    source: Optional[str] = Query(
+        None, description="Filter by source: manual, csv, or gmail"
+    ),
+    sort: str = Query("date", description="Sort key: date, vendor, or total"),
+    order: str = Query("desc", description="Sort direction: asc or desc"),
     session: Session = Depends(get_session),
 ) -> List[Invoice]:
-    query = session.query(Invoice).order_by(Invoice.order_date.desc())
+    if source is not None:
+        _check_source(source)
+    query = session.query(Invoice)
     if vendor:
         query = query.filter(Invoice.vendor.contains(vendor))
+    if q:
+        query = query.filter(
+            (Invoice.vendor.contains(q))
+            | (Invoice.order_number.contains(q))
+            | (Invoice.items_summary.contains(q))
+        )
+    if source:
+        query = query.filter(Invoice.source == source)
+    sort_col = {
+        "date": Invoice.order_date,
+        "vendor": Invoice.vendor,
+        "total": Invoice.total,
+    }.get(sort, Invoice.order_date)
+    # order_date is stored ISO YYYY-MM-DD so string sort == date sort.
+    query = query.order_by(
+        sort_col.asc() if order == "asc" else sort_col.desc()
+    )
     return query.all()
 
 
@@ -76,6 +106,41 @@ def create_invoice(
     session.commit()
     session.refresh(invoice)
     return invoice
+
+
+@router.post("/scan")
+async def scan_receipt_photo(
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Read a photographed paper receipt with the vision model.
+
+    Returns {"extraction": {vendor, order_date, order_number, total,
+    items_summary, notes}} — nothing is saved. The UI shows the extraction
+    for review and fills the invoice form on confirmation.
+    """
+    ctype = (file.content_type or "").lower()
+    if ctype not in SCAN_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Not a photo (want one of: {', '.join(sorted(SCAN_IMAGE_TYPES))}).",
+        )
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=422, detail="The uploaded file is empty.")
+    if len(raw) > SCAN_MAX_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Photo is {len(raw) // 1024 // 1024} MB — keep it under "
+            f"{SCAN_MAX_BYTES // 1024 // 1024} MB.",
+        )
+    data_uri = f"data:{ctype};base64," + base64.b64encode(raw).decode("ascii")
+    try:
+        extraction = extract_receipt(session, data_uri)
+    except llm_mod.LLMError as exc:
+        # extract_receipt only raises LLMError with user-friendly messages.
+        raise HTTPException(status_code=502, detail=str(exc))
+    return {"extraction": extraction}
 
 
 @router.post("/{invoice_id}/create-expense", response_model=InvoiceRead)

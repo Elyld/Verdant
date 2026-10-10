@@ -9,44 +9,18 @@
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <div class="flex rounded-lg bg-beige-200/60 p-0.5 text-sm" role="tablist" aria-label="Seeds views">
-            <button type="button" id="seed-tabbtn-sources" class="rounded-md px-3 py-1.5 font-semibold" role="tab">Sources</button>
+            <button type="button" id="seed-tabbtn-sources" class="rounded-md px-3 py-1.5 font-semibold" role="tab">🏪 Vendors</button>
             <button type="button" id="seed-tabbtn-catalog" class="rounded-md px-3 py-1.5 font-semibold" role="tab">🌱 My seed stash</button>
             <button type="button" id="seed-tabbtn-assistant" class="rounded-md px-3 py-1.5 font-semibold" role="tab">🛒 Order assistant</button>
           </div>
-          <label class="sr-only" for="seed-vendor-filter">Filter by vendor</label>
-          <select id="seed-vendor-filter" class="inp text-sm"><option value="">All vendors</option></select>
-          <button type="button" id="seed-add-toggle" class="btn-primary text-sm">+ Add seeds</button>
         </div>
       </header>
 
       <div id="seed-tab-sources">
-
-      <!-- Add / edit seed source form -->
-      <form id="seed-form" class="card hidden space-y-4" autocomplete="off">
-        <h3 class="font-display text-lg font-semibold" id="seed-form-title">Add seed source</h3>
-        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <div><label class="lbl" for="seed-vendor">Vendor / source *</label><input id="seed-vendor" class="inp" required maxlength="120" placeholder="Territorial Seed" /></div>
-          <div><label class="lbl" for="seed-variety">Variety</label><input id="seed-variety" class="inp" maxlength="120" placeholder="Cherokee Purple" /></div>
-          <div><label class="lbl" for="seed-type">Type</label>
-            <select id="seed-type" class="inp">
-              <option>Vendor Purchase</option>
-              <option>Saved</option>
-              <option>Trade</option>
-              <option>Gift</option>
-            </select></div>
-          <div><label class="lbl" for="seed-acquired">Acquired date</label><input id="seed-acquired" type="date" class="inp" /></div>
-          <div><label class="lbl" for="seed-plant-link">Linked plant</label><select id="seed-plant-link" class="inp"><option value="">— none —</option></select></div>
-          <div class="sm:col-span-2 lg:col-span-3"><label class="lbl" for="seed-notes">Notes</label><textarea id="seed-notes" rows="2" class="inp" placeholder="Packet size, lot number, germination notes…"></textarea></div>
-        </div>
-        <div class="flex gap-2">
-          <button type="submit" class="btn-primary text-sm" id="seed-submit">Add seeds</button>
-          <button type="button" class="btn-ghost text-sm" id="seed-cancel">Cancel</button>
-        </div>
-      </form>
-
-      <!-- Vendor groups -->
+      <p class="text-sm text-navy-500">Every place your seeds came from — built from your stash. To add seeds, add a packet on the 🌱 My seed stash tab.</p>
+      <!-- Vendor directory (read-only; derived from the seed stash) -->
       <div id="seed-groups" class="space-y-6"></div>
-      <div id="seeds-empty" class="card hidden text-center text-navy-500">No seed sources yet. Add your vendors above — your seed stash lives here.</div>
+      <div id="seeds-empty" class="card hidden text-center text-navy-500">No vendors yet — your seed stash is empty.</div>
       </div><!-- /#seed-tab-sources -->
 
       <div id="seed-tab-catalog" class="hidden space-y-4">

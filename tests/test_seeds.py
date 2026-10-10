@@ -34,7 +34,11 @@ def test_seeds_page_renders(client):
     res = client.get("/seeds")
     assert res.status_code == 200
     assert "Seed Sources" in res.text or ">Seeds</h2>" in res.text
-    assert 'id="seed-form"' in res.text
+    # The old seed-source CRUD form is gone: the Sources tab is now a
+    # read-only vendor directory built from the stash.
+    assert 'id="seed-form"' not in res.text
+    assert 'id="seed-groups"' in res.text
+    assert "🏪 Vendors" in res.text
 
 
 def test_nav_link_on_every_page(client):

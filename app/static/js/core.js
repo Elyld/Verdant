@@ -383,6 +383,36 @@
   function onBoot(fn) { inits.push(fn); }
   function onBootLate(fn) { lateInits.push(fn); }
 
+  // ---- Global season year -------------------------------------------------
+  // One year selector for the whole app (header). Pages showing dated
+  // records (costs, plants, logs) filter to it; seeds stay year-independent.
+  const YEAR_KEY = 'verdant.year';
+  function year() {
+    try {
+      const y = Number(localStorage.getItem(YEAR_KEY));
+      if (y >= 2000 && y <= 2100) return y;
+    } catch { /* no storage (tests, private mode) — fall through to current year */ }
+    return new Date().getFullYear();
+  }
+  function setYear(y) {
+    y = Number(y);
+    if (!(y >= 2000 && y <= 2100)) return;
+    try { localStorage.setItem(YEAR_KEY, String(y)); } catch { /* ignore */ }
+    document.dispatchEvent(new CustomEvent('verdant:year', { detail: { year: y } }));
+  }
+  function initYearPicker() {
+    const sel = $('#season-year');
+    if (!sel) return;
+    const now = new Date().getFullYear();
+    const years = [];
+    for (let y = now + 1; y >= now - 4; y--) years.push(y);
+    sel.innerHTML = years.map((y) => `<option value="${y}">${y}</option>`).join('');
+    sel.value = String(year());
+    sel.addEventListener('change', () => setYear(sel.value));
+    // Keep the picker in sync if some page changes the year programmatically.
+    document.addEventListener('verdant:year', (e) => { sel.value = String(e.detail.year); });
+  }
+
   // Cached app settings (week_start, default_weight_unit, slideshow_interval,
   // confirm_water_all, ...). Fetched once per page load; never rejects.
   let _settings = null;
@@ -405,12 +435,14 @@
     initFrost();
     initWeatherRibbon();
     initMobileNav();
+    initYearPicker();
   }
 
   globalThis.Verdant = {
     $, $$, esc, fmtDate, fmtDateTime, fmtAmount, tempUnit, fmtTemp, api, toast, markdown,
     uploadFiles, wireDraft, renderStats, healthBar, plantCard, onBoot, onBootLate, todayLocal,
     getSettings, NAV_SECTIONS, DEFAULT_MOBILE_TABS, MAX_MOBILE_TABS, parseMobileTabs,
+    year, setYear,
   };
 
   document.addEventListener('DOMContentLoaded', boot);

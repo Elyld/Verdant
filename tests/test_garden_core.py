@@ -118,6 +118,27 @@ def test_observation_linked_has_weather_fields(client):
     assert "temp_c" in obs and "weather_summary" in obs
 
 
+def test_fertilization_date_filters(client):
+    for day in ["2025-06-01", "2026-06-01"]:
+        res = client.post(
+            "/api/fertilizations",
+            json={"date": day, "fertilizer_name": f"FilterTest {day}"},
+        )
+        assert res.status_code == 201, res.text
+    res = client.get("/api/fertilizations", params={
+        "date_from": "2026-01-01", "date_to": "2026-12-31", "limit": 500,
+    })
+    assert res.status_code == 200
+    names = [r["fertilizer_name"] for r in res.json()]
+    assert "FilterTest 2026-06-01" in names
+    assert "FilterTest 2025-06-01" not in names
+    # Pagination still works alongside the filter.
+    res = client.get("/api/fertilizations", params={
+        "date_from": "2026-01-01", "date_to": "2026-12-31", "limit": 1, "offset": 0,
+    })
+    assert len(res.json()) <= 1
+
+
 def test_fertilization_links_to_plant(client):
     plant = make_plant(client, "Fed Kale")
     res = client.post(

@@ -9,6 +9,7 @@ from uuid import uuid4
 
 import sqlalchemy as sa
 from fastapi import HTTPException
+from sqlalchemy import Column, ForeignKey, Integer
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -173,10 +174,22 @@ class Plant(SQLModel, table=True):
     days_to_maturity: Optional[int] = None
     light: str = Field(default="Full Sun")
     notes: Optional[str] = None
+    # Which seed packet this plant was grown from (optional). Traces the
+    # plant back to its packet, and through the packet to the invoice.
+    # use_alter=True: plants/seed_packets/seed_sources form an FK cycle, and
+    # without it SQLAlchemy cannot sort tables for CREATE TABLE (the backup's
+    # parent-first restore order depends on that sort).
+    seed_packet_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(
+            Integer, ForeignKey("seed_packets.id", use_alter=True), index=True
+        ),
+    )
     # Care cadence (days) — drives watering/feeding reminders. Null = no reminder.
     water_every_days: Optional[int] = Field(default=None, ge=1, le=365)
     feed_every_days: Optional[int] = Field(default=None, ge=1, le=365)
     location: Optional[Location] = Relationship(back_populates="plants")
+    seed_packet: Optional["SeedPacket"] = Relationship()
     fertilization_logs: List["FertilizationLog"] = Relationship(back_populates="plant")
     observation_logs: List["ObservationLog"] = Relationship(back_populates="plant")
     harvests: List["Harvest"] = Relationship(back_populates="plant")

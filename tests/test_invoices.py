@@ -73,6 +73,57 @@ def test_bad_source_rejected(client):
     assert res.status_code == 422
 
 
+def test_list_filters_and_sort(client):
+    ids = []
+    try:
+        for vendor, num, total, source in [
+            ("Territorial Seed", "WW-F1", 10.00, "manual"),
+            ("Baker Creek", "BC-F2", 30.00, "gmail"),
+            ("Territorial Seed", "WW-F3", 20.00, "csv"),
+        ]:
+            res = client.post("/api/invoices/", json=_payload(
+                vendor=vendor, order_number=num, total=total, source=source,
+                items_summary=f"seeds {num}",
+            ))
+            assert res.status_code == 201, res.text
+            ids.append(res.json()["id"])
+
+        # q searches vendor, order number, and items.
+        res = client.get("/api/invoices/", params={"q": "BC-F2"})
+        assert res.status_code == 200
+        got = res.json()
+        assert len(got) == 1 and got[0]["order_number"] == "BC-F2"
+
+        res = client.get("/api/invoices/", params={"q": "territorial"})
+        assert len(res.json()) == 2
+
+        # source filter.
+        res = client.get("/api/invoices/", params={"source": "gmail"})
+        assert res.status_code == 200
+        assert all(i["source"] == "gmail" for i in res.json())
+        assert any(i["order_number"] == "BC-F2" for i in res.json())
+
+        res = client.get("/api/invoices/", params={"source": "pigeon"})
+        assert res.status_code == 422
+
+        # sort by total descending / ascending.
+        res = client.get("/api/invoices/", params={"sort": "total", "order": "desc"})
+        totals = [i["total"] for i in res.json()]
+        assert totals == sorted(totals, reverse=True)
+
+        res = client.get("/api/invoices/", params={"sort": "total", "order": "asc"})
+        totals = [i["total"] for i in res.json()]
+        assert totals == sorted(totals)
+
+        # sort by vendor A-Z.
+        res = client.get("/api/invoices/", params={"sort": "vendor", "order": "asc"})
+        vendors = [i["vendor"] for i in res.json()]
+        assert vendors == sorted(vendors, key=str.lower)
+    finally:
+        for inv_id in ids:
+            client.delete(f"/api/invoices/{inv_id}")
+
+
 def test_bad_date_rejected(client):
     res = client.post("/api/invoices/", json=_payload(order_number="WW-BAD2", order_date="not-a-date"))
     assert res.status_code == 422

@@ -111,6 +111,64 @@ def test_round_trip_restore(client):
     assert any(p.stat().st_size > 0 for p in jpgs)
 
 
+def test_packet_photos_are_backed_up(client):
+    # Regression: seed packet photo_path/photo_back_path were silently
+    # excluded from backups (FILE_TABLES only knew file_path/pdf_path).
+    from app.models import SeedPacket
+    from app.routers.backup import FILE_TABLES
+
+    assert SeedPacket in FILE_TABLES
+    assert "photo_path" in FILE_TABLES[SeedPacket]
+    assert "photo_back_path" in FILE_TABLES[SeedPacket]
+
+    res = client.post("/api/seed-packets/", json={"variety_name": "Backup Packet"})
+    assert res.status_code == 201, res.text
+    pkt = res.json()
+    front = b"\xff\xd8\xff" + b"packet-front-bytes"
+    back = b"\xff\xd8\xff" + b"packet-back-bytes"
+    res = client.post(
+        f"/api/seed-packets/{pkt['id']}/photo?side=front",
+        files={"file": ("front.jpg", front, "image/jpeg")},
+    )
+    assert res.status_code == 200, res.text
+    res = client.post(
+        f"/api/seed-packets/{pkt['id']}/photo?side=back",
+        files={"file": ("back.jpg", back, "image/jpeg")},
+    )
+    assert res.status_code == 200, res.text
+
+    zf = download_backup(client)
+    names = zf.namelist()
+    assert any(n.startswith("files/seed-packets/") for n in names), names
+    contents = [zf.read(n) for n in names if n.startswith("files/seed-packets/")]
+    assert front in contents
+    assert back in contents
+
+    # Round-trip: the photo bytes survive a restore.
+    res = client.post(
+        "/api/backup/import",
+        files={"file": ("verdant-backup-test.zip", _zip_bytes(zf), "application/zip")},
+    )
+    assert res.status_code == 200, res.text
+    from app.database import UPLOAD_DIR as _UD
+
+    restored = [p for p in _UD.rglob("*") if p.is_file() and b"packet-" in p.read_bytes()]
+    assert len(restored) >= 2, [str(p) for p in _UD.rglob("*")]
+
+    client.delete(f"/api/seed-packets/{pkt['id']}")
+
+
+def _zip_bytes(zf):
+    # Re-serialize the downloaded zip for the import round-trip.
+    import io as _io
+
+    buf = _io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as out:
+        for n in zf.namelist():
+            out.writestr(n, zf.read(n))
+    return buf.getvalue()
+
+
 def test_import_rejects_garbage(client):
     res = client.post(
         "/api/backup/import",

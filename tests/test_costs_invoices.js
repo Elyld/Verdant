@@ -52,8 +52,10 @@ const named = {};
 const namedAll = {};
 ['cost-form', 'cost-form-title', 'cost-submit', 'cost-cancel', 'cost-date', 'cost-category', 'cost-desc', 'cost-amount', 'cost-notes',
  'cost-plant', 'costs-rows', 'costs-empty', 'costs-total', 'costs-by-cat',
- 'invoice-form', 'inv-vendor', 'inv-date', 'inv-order', 'inv-total', 'inv-items',
-  'inv-expense', 'inv-notes', 'inv-pdf', 'invoices-rows', 'invoices-empty',
+ 'invoice-form', 'invoice-form-title', 'inv-submit', 'inv-cancel',
+ 'inv-vendor', 'inv-date', 'inv-order', 'inv-total', 'inv-items',
+  'inv-expense', 'inv-notes', 'inv-email', 'inv-pdf', 'invoices-rows', 'invoices-empty',
+  'inv-q', 'inv-source', 'inv-sort', 'inv-scan-btn', 'inv-scan', 'scan-review',
   'books-badge',
   'toasts'].forEach((id) => {
   named[`#${id}`] = makeEl();
@@ -76,6 +78,12 @@ global.document = {
 };
 global.window = { location: { pathname: '/costs' }, confirm: () => true };
 global.location = { search: '' };
+const _lsStore = {};
+global.localStorage = {
+  getItem: (k) => (k in _lsStore ? _lsStore[k] : null),
+  setItem: (k, v) => { _lsStore[k] = String(v); },
+  removeItem: (k) => { delete _lsStore[k]; },
+};
 global.CustomEvent = function (type, opts) { this.type = type; this.detail = (opts && opts.detail) || null; };
 
 const seenToasts = [];
@@ -114,7 +122,7 @@ const fetchCalls = [];
 global.fetch = async (url, options = {}) => {
   fetchCalls.push({ url, method: options.method || 'GET', body: options.body });
   let body = [];
-  if (url === '/api/invoices/') body = invoices;
+  if (url === '/api/invoices/' || url.startsWith('/api/invoices/?')) body = invoices;
   else if (url === '/api/expenses/') body = expenses;
   else if (url === '/api/seed-packets/') body = packets;
   else if (url === '/api/books/check') body = {
@@ -316,6 +324,35 @@ const tick = (ms) => new Promise((r) => setTimeout(r, ms));
   check('books badge shows an error summary', badge.includes('Books check') && badge.includes('1 error'));
   check('books badge lists the finding with a fix link',
     badge.includes('Invoice 9 total mismatch') && badge.includes('review invoice #9'));
+
+  // 16. Invoice edit button renders; clicking it populates the form.
+  check('edit button rendered for an invoice', rows.includes('data-edit-inv="1"'));
+  const fakeInvEdit = { target: { closest: (sel) => (sel === '[data-edit-inv]' ? { dataset: { editInv: '1' } } : null) } };
+  await Promise.all(clickFns.map((fn) => fn(fakeInvEdit)));
+  await tick(60);
+  check('edit populates the vendor field', named['#inv-vendor'].value === 'Territorial Seed');
+  check('edit populates the total field', String(named['#inv-total'].value) === '56.53');
+  check('edit switches the submit label', named['#inv-submit'].textContent === 'Save changes');
+
+  // 17. Filters re-fetch with query params.
+  fetchCalls.length = 0;
+  named['#inv-q'].value = 'WW1149159';
+  const inputFns = named['#inv-q']._listeners.input || [];
+  await Promise.all(inputFns.map((fn) => fn()));
+  await tick(400);
+  const qCall = fetchCalls.find((c) => String(c.url).startsWith('/api/invoices/?'));
+  check('search filter fetches with q param', !!qCall && String(qCall.url).includes('q=WW1149159'));
+  named['#inv-q'].value = '';
+
+  // 18. Season year filters the invoice list.
+  globalThis.Verdant.setYear(2025);
+  await tick(150);
+  check('year filter hides other-year invoices',
+    !named['#invoices-rows'].innerHTML.includes('Territorial Seed'));
+  globalThis.Verdant.setYear(2026);
+  await tick(150);
+  check('year filter restores current-year invoices',
+    named['#invoices-rows'].innerHTML.includes('Territorial Seed'));
 
   process.exit(failures ? 1 : 0);
 })();
