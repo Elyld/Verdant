@@ -56,6 +56,7 @@
           <p class="text-sm text-navy-500">Order receipts from seed &amp; garden suppliers — the paper trail behind the spending above.</p>
         </div>
         <form id="invoice-form" class="space-y-3">
+          <h3 id="invoice-form-title" class="font-display text-base font-semibold text-navy-800">Add an invoice</h3>
           <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label class="block"><span class="lbl">Vendor</span><input id="inv-vendor" type="text" class="inp" placeholder="Territorial Seed" maxlength="120" required /></label>
             <label class="block"><span class="lbl">Order date</span><input id="inv-date" type="date" class="inp" required /></label>
@@ -67,10 +68,24 @@
             <label class="block sm:col-span-2"><span class="lbl">Email link (optional)</span><input id="inv-email" type="url" class="inp" placeholder="https://mail.google.com/…" maxlength="500" /><span class="block text-xs text-navy-400 mt-1">Deep link back to the order-confirmation email this invoice came from.</span></label>
           </div>
           <div class="flex flex-wrap items-center gap-3">
-            <button type="submit" class="btn-primary">Add invoice</button>
+            <button type="submit" id="inv-submit" class="btn-primary">Add invoice</button>
+            <button type="button" id="inv-cancel" class="btn-ghost hidden">Cancel</button>
+            <button type="button" id="inv-scan-btn" class="btn-secondary" title="Photograph a paper receipt — the AI reads the vendor, date, total, and items into the form">📷 Scan receipt</button>
+            <input id="inv-scan" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" class="hidden" />
             <label class="text-sm text-navy-500">PDF receipt <input id="inv-pdf" type="file" accept="application/pdf,.pdf" class="text-sm" /></label>
           </div>
         </form>
+        <div id="scan-review" class="hidden"></div>
+        <div class="flex flex-wrap items-end gap-3">
+          <label class="block"><span class="lbl">Search</span><input id="inv-q" type="search" class="inp" placeholder="vendor, order #, items…" /></label>
+          <label class="block"><span class="lbl">Source</span><select id="inv-source" class="inp">
+            <option value="">All sources</option><option value="manual">Manual</option><option value="csv">CSV import</option><option value="gmail">Gmail</option>
+          </select></label>
+          <label class="block"><span class="lbl">Sort by</span><select id="inv-sort" class="inp">
+            <option value="date-desc">Date ↓</option><option value="date-asc">Date ↑</option>
+            <option value="vendor-asc">Vendor A–Z</option><option value="total-desc">Total ↓</option><option value="total-asc">Total ↑</option>
+          </select></label>
+        </div>
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
             <thead><tr class="text-left text-xs uppercase tracking-widest text-navy-400">

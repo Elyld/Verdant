@@ -61,12 +61,24 @@ def _order_columns(model):
     return pk or [next(iter(model.__table__.columns.values()))]
 
 
-# Tables carrying uploaded files (detected by file_path / pdf_path columns).
-# Maps each such model to the columns holding /uploads/ paths.
+# Tables carrying uploaded files, detected by column name: any column ending
+# in _path (file_path, pdf_path, photo_path, photo_back_path, ...) holds a
+# /uploads/ path. Like _discover_models, there is no hand-maintained list —
+# a new photo column is backed up automatically. (This is what the seed
+# packet photos were missing: they shipped with photo_path/photo_back_path
+# and silently fell out of every backup.)
+def _file_columns(model) -> list[str]:
+    return [
+        c.name
+        for c in model.__table__.columns
+        if c.name.endswith("_path")
+    ]
+
+
 FILE_TABLES = {
-    m: [c for c in ("file_path", "pdf_path") if c in m.__table__.columns]
+    m: _file_columns(m)
     for m in TABLES_IN_ORDER
-    if any(c in m.__table__.columns for c in ("file_path", "pdf_path"))
+    if _file_columns(m)
 }
 
 

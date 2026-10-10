@@ -125,13 +125,17 @@
       $('#cost-plant').value = '';
     }
 
+    // Expenses follow the global season year; the invoice link dropdown
+    // below stays unfiltered so cross-year linking still works.
+    const inSeason = (d) => (d || '').slice(0, 4) === String(globalThis.Verdant.year());
+
     async function load() {
       const [expenses, plants, packets] = await Promise.all([
         api.get('/api/expenses/'),
         api.get('/api/plants/').catch(() => []),
         api.get('/api/seed-packets/').catch(() => []),
       ]);
-      const list = Array.isArray(expenses) ? expenses : [];
+      const list = (Array.isArray(expenses) ? expenses : []).filter((e) => inSeason(e.date));
       lastList = list;
       const packetList = Array.isArray(packets) ? packets : [];
       const plantNames = new Map((Array.isArray(plants) ? plants : []).map((p) => [p.id, p.variety_name]));
@@ -230,6 +234,9 @@
     load().catch((error) => toast(`Could not load expenses: ${error.message}`, 'err'));
     renderBooksBadge();
     initInvoices();
+    document.addEventListener('verdant:year', () => {
+      load().catch((error) => toast(`Could not load expenses: ${error.message}`, 'err'));
+    });
   }
 
   function initInvoices() {
@@ -239,14 +246,44 @@
     const today = todayLocal();
     $('#inv-date').value = today;
     const money = (n) => `$${Number(n || 0).toFixed(2)}`;
+    let editingInvId = null;
+    let lastInvoices = [];
+
+    function resetInvoiceForm() {
+      editingInvId = null;
+      $('#invoice-form-title').textContent = 'Add an invoice';
+      $('#inv-submit').textContent = 'Add invoice';
+      $('#inv-cancel').classList.add('hidden');
+      ['#inv-vendor', '#inv-order', '#inv-total', '#inv-items', '#inv-notes', '#inv-email'].forEach((s) => { if ($(s)) $(s).value = ''; });
+      $('#inv-date').value = today;
+      $('#inv-expense').value = '';
+      $('#inv-pdf').value = '';
+      hideScanReview();
+    }
+
+    function invoiceQuery() {
+      const p = new URLSearchParams();
+      const q = $('#inv-q').value.trim();
+      const source = $('#inv-source').value;
+      const sort = $('#inv-sort').value || 'date-desc';
+      if (q) p.set('q', q);
+      if (source) p.set('source', source);
+      const [sortKey, sortDir] = sort.split('-');
+      p.set('sort', sortKey);
+      p.set('order', sortDir);
+      const s = p.toString();
+      return s ? `/api/invoices/?${s}` : '/api/invoices/';
+    }
 
     async function load() {
       const [invoices, expenses, packets] = await Promise.all([
-        api.get('/api/invoices/'),
+        api.get(invoiceQuery()),
         api.get('/api/expenses/').catch(() => []),
         api.get('/api/seed-packets/').catch(() => []),
       ]);
-      const list = Array.isArray(invoices) ? invoices : [];
+      const list = (Array.isArray(invoices) ? invoices : [])
+        .filter((inv) => (inv.order_date || '').slice(0, 4) === String(globalThis.Verdant.year()));
+      lastInvoices = list;
       const packetList = Array.isArray(packets) ? packets : [];
       const expList = Array.isArray(expenses) ? expenses : [];
       const expNames = new Map(expList.map((e) => [e.id, `${fmtDate(e.date)} · ${e.description || e.category} · $${Number(e.amount || 0).toFixed(2)}`]));
@@ -276,40 +313,78 @@
           <td class="py-2 pr-3 text-right font-semibold">${money(inv.total)}</td>
           <td class="py-2 text-right whitespace-nowrap">
             ${inv.email_link ? `<a href="${esc(inv.email_link)}" target="_blank" rel="noopener" class="text-xs text-sage-700 underline" title="Open the source email">✉️ email</a> ` : ''}${inv.pdf_path ? `<a href="${esc(inv.pdf_path)}" target="_blank" rel="noopener" class="text-xs text-sage-700 underline">PDF</a> ` : ''}
-            <button type="button" data-del-inv="${inv.id}" class="text-xs text-red-700 underline">delete</button>
+            <button type="button" data-edit-inv="${inv.id}" class="text-xs text-sage-700 underline mr-2">edit</button><button type="button" data-del-inv="${inv.id}" class="text-xs text-red-700 underline">delete</button>
           </td>
         </tr>`).join('');
     }
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
+      const payload = {
+        vendor: $('#inv-vendor').value.trim(),
+        order_date: $('#inv-date').value || today,
+        order_number: $('#inv-order').value.trim(),
+        total: Number($('#inv-total').value) || 0,
+        items_summary: $('#inv-items').value.trim(),
+        notes: $('#inv-notes').value.trim(),
+        email_link: $('#inv-email') && $('#inv-email').value.trim() ? $('#inv-email').value.trim() : null,
+        expense_id: $('#inv-expense').value ? Number($('#inv-expense').value) : null,
+      };
       try {
-        const created = await api.post('/api/invoices/', {
-          vendor: $('#inv-vendor').value.trim(),
-          order_date: $('#inv-date').value || today,
-          order_number: $('#inv-order').value.trim(),
-          total: Number($('#inv-total').value) || 0,
-          items_summary: $('#inv-items').value.trim(),
-          notes: $('#inv-notes').value.trim(),
-          email_link: $('#inv-email') && $('#inv-email').value.trim() ? $('#inv-email').value.trim() : null,
-          expense_id: $('#inv-expense').value ? Number($('#inv-expense').value) : null,
-        });
+        let savedId;
+        if (editingInvId) {
+          await api.patch(`/api/invoices/${editingInvId}`, payload);
+          savedId = editingInvId;
+          toast('Invoice updated 🧾', 'ok');
+        } else {
+          const created = await api.post('/api/invoices/', payload);
+          savedId = created.id;
+          toast('Invoice saved 🧾', 'ok');
+        }
         const pdfInput = $('#inv-pdf');
         if (pdfInput.files.length) {
           const data = new FormData();
           data.append('file', pdfInput.files[0], pdfInput.files[0].name);
-          await api.upload(`/api/invoices/${created.id}/pdf`, data);
+          await api.upload(`/api/invoices/${savedId}/pdf`, data);
         }
-        toast('Invoice saved 🧾', 'ok');
-        ['#inv-vendor', '#inv-order', '#inv-total', '#inv-items', '#inv-notes', '#inv-email'].forEach((s) => { if ($(s)) $(s).value = ''; });
-        $('#inv-expense').value = '';
-        pdfInput.value = '';
+        resetInvoiceForm();
         load();
       } catch (error) { toast(`Could not save invoice: ${error.message}`, 'err'); }
     });
 
+    $('#inv-cancel').addEventListener('click', resetInvoiceForm);
+
+    // Filters re-run the (server-side) query.
+    let qTimer = null;
+    $('#inv-q').addEventListener('input', () => {
+      clearTimeout(qTimer);
+      qTimer = setTimeout(load, 250);
+    });
+    $('#inv-source').addEventListener('change', load);
+    $('#inv-sort').addEventListener('change', load);
+
     $('#invoices-rows').addEventListener('click', async (event) => {
       if (await handlePkClick(event, 'invoice', load)) return;
+      const editBtn = event.target.closest('[data-edit-inv]');
+      if (editBtn) {
+        const inv = lastInvoices.find((x) => String(x.id) === editBtn.dataset.editInv);
+        if (!inv) return;
+        editingInvId = inv.id;
+        $('#inv-vendor').value = inv.vendor || '';
+        $('#inv-date').value = (inv.order_date || '').slice(0, 10) || today;
+        $('#inv-order').value = inv.order_number || '';
+        $('#inv-total').value = inv.total ?? '';
+        $('#inv-items').value = inv.items_summary || '';
+        $('#inv-notes').value = inv.notes || '';
+        if ($('#inv-email')) $('#inv-email').value = inv.email_link || '';
+        $('#inv-expense').value = inv.expense_id ? String(inv.expense_id) : '';
+        $('#invoice-form-title').textContent = 'Edit invoice';
+        $('#inv-submit').textContent = 'Save changes';
+        $('#inv-cancel').classList.remove('hidden');
+        hideScanReview();
+        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
       const createExpBtn = event.target.closest('[data-create-expense]');
       if (createExpBtn) {
         try {
@@ -339,6 +414,7 @@
       if (!window.confirm('Delete this invoice? Its PDF and any auto-created expense go with it.')) return;
       try {
         await api.del(`/api/invoices/${btn.dataset.delInv}`);
+        if (editingInvId && String(editingInvId) === btn.dataset.delInv) resetInvoiceForm();
         toast('Invoice deleted.', 'ok');
         load();
       } catch (error) { toast(`Could not delete: ${error.message}`, 'err'); }
@@ -346,6 +422,71 @@
 
     $('#invoices-rows').addEventListener('change', async (event) => {
       await handlePkChange(event, 'invoice', load);
+    });
+
+    // ---- Receipt photo scanning ----
+    const scanBox = $('#scan-review');
+    function hideScanReview() {
+      scanBox.classList.add('hidden');
+      scanBox.innerHTML = '';
+      $('#inv-scan').value = '';
+    }
+
+    $('#inv-scan-btn').addEventListener('click', () => $('#inv-scan').click());
+
+    $('#inv-scan').addEventListener('change', async () => {
+      const file = $('#inv-scan').files[0];
+      if (!file) return;
+      scanBox.classList.remove('hidden');
+      scanBox.innerHTML = '<p class="text-sm text-navy-400">📷 Reading receipt…</p>';
+      try {
+        const data = new FormData();
+        data.append('file', file, file.name);
+        const res = await api.upload('/api/invoices/scan', data);
+        const ex = (res && res.extraction) || {};
+        const row = (label, val) => val ? `<div class="text-sm"><span class="text-navy-400">${label}:</span> <strong>${esc(String(val))}</strong></div>` : '';
+        const anyFound = ex.vendor || ex.total != null || ex.order_date;
+        scanBox.innerHTML = `
+          <div class="card space-y-2">
+            <h4 class="font-display text-base font-semibold text-navy-800">📷 Scanned receipt</h4>
+            ${anyFound ? `
+              ${row('Vendor', ex.vendor)}
+              ${row('Date', ex.order_date)}
+              ${row('Order #', ex.order_number)}
+              ${row('Total', ex.total != null ? `$${Number(ex.total).toFixed(2)}` : '')}
+              ${row('Items', ex.items_summary)}
+              ${row('Notes', ex.notes)}
+              <div class="flex gap-2 pt-1">
+                <button type="button" id="scan-use" class="btn-primary btn-small">Use these values</button>
+                <button type="button" id="scan-dismiss" class="btn-ghost btn-small">Dismiss</button>
+              </div>` : `
+              <p class="text-sm text-navy-500">Couldn't pull much from that photo — try better lighting, flat on a table, all four corners visible.</p>
+              <button type="button" id="scan-dismiss" class="btn-ghost btn-small">Dismiss</button>`}
+          </div>`;
+        const dismiss = $('#scan-dismiss');
+        if (dismiss) dismiss.addEventListener('click', hideScanReview);
+        const use = $('#scan-use');
+        if (use) use.addEventListener('click', () => {
+          if (ex.vendor) $('#inv-vendor').value = ex.vendor;
+          if (ex.order_date) $('#inv-date').value = ex.order_date;
+          if (ex.order_number) $('#inv-order').value = ex.order_number;
+          if (ex.total != null) $('#inv-total').value = ex.total;
+          if (ex.items_summary) $('#inv-items').value = ex.items_summary;
+          if (ex.notes) $('#inv-notes').value = ex.notes;
+          hideScanReview();
+          toast('Receipt values filled in — review and hit Add invoice 🧾', 'ok');
+          form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+      } catch (error) {
+        scanBox.innerHTML = `
+          <div class="card"><p class="text-sm text-red-700">Couldn't read that receipt: ${esc(error.message)}</p>
+          <button type="button" id="scan-dismiss" class="btn-ghost btn-small mt-2">Dismiss</button></div>`;
+        $('#scan-dismiss').addEventListener('click', hideScanReview);
+      }
+    });
+
+    document.addEventListener('verdant:year', () => {
+      load().catch((error) => toast(`Could not load invoices: ${error.message}`, 'err'));
     });
 
     load().catch((error) => toast(`Could not load invoices: ${error.message}`, 'err'));

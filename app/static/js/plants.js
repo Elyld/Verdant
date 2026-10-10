@@ -64,7 +64,7 @@
     </li>`;
   }
 
-  function plantModalHtml(plant, timeline, locationName, matched) {
+  function plantModalHtml(plant, timeline, locationName, matched, packet) {
     const events = timeline.events || [];
     const photos = timeline.photos || [];
     const harvests = events.filter((e) => e.kind === 'harvest');
@@ -75,6 +75,7 @@
         <div>
           <h3 class="font-display text-2xl font-semibold text-navy-800">${esc(plant.variety_name)}</h3>
           <p class="text-sm text-navy-500">${esc(plant.species_type || '')}${plant.species_type && locationName ? ' · ' : ''}${esc(locationName || '')} · <span class="pill">${esc(plant.status || 'Growing')}</span></p>
+          ${packet ? `<p class="mt-1 text-sm text-navy-500">🌱 Grown from <strong>${esc(packet.variety_name || 'seed packet')}</strong>${packet.vendor_name ? ` · ${esc(packet.vendor_name)}` : ''}</p>` : ''}
           ${plant.notes ? `<p class="mt-2 text-sm text-navy-600">${esc(plant.notes)}</p>` : ''}
         </div>
         <div class="flex shrink-0 gap-2">
@@ -176,10 +177,10 @@
     render();
   }
 
-  async function openPlantModal(plant, timeline, locationName, matched) {
+  async function openPlantModal(plant, timeline, locationName, matched, packet) {
     const modal = $('#plant-modal');
     if (!modal) return;
-    modal.innerHTML = `<div class="modal-backdrop" data-close></div><div class="modal-card modal-wide card" role="dialog" aria-modal="true" aria-label="${esc(plant.variety_name)}">${plantModalHtml(plant, timeline, locationName, matched)}</div>`;
+    modal.innerHTML = `<div class="modal-backdrop" data-close></div><div class="modal-card modal-wide card" role="dialog" aria-modal="true" aria-label="${esc(plant.variety_name)}">${plantModalHtml(plant, timeline, locationName, matched, packet)}</div>`;
     modal.classList.remove('hidden');
     modal.classList.add('modal-open');
     modal.setAttribute('aria-hidden', 'false');
@@ -231,16 +232,24 @@
       } catch { /* reminders are supplementary */ }
     }
 
-    async function loadPlants() {
-      const [fetched, locs] = await Promise.all([
-        api.get('/api/plants/'),
-        api.get('/api/locations/').catch(() => []),
-      ]);
-      plants = fetched;
-      locations = locs;
+    // The year a plant belongs to: planted date first, indoor-start as fallback.
+    // Follows the global season year from the header — no local year control.
+    const plantYear = (p) => ((p.date_planted || p.date_started_indoors || '').slice(0, 4) || null);
+
+    function renderPlants() {
+      const y = String(globalThis.Verdant.year());
+      const visible = plants.filter((p) => {
+        const py = plantYear(p);
+        return !py || py === y;
+      });
       const empty = $('#plants-empty');
-      if (empty) empty.classList.toggle('hidden', plants.length > 0);
-      grid.innerHTML = plants.map((plant) => {
+      if (empty) {
+        empty.classList.toggle('hidden', visible.length > 0);
+        empty.textContent = visible.length
+          ? ''
+          : `No plants for the ${globalThis.Verdant.year()} season yet. Add your first above — or pick another season up top.`;
+      }
+      grid.innerHTML = visible.map((plant) => {
         const badges = (reminderByPlant.get(plant.id) || [])
           .filter((r) => ['overdue', 'due', 'soon'].includes(r.status))
           .map((r) => `<span class="pill ${r.status === 'overdue' ? '!bg-red-100 !text-red-800' : ''}">${r.kind === 'water' ? '💧' : '🧪'} ${esc((dueLabel(r).split('· ')[1] || r.status))}</span>`)
@@ -249,6 +258,18 @@
       }).join('');
       enrichCovers();
     }
+
+    async function loadPlants() {
+      const [fetched, locs] = await Promise.all([
+        api.get('/api/plants/'),
+        api.get('/api/locations/').catch(() => []),
+      ]);
+      plants = fetched;
+      locations = locs;
+      renderPlants();
+    }
+
+    document.addEventListener('verdant:year', renderPlants);
 
     async function enrichCovers() {
       await Promise.all(plants.map(async (plant) => {
@@ -270,7 +291,11 @@
           api.get(`/api/plants/${plantId}/timeline`),
           api.get(`/api/album-images/?plant_id=${plantId}&limit=200`).catch(() => []),
         ]);
-        openPlantModal(plant, timeline, locationName(plant.location_id), Array.isArray(matched) ? matched : []);
+        let packet = null;
+        if (plant.seed_packet_id) {
+          packet = await api.get(`/api/seed-packets/${plant.seed_packet_id}`).catch(() => null);
+        }
+        openPlantModal(plant, timeline, locationName(plant.location_id), Array.isArray(matched) ? matched : [], packet);
       } catch (error) { toast(`Could not open plant: ${error.message}`, 'err'); }
     }
 
@@ -283,6 +308,7 @@
       $('#plant-light').value = plant?.light || 'Full Sun';
       $('#plant-status').value = plant?.status || 'Growing';
       $('#plant-location').value = plant?.location_id ? String(plant.location_id) : '';
+      $('#plant-packet').value = plant?.seed_packet_id ? String(plant.seed_packet_id) : '';
       $('#plant-planted').value = (plant?.date_planted || '').slice(0, 10);
       $('#plant-maturity').value = plant?.days_to_maturity ?? '';
       $('#plant-water').value = plant?.water_every_days ?? '';
@@ -299,6 +325,16 @@
         if (sel) sel.innerHTML = '<option value="">— none —</option>'
           + locations.map((l) => `<option value="${l.id}">${esc(l.name)}</option>`).join('');
       } catch { /* locations optional */ }
+    }
+
+    async function loadPacketOptions() {
+      try {
+        const packets = await api.get('/api/seed-packets/');
+        const sel = $('#plant-packet');
+        if (sel) sel.innerHTML = '<option value="">— none —</option>'
+          + (Array.isArray(packets) ? packets : []).map((p) =>
+            `<option value="${p.id}">${esc([p.variety_name, p.vendor_name].filter(Boolean).join(' · ') || 'seed packet')}</option>`).join('');
+      } catch { /* packets optional */ }
     }
 
     $('#plant-add-toggle').addEventListener('click', () => {
@@ -320,6 +356,7 @@
           light: $('#plant-light').value,
           status: $('#plant-status').value,
           location_id: $('#plant-location').value ? Number($('#plant-location').value) : null,
+          seed_packet_id: $('#plant-packet').value ? Number($('#plant-packet').value) : null,
           date_planted: $('#plant-planted').value || null,
           days_to_maturity: $('#plant-maturity').value ? Number($('#plant-maturity').value) : null,
           water_every_days: $('#plant-water').value ? Number($('#plant-water').value) : null,
@@ -526,6 +563,7 @@
     });
 
     loadLocationOptions()
+      .then(() => loadPacketOptions())
       .then(() => loadReminders())
       .then(() => loadPlants())
       .then(() => loadSowCalendar())

@@ -74,7 +74,12 @@ maturity, light needs, and custom care intervals. Verdant computes what's
 also has a photo timeline and a per-plant timelapse view.
 
 Photos you assign on the 🎯 Match photos page appear in a **Photos** gallery
-on the plant's profile, with a lightbox on click.
+on the plant's profile, with a lightbox on click. Plants follow the
+**season year** picker in the header — switch seasons without deleting
+anything; last year's plants stay for history, rotation warnings, and the
+season review. And each plant can record which **seed packet** it was grown
+from, tracing it back through the packet
+to the invoice that bought it.
 
 Adding a plant? Hit **🔎 Look up growing info** on the form — search the
 crop guide (30 curated crops plus **8,200 edible plants from OpenPlantDB**,
@@ -137,11 +142,13 @@ interval, and let the garden scroll by on a TV or tablet.
 
 ![Full-screen slideshow](docs/screenshots/slideshow.png)
 
-### 🌰 Seeds — sources & vendors
-Track where every seed came from: vendors, trades, or saved seed. Grouped by
-vendor, filterable, linkable to the plants you grew from them.
+### 🏪 Vendors — where the seeds came from
+A read-only directory of every place your seeds came from, built from the
+stash: packet counts and year ranges per vendor, with a jump straight into
+the stash filtered to that vendor. (The old manual seed-source list was
+redundant next to the stash — it's gone; the data underneath is untouched.)
 
-![Seed sources](docs/screenshots/seeds.png)
+![Vendors](docs/screenshots/vendors.png)
 
 ### 🌱 Seed stash — the binder, catalogued
 Every packet you own, inventoried: a photo of the packet, vendor (with link),
@@ -427,10 +434,16 @@ date, order number, total, and the PDF receipt, each optionally linked to
 the expense it documents — and both invoices and expenses can be **tagged
 with the seed packets** they bought (with smart suggestions matched from the
 order text), so the Order assistant knows exactly what came from where.
+Invoices are searchable (vendor, order number, items), filterable by source,
+sortable, and editable in place. A **📷 Scan receipt** button photographs a
+paper receipt and reads the vendor, date, total, and items into the form —
+nothing is saved until you confirm.
 
 ![Costs](docs/screenshots/costs.png)
 
 ![Invoices](docs/screenshots/invoices.png)
+
+![Receipt scan](docs/screenshots/receipt-scan.png)
 
 ### 🐛 Pests — the treatment log
 What showed up, what you sprayed or squashed, and whether it worked — a
@@ -734,12 +747,16 @@ Notes:
 ## Backup & restore
 
 **Backup:** open the Backup page (`/backup`) → Download. You get a zip with
-`garden.db` and, unless you uncheck the box, the entire `uploads/` tree.
-Store one before every upgrade.
+`data.json` — every table's rows, all 30+ of them, auto-discovered so new
+features are covered without anyone remembering a list — plus a `files/`
+tree with every uploaded photo, packet scan, and invoice PDF (uncheck the
+box for a tiny database-only backup). Store one before every upgrade.
 
 **Restore:** on the same page, upload a backup zip. Verdant replaces the
 database with the backup's contents; uploads are replaced too, unless the
 backup was made without photos — then your current photos are left alone.
+The zip is fully validated before anything is touched, so a corrupt file
+can't wipe your garden.
 
 There's also a JSON export per table via the API (see `/docs`) if you'd
 rather script it.
@@ -870,6 +887,37 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.56.0** — **🧾 Invoices grow up, backups you can trust.** **💾 Backup fixed:** the backup auto-discovers every table, but
+  its photo detection only knew two filename columns — so **seed packet
+  photos were silently left out of every backup**. Photo detection now
+  covers any `*_path` column, the same "no list to forget" philosophy as the
+  tables. If you downloaded a backup before this fix, your packet photos
+  weren't in it — grab a fresh one. **🗓️ Season year:** a year picker now
+  lives in the header and the whole app follows it — costs drop to $0 for a
+  fresh year, plants and garden logs show that season's entries, and last
+  year's data is one click away instead of deleted. Seeds stay
+  year-independent, as they should. The endless Garden Logs histories are
+  also **paged** (25 at a time, newest first) instead of scrolling forever.
+  Then, four accounting-workflow upgrades
+  on the Costs page and around it. **Search, filter, sort:** the invoice list
+  now searches vendor, order number, and items together, filters by source
+  (manual / CSV / Gmail), and sorts by date, vendor, or total
+  (`GET /api/invoices/` gains `q`, `source`, `sort`, `order`). **Editing:**
+  invoices finally have an edit button — the form fills in, PATCHes on save,
+  and cancels cleanly, just like expenses always could. **📷 Receipt scanning:**
+  not every purchase comes through email, so the invoice form has a **Scan
+  receipt** button: photograph a paper receipt and the vision model reads the
+  vendor, date, order number, total, and items into a review card — one tap
+  fills the form, nothing is saved until you confirm
+  (`POST /api/invoices/scan`, new `app/receipt_scan.py`; uses the same AI
+  settings as the garden agent, so there's nothing new to configure).
+  **🌱 Plants link to seed packets:** the plant form has a "Grown from seed
+  packet" dropdown, so a plant traces back to its packet and through it to
+  the invoice that bought it (`Plant.seed_packet_id`; the plant profile shows
+  the link). **🏪 Vendors, not sources:** the redundant Seed Sources tab is
+  now a read-only vendor directory built from the stash — every place your
+  seeds came from, with packet counts and a jump into the stash. The old
+  add/edit/delete source form is gone; the underlying data is untouched.
 - **2.55.1** — **🌿 The real logo.** Verdant finally has its logo — the
   navy V over fern fronds, designed by Kate — and it now appears everywhere
   the placeholder used to: header, footer, favicon (plus an

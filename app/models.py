@@ -173,10 +173,14 @@ class Plant(SQLModel, table=True):
     days_to_maturity: Optional[int] = None
     light: str = Field(default="Full Sun")
     notes: Optional[str] = None
+    # Which seed packet this plant was grown from (optional). Traces the
+    # plant back to its packet, and through the packet to the invoice.
+    seed_packet_id: Optional[int] = Field(default=None, foreign_key="seed_packets.id", index=True)
     # Care cadence (days) — drives watering/feeding reminders. Null = no reminder.
     water_every_days: Optional[int] = Field(default=None, ge=1, le=365)
     feed_every_days: Optional[int] = Field(default=None, ge=1, le=365)
     location: Optional[Location] = Relationship(back_populates="plants")
+    seed_packet: Optional["SeedPacket"] = Relationship()
     fertilization_logs: List["FertilizationLog"] = Relationship(back_populates="plant")
     observation_logs: List["ObservationLog"] = Relationship(back_populates="plant")
     harvests: List["Harvest"] = Relationship(back_populates="plant")

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from sqlmodel import or_
 
 from app.database import get_session
-from app.models import Plant, Location, apply_patch
+from app.models import Plant, Location, SeedPacket, apply_patch
 from app.schemas import (
     ImageRead,
     PlantTimelineRead,
@@ -72,6 +72,12 @@ def create_plant(
                 status_code=404,
                 detail=f"Location {plant.location_id} not found"
             )
+    if plant.seed_packet_id:
+        if not session.get(SeedPacket, plant.seed_packet_id):
+            raise HTTPException(
+                status_code=404,
+                detail=f"Seed packet {plant.seed_packet_id} not found"
+            )
     existing = session.query(Plant).filter(
         Plant.plant_id == plant.plant_id
     ).first()
@@ -99,6 +105,12 @@ def update_plant(
 ) -> Plant:
     plant = _get_or_404(session, plant_id)
     # plant_id is the stable public ID (CSV re-import keys on it): never rewritable.
+    if payload.get("seed_packet_id") is not None:
+        if not session.get(SeedPacket, payload["seed_packet_id"]):
+            raise HTTPException(
+                status_code=404,
+                detail=f"Seed packet {payload['seed_packet_id']} not found",
+            )
     apply_patch(plant, payload, exclude=("plant_id",))
     session.add(plant)
     session.commit()

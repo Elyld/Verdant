@@ -1,7 +1,8 @@
 """Fertilization log CRUD."""
 from __future__ import annotations
 
-from typing import List
+from datetime import date as Date
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session, select
@@ -25,14 +26,17 @@ def list_logs(
     session: Session = Depends(get_session),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
+    date_from: Optional[Date] = Query(default=None, description="Earliest log date"),
+    date_to: Optional[Date] = Query(default=None, description="Latest log date"),
 ) -> List[FertilizationLog]:
-    stmt = (
-        select(FertilizationLog)
-        .order_by(FertilizationLog.date.desc(), FertilizationLog.id.desc())
-        .offset(offset)
-        .limit(limit)
+    stmt = select(FertilizationLog).order_by(
+        FertilizationLog.date.desc(), FertilizationLog.id.desc()
     )
-    return list(session.exec(stmt).all())
+    if date_from:
+        stmt = stmt.where(FertilizationLog.date >= date_from)
+    if date_to:
+        stmt = stmt.where(FertilizationLog.date <= date_to)
+    return list(session.exec(stmt.offset(offset).limit(limit)).all())
 
 
 @router.post("", response_model=FertilizationRead, status_code=status.HTTP_201_CREATED)

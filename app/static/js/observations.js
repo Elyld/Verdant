@@ -17,22 +17,75 @@
     let editingFert = null;
     let editingObs = null;
 
+    // Histories are paged (25/page, newest first) and follow the global season year.
+    const PAGE_SIZE = 25;
+    let fertPage = 0;
+    let obsPage = 0;
+
+    function yearRange() {
+      const y = globalThis.Verdant.year();
+      return { year: y, from: `${y}-01-01`, to: `${y}-12-31` };
+    }
+
+    function renderPager(kind, page, hasMore, shown) {
+      const label = $(`#${kind}-page-label`);
+      const prev = $(`#${kind}-prev`);
+      const next = $(`#${kind}-next`);
+      const y = globalThis.Verdant.year();
+      if (label) label.textContent = shown ? `Page ${page + 1} · ${y}` : `Nothing in ${y} yet.`;
+      if (prev) prev.disabled = page === 0;
+      if (next) next.disabled = !hasMore;
+    }
+
     async function loadFerts() {
-      ferts = await api.get('/api/fertilizations?limit=500');
+      const { from, to } = yearRange();
+      const rows = await api.get(`/api/fertilizations?limit=${PAGE_SIZE + 1}&offset=${fertPage * PAGE_SIZE}&date_from=${from}&date_to=${to}`);
+      const hasMore = rows.length > PAGE_SIZE;
+      ferts = rows.slice(0, PAGE_SIZE);
       $('#fert-count').textContent = ferts.length;
       $('#fert-rows').innerHTML = ferts.length ? ferts.map((item) => `<tr><td class="td">${fmtDate(item.date)}</td><td class="td">${esc(item.fertilizer_name)}</td><td class="td">${esc(item.npk_ratio) || '—'}</td><td class="td">${esc(fmtAmount(item)) || '—'}</td><td class="td">${esc(item.notes) || '—'}</td><td class="td text-right"><button class="text-sage-700" data-edit-fert="${item.id}">Edit</button> <button data-delete-fert="${item.id}" aria-label="Delete fertilization">🗑</button></td></tr>`).join('') : '<tr><td class="td text-center" colspan="6">No fertilization entries yet.</td></tr>';
+      renderPager('fert', fertPage, hasMore, ferts.length);
     }
     async function loadObs() {
       const plant = $('#obs-filter').value.trim();
       const date = new URLSearchParams(location.search).get('date');
-      observations = await api.get(`/api/observations?limit=500${plant ? `&plant=${encodeURIComponent(plant)}` : ''}${date ? `&date_from=${date}&date_to=${date}` : ''}`);
+      const { from, to } = yearRange();
+      // A calendar deep-link (?date=…) pins one exact day, bypassing the year filter.
+      const range = date ? `&date_from=${date}&date_to=${date}` : `&date_from=${from}&date_to=${to}`;
+      const rows = await api.get(`/api/observations?limit=${PAGE_SIZE + 1}&offset=${obsPage * PAGE_SIZE}${plant ? `&plant=${encodeURIComponent(plant)}` : ''}${range}`);
+      const hasMore = rows.length > PAGE_SIZE;
+      observations = rows.slice(0, PAGE_SIZE);
       $('#obs-count').textContent = observations.length;
       const tunit = await tempUnit();
       const weatherChip = (item) => item.temp_c != null
         ? `<div class="mt-0.5 text-xs text-navy-400">🌡️ ${esc(fmtTemp(item.temp_c, tunit))}${item.weather_summary ? ` · ${esc(item.weather_summary)}` : ''}</div>`
         : '';
       $('#obs-rows').innerHTML = observations.length ? observations.map((item) => `<tr><td class="td">${fmtDate(item.date)}</td><td class="td">${esc(item.plant_name)}</td><td class="td">${healthBar(item.health_scale)}</td><td class="td">${item.watering_status ? '💧 Watered' : '—'}</td><td class="td">${esc(item.pest_sightings) || 'None'}</td><td class="td">${esc(item.notes) || ''}${weatherChip(item)}${!item.notes && !weatherChip(item) ? '—' : ''}</td><td class="td">${(item.images || []).map((image) => `<button data-lightbox="${esc(image.file_path)}"><img src="${esc(image.file_path)}" class="h-10 w-10 rounded object-cover" alt="${esc(item.plant_name)}"></button>`).join('') || '—'}</td><td class="td text-right"><button class="text-sage-700" data-edit-obs="${item.id}">Edit</button> <button data-delete-obs="${item.id}" aria-label="Delete observation">🗑</button></td></tr>`).join('') : '<tr><td class="td text-center" colspan="8">No observations yet.</td></tr>';
+      renderPager('obs', obsPage, hasMore, observations.length);
     }
+
+    function wirePager(kind, load) {
+      const prev = $(`#${kind}-prev`);
+      const next = $(`#${kind}-next`);
+      if (prev) prev.addEventListener('click', () => {
+        if (kind === 'fert' ? fertPage > 0 : obsPage > 0) {
+          if (kind === 'fert') fertPage--; else obsPage--;
+          load().catch((e) => toast(`Could not load: ${e.message}`, 'err'));
+        }
+      });
+      if (next) next.addEventListener('click', () => {
+        if (kind === 'fert') fertPage++; else obsPage++;
+        load().catch((e) => toast(`Could not load: ${e.message}`, 'err'));
+      });
+    }
+    wirePager('fert', loadFerts);
+    wirePager('obs', loadObs);
+
+    // New entries go to page 1; the season-year switch resets both histories.
+    document.addEventListener('verdant:year', () => {
+      fertPage = 0; obsPage = 0;
+      Promise.all([loadFerts(), loadObs()]).catch((e) => toast(`Could not load: ${e.message}`, 'err'));
+    });
 
     wireDraft(fertForm, 'verdant.draft.fert', ['#fert-date', '#fert-name', '#fert-npk', '#fert-amount', '#fert-amount-value', '#fert-amount-unit', '#fert-notes', '#fert-plant-link']);
     wireDraft(obsForm, 'verdant.draft.obs', ['#obs-date', '#obs-plant', '#obs-plant-link', '#obs-health', '#obs-water', '#obs-pests', '#obs-notes']);
@@ -89,7 +142,7 @@
         editingFert ? await api.patch(`/api/fertilizations/${editingFert}`, payload) : await api.post('/api/fertilizations', payload);
         editingFert = null; fertForm.reset(); localStorage.removeItem('verdant.draft.fert'); $('#fert-date').value = today;
         $('button[type="submit"]', fertForm).textContent = 'Add fertilization';
-        toast('Fertilization saved 🧪', 'ok'); await Promise.all([loadFerts(), renderStats()]);
+        toast('Fertilization saved 🧪', 'ok'); fertPage = 0; await Promise.all([loadFerts(), renderStats()]);
       } catch (error) { toast(`Could not save: ${error.message}`, 'err'); }
     });
     obsForm.addEventListener('submit', async (event) => {
@@ -100,7 +153,7 @@
         if (!editingObs) await uploadFiles(`/api/observations/${observation.id}/images`, $('#obs-images').files);
         editingObs = null; obsForm.reset(); localStorage.removeItem('verdant.draft.obs'); $('#obs-date').value = today; $('#obs-health-out').textContent = '5';
         $('button[type="submit"]', obsForm).textContent = 'Add observation';
-        toast('Observation saved 🔍', 'ok'); await Promise.all([loadObs(), renderStats()]);
+        toast('Observation saved 🔍', 'ok'); obsPage = 0; await Promise.all([loadObs(), renderStats()]);
       } catch (error) { toast(`Could not save: ${error.message}`, 'err'); }
     });
     document.addEventListener('click', (event) => {
@@ -118,7 +171,7 @@
       }
     });
     let filterTimer;
-    $('#obs-filter').addEventListener('input', () => { clearTimeout(filterTimer); filterTimer = setTimeout(() => loadObs(), 250); });
+    $('#obs-filter').addEventListener('input', () => { clearTimeout(filterTimer); filterTimer = setTimeout(() => { obsPage = 0; loadObs(); }, 250); });
     Promise.all([loadFerts(), loadObs(), renderStats()]).catch((error) => toast(`Could not load garden logs: ${error.message}`, 'err'));
     return { ferts: loadFerts, obs: loadObs };
   }
