@@ -1,5 +1,9 @@
 # 🌿 Verdant — Self-Hosted Garden Journal
 
+<img src="app/static/img/logo.jpg" alt="Verdant logo" width="180" />
+
+*Logo designed by Kate 🌿*
+
 [![CI](https://github.com/Elyld/Verdant/actions/workflows/test.yml/badge.svg)](https://github.com/Elyld/Verdant/actions/workflows/test.yml)
 [![Release](https://img.shields.io/github/v/release/Elyld/Verdant)](https://github.com/Elyld/Verdant/releases)
 [![Docker](https://img.shields.io/badge/docker-ghcr.io%2Felyld%2Fverdant-blue?logo=docker)](https://github.com/Elyld/Verdant/pkgs/container/verdant)
@@ -866,6 +870,11 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.55.1** — **🌿 The real logo.** Verdant finally has its logo — the
+  navy V over fern fronds, designed by Kate — and it now appears everywhere
+  the placeholder used to: header, footer, favicon (plus an
+  `apple-touch-icon` for phone home screens). The old
+  `logo-placeholder.svg` is gone.
 - **2.55.0** — **✅ Books integrity check.** The Costs page now carries an
   integrity badge that answers "do these numbers actually add up?". Two layers,
   one report (`GET /api/books/check`): a **structural audit** that runs live

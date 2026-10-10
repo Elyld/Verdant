@@ -77,12 +77,13 @@ def test_front_and_back_photos():
 
 
 def test_logo_placeholders_served():
-    # Placeholder SVG is served from static.
-    r = client.get("/static/img/logo-placeholder.svg")
+    # The real logo (Kate's design) is served from static.
+    r = client.get("/static/img/logo.jpg")
     assert r.status_code == 200, r.text
-    assert "LOGO" in r.text
 
     # Every page (via base.html) references it: nav, footer, favicon.
     r = client.get("/seeds")
     assert r.status_code == 200, r.text
-    assert r.text.count("/static/img/logo-placeholder.svg") >= 3
+    assert r.text.count("/static/img/logo.jpg") >= 3
+    # Kate gets credit in the footer.
+    assert "logo by Kate" in r.text
