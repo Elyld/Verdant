@@ -388,13 +388,16 @@
   // records (costs, plants, logs) filter to it; seeds stay year-independent.
   const YEAR_KEY = 'verdant.year';
   function year() {
-    const y = Number(localStorage.getItem(YEAR_KEY));
-    return y >= 2000 && y <= 2100 ? y : new Date().getFullYear();
+    try {
+      const y = Number(localStorage.getItem(YEAR_KEY));
+      if (y >= 2000 && y <= 2100) return y;
+    } catch { /* no storage (tests, private mode) — fall through to current year */ }
+    return new Date().getFullYear();
   }
   function setYear(y) {
     y = Number(y);
     if (!(y >= 2000 && y <= 2100)) return;
-    localStorage.setItem(YEAR_KEY, String(y));
+    try { localStorage.setItem(YEAR_KEY, String(y)); } catch { /* ignore */ }
     document.dispatchEvent(new CustomEvent('verdant:year', { detail: { year: y } }));
   }
   function initYearPicker() {
