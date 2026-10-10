@@ -5,9 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>{% block title %}Verdant{% endblock %}</title>
 <meta name="description" content="Self-hosted gardening blog and observation log." />
-<link rel="icon" type="image/svg+xml" href="/static/img/logo-placeholder.svg" />
-<!-- LOGO: the favicon above points at the placeholder SVG. When the real logo arrives,
-     either replace app/static/img/logo-placeholder.svg with it, or point href at the new file. -->
+<link rel="icon" type="image/jpeg" href="/static/img/logo.jpg" />
+<link rel="apple-touch-icon" href="/static/img/apple-touch-icon.png" />
 <!-- Typography: Newsreader (display serif) + Source Sans 3 (body), mirroring the Verdant demo look. -->
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -45,7 +44,7 @@
       <div class="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
         <div class="flex items-center gap-3">
           <!-- LOGO: placeholder below. Swap src for the real logo file when it arrives. -->
-          <img src="/static/img/logo-placeholder.svg" alt="Verdant logo" class="h-11 w-11 rounded-xl ring-1 ring-sage-300/40" />
+          <img src="/static/img/logo.jpg" alt="Verdant logo" class="h-11 w-11 rounded-xl ring-1 ring-sage-300/40" />
           <div>
             <h1 class="font-display text-2xl font-semibold tracking-tight text-beige-50">Verdant</h1>
             <p class="text-xs uppercase tracking-[0.18em] text-sage-200">Garden Journal &amp; Observation Log</p>
@@ -153,12 +152,11 @@
   <!-- Footer -->
   {% block footer %}
   <footer class="border-t border-beige-300 bg-beige-50/70 py-6 text-center text-xs text-navy-400">
-    <!-- LOGO: small placeholder copy of the logo in the footer. -->
-    <img src="/static/img/logo-placeholder.svg" alt="" class="mr-1 inline h-4 w-4 rounded align-[-2px]" />Verdant · self-hosted garden journal ·
+    <img src="/static/img/logo.jpg" alt="" class="mr-1 inline h-4 w-4 rounded align-[-2px]" />Verdant · self-hosted garden journal ·
     {% if docs_enabled %}<a class="underline decoration-sage-400 hover:text-navy-700" href="/docs">API docs</a> ·{% endif %}
     <a class="underline decoration-sage-400 hover:text-navy-700" href="/backup">💾 Backup</a> ·
     <a class="underline decoration-sage-400 hover:text-navy-700" href="/settings">⚙️ Settings</a>
-    <span id="app-version" class="pill" title="Verdant version"></span>
+    <span id="app-version" class="pill" title="Verdant version"></span> · 🌿 logo by Kate
   </footer>
   {% endblock %}
 </div>
