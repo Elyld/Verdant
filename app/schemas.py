@@ -330,8 +330,10 @@ class AlbumImageRead(BaseModel):
     longitude: Optional[float] = None
     tags: str = ""
     plant_id: Optional[int] = None
-    # Filled in by endpoints that join plants; not a model column.
+    seed_packet_id: Optional[int] = None
+    # Filled in by endpoints that join plants / seed packets; not model columns.
     plant_variety: Optional[str] = None
+    packet_variety: Optional[str] = None
 
     _null_str = field_validator(
         "source_url", "camera_make", "camera_model", "tags", mode="before"
@@ -374,16 +376,21 @@ class AlbumMergeResult(BaseModel):
 
 
 class ImageAssignRequest(BaseModel):
-    """Assign a photo to a plant (or unassign with null)."""
+    """Assign a photo to a plant or a seed packet (or unassign with both null).
+
+    The two targets are mutually exclusive — setting one clears the other.
+    """
 
     plant_id: Optional[int] = None
+    seed_packet_id: Optional[int] = None
 
 
 class ImageBulkAssignRequest(BaseModel):
-    """Assign many photos to one plant at once (null unassigns)."""
+    """Assign many photos to one plant or one seed packet at once (both null unassigns)."""
 
     image_ids: List[int] = Field(min_length=1, max_length=2000)
     plant_id: Optional[int] = None
+    seed_packet_id: Optional[int] = None
 
 
 class AlbumCreateResult(BaseModel):

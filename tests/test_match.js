@@ -1,9 +1,10 @@
-/* Regression test: /match photo<->plant workflow + Immich merge-duplicates button.
+/* Regression test: /match photo<->plant/packet workflow + Immich merge-duplicates button.
  * Drives match.js and immich.js with a stub DOM:
- *  1. Match page boots: albums + plants load, first photo renders with metadata
- *  2. Assign without a plant warns; assign with a plant PATCHes and advances
- *  3. Bulk button groups same-day photos and posts a bulk assign
- *  4. Merge duplicates button posts and toasts the result
+ *  1. Match page boots: albums + plants + packets load, first photo renders with metadata
+ *  2. Assign without a target warns; assign to a plant PATCHes and advances
+ *  3. Assign to a seed packet PATCHes seed_packet_id and clears plant_id
+ *  4. Bulk button groups same-day photos and posts a bulk assign
+ *  5. Merge duplicates button posts and toasts the result
  */
 'use strict';
 const fs = require('fs');
@@ -88,13 +89,20 @@ global.localStorage = {
 const IMAGES = [
   { id: 101, file_path: '/uploads/albums/7/p0.jpg', title: 'p0.jpg', original_name: 'p0.jpg',
     taken_at: '2026-09-20T10:00:00', camera_make: 'Google', camera_model: 'Pixel',
-    latitude: 39.1, longitude: -94.5, tags: 'pepper', plant_id: null, plant_variety: null },
+    latitude: 39.1, longitude: -94.5, tags: 'pepper', plant_id: null, plant_variety: null,
+    seed_packet_id: null, packet_variety: null },
   { id: 102, file_path: '/uploads/albums/7/p1.jpg', title: 'p1.jpg', original_name: 'p1.jpg',
     taken_at: '2026-09-20T10:05:00', camera_make: '', camera_model: '',
-    latitude: null, longitude: null, tags: '', plant_id: null, plant_variety: null },
+    latitude: null, longitude: null, tags: '', plant_id: null, plant_variety: null,
+    seed_packet_id: null, packet_variety: null },
   { id: 103, file_path: '/uploads/albums/7/p2.jpg', title: 'p2.jpg', original_name: 'p2.jpg',
     taken_at: '2026-09-21T10:00:00', camera_make: '', camera_model: '',
-    latitude: null, longitude: null, tags: '', plant_id: 5, plant_variety: 'Habanero' },
+    latitude: null, longitude: null, tags: '', plant_id: 5, plant_variety: 'Habanero',
+    seed_packet_id: null, packet_variety: null },
+  { id: 104, file_path: '/uploads/albums/7/p3.jpg', title: 'p3.jpg', original_name: 'p3.jpg',
+    taken_at: '2026-09-20T10:10:00', camera_make: '', camera_model: '',
+    latitude: null, longitude: null, tags: '', plant_id: null, plant_variety: null,
+    seed_packet_id: 9, packet_variety: 'Sungold' },
 ];
 const calls = { patch: [], bulk: [], merge: 0 };
 global.fetch = async (url, options) => {
@@ -106,11 +114,16 @@ global.fetch = async (url, options) => {
     { id: 5, variety_name: 'Habanero' },
     { id: 6, variety_name: 'Sungold' },
   ];
+  else if (url === '/api/seed-packets/') resp = [
+    { id: 9, variety_name: 'Sungold', year_acquired: 2025, vendor_name: 'Baker Creek' },
+  ];
   else if (url.startsWith('/api/album-images/') && method === 'GET') {
-    resp = url.includes('unassigned_only=true') ? IMAGES.filter((i) => !i.plant_id) : IMAGES;
+    resp = url.includes('unassigned_only=true') ? IMAGES.filter((i) => !i.plant_id && !i.seed_packet_id) : IMAGES;
   } else if (url === '/api/album-images/101' && method === 'PATCH') {
     calls.patch.push(body);
-    resp = { ...IMAGES[0], plant_id: body.plant_id, plant_variety: 'Sungold' };
+    resp = body.seed_packet_id
+      ? { ...IMAGES[0], plant_id: null, plant_variety: null, seed_packet_id: body.seed_packet_id, packet_variety: 'Sungold' }
+      : { ...IMAGES[0], plant_id: body.plant_id, plant_variety: 'Sungold', seed_packet_id: null, packet_variety: null };
   } else if (url === '/api/album-images/bulk-assign' && method === 'POST') {
     calls.bulk.push(body);
     resp = { updated: body.image_ids.length };
@@ -146,11 +159,15 @@ named['#toasts'].append = (c) => { seenToasts.push(c.textContent); };
   check('xmp tags shown', named['#match-tags'].textContent === '🏷️ pepper');
   check('counter shows position', named['#match-counter'].textContent.startsWith('1 / 2'));
   check('plants listed alphabetically', named['#match-plant'].innerHTML.indexOf('Habanero') < named['#match-plant'].innerHTML.indexOf('Sungold'));
+  check('seed packets listed in their own group', named['#match-plant'].innerHTML.includes('Seed packets')
+    && named['#match-plant'].innerHTML.includes('value="s:9"')
+    && named['#match-plant'].innerHTML.includes('Sungold (2025 · Baker Creek)'));
+  check('packet-assigned photo excluded from unassigned view', named['#match-counter'].textContent.startsWith('1 / 2'));
   check('bulk button groups the two same-day photos',
     !named['#match-bulk'].disabled && named['#match-bulk'].textContent.includes('all 2'));
 
   // Bulk assign the two same-day photos first.
-  named['#match-plant'].value = '5';
+  named['#match-plant'].value = 'p:5';
   await named['#match-bulk']._listeners.click[0]();
   await tick(60);
   check('bulk assign posted', calls.bulk.length === 1
@@ -163,7 +180,7 @@ named['#toasts'].append = (c) => { seenToasts.push(c.textContent); };
   named['#match-unassigned'].checked = false;
   await named['#match-unassigned']._listeners.change[0]();
   await tick(60);
-  check('all photos listed when filter off', named['#match-counter'].textContent.startsWith('1 / 3'));
+  check('all photos listed when filter off', named['#match-counter'].textContent.startsWith('1 / 4'));
 
   // Assign with no plant chosen -> warning, no request.
   named['#match-plant'].value = '';
@@ -172,16 +189,23 @@ named['#toasts'].append = (c) => { seenToasts.push(c.textContent); };
   check('no patch sent without plant', calls.patch.length === 0);
 
   // Assign to Sungold -> PATCH and advance to the next photo.
-  named['#match-plant'].value = '6';
+  named['#match-plant'].value = 'p:6';
   await named['#match-assign']._listeners.click[0]();
   await tick(60);
-  check('patch sent with plant id', calls.patch.length === 1 && calls.patch[0].plant_id === 6);
+  check('patch sent with plant id', calls.patch.length === 1 && calls.patch[0].plant_id === 6 && calls.patch[0].seed_packet_id === null);
   check('advanced to next photo', named['#match-photo'].src === '/uploads/albums/7/p1.jpg');
 
   // Keyboard navigation wraps.
   const key = (k) => ({ key: k, target: { matches: () => false } });
   docListeners.keydown.forEach((fn) => fn(key('ArrowLeft')));
   check('arrow key navigates back', named['#match-photo'].src === '/uploads/albums/7/p0.jpg');
+
+  // Assign to a seed packet -> PATCH with seed_packet_id, plant cleared.
+  named['#match-plant'].value = 's:9';
+  await named['#match-assign']._listeners.click[0]();
+  await tick(60);
+  check('patch sent with seed_packet_id', calls.patch.length === 2
+    && calls.patch[1].seed_packet_id === 9 && calls.patch[1].plant_id === null);
 
   // Merge duplicates button.
   const mergeBtn = named['#immich-merge'];
