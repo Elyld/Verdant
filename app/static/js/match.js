@@ -1,4 +1,4 @@
-/* Photo <-> plant matching workflow (/match page). */
+/* Photo <-> plant/packet matching workflow (/match page). */
 (() => {
   'use strict';
 
@@ -7,13 +7,14 @@
 
   function initMatch() {
     const albumSel = $('#match-album');
-    const plantSel = $('#match-plant');
+    const targetSel = $('#match-plant');
     const unassignedOnly = $('#match-unassigned');
-    if (!albumSel || !plantSel) return;
+    if (!albumSel || !targetSel) return;
 
     let images = [];
     let index = 0;
     let plants = [];
+    let packets = [];
 
     async function loadAlbums() {
       const albums = await api.get('/api/albums');
@@ -24,13 +25,51 @@
       albumSel.value = current;
     }
 
-    async function loadPlants() {
-      const list = await api.get('/api/plants/').catch(() => []);
-      plants = (Array.isArray(list) ? list : []).slice()
+    async function loadTargets() {
+      const [plantList, packetList] = await Promise.all([
+        api.get('/api/plants/').catch(() => []),
+        api.get('/api/seed-packets/').catch(() => []),
+      ]);
+      plants = (Array.isArray(plantList) ? plantList : []).slice()
         .sort((a, b) => String(a.variety_name || '').localeCompare(String(b.variety_name || '')));
-      plantSel.innerHTML = '<option value="">Choose a plant…</option>'
-        + plants.map((p) => `<option value="${p.id}">${esc(p.variety_name)}</option>`).join('');
+      packets = (Array.isArray(packetList) ? packetList : []).slice()
+        .sort((a, b) => String(a.variety_name || '').localeCompare(String(b.variety_name || '')));
+      const plantOpts = plants
+        .map((p) => `<option value="p:${p.id}">${esc(p.variety_name)}</option>`).join('');
+      const packetOpts = packets
+        .map((p) => `<option value="s:${p.id}">${esc(packetLabel(p))}</option>`).join('');
+      targetSel.innerHTML = '<option value="">Choose a plant or seed packet…</option>'
+        + `<optgroup label="🌿 Plants">${plantOpts}</optgroup>`
+        + `<optgroup label="🫘 Seed packets">${packetOpts}</optgroup>`;
     }
+
+    function packetLabel(p) {
+      const bits = [p.variety_name];
+      const extra = [p.year_acquired, p.vendor_name].filter(Boolean).join(' · ');
+      return extra ? `${bits[0]} (${extra})` : bits[0];
+    }
+
+    // The dropdown values are prefixed: p:<id> for plants, s:<id> for packets.
+    function selectedTarget() {
+      const v = targetSel.value || '';
+      if (v.startsWith('p:')) return { plant_id: Number(v.slice(2)), seed_packet_id: null };
+      if (v.startsWith('s:')) return { plant_id: null, seed_packet_id: Number(v.slice(2)) };
+      return { plant_id: null, seed_packet_id: null };
+    }
+
+    function targetValue(img) {
+      if (img.plant_id) return `p:${img.plant_id}`;
+      if (img.seed_packet_id) return `s:${img.seed_packet_id}`;
+      return '';
+    }
+
+    function targetName(target) {
+      if (target.plant_id) return plants.find((p) => p.id === target.plant_id)?.variety_name || 'plant';
+      if (target.seed_packet_id) return packets.find((p) => p.id === target.seed_packet_id)?.variety_name || 'seed packet';
+      return 'target';
+    }
+
+    function isAssigned(img) { return !!(img.plant_id || img.seed_packet_id); }
 
     async function loadImages() {
       const params = new URLSearchParams({
@@ -75,11 +114,11 @@
       $('#match-caption').textContent = img.title || img.original_name || `Photo #${img.id}`;
       $('#match-meta').textContent = metaLine(img);
       $('#match-tags').textContent = img.tags ? '🏷️ ' + img.tags : '';
-      const assigned = images.filter((i) => i.plant_id).length;
+      const assigned = images.filter(isAssigned).length;
       $('#match-counter').textContent = `${index + 1} / ${images.length} · ${assigned} assigned in this view`;
       progress.textContent = images.length === 1000 ? 'Showing first 1000 photos' : '';
 
-      plantSel.value = img.plant_id ? String(img.plant_id) : '';
+      targetSel.value = targetValue(img);
       updateBulkButton();
     }
 
@@ -91,7 +130,7 @@
     function dayMates() {
       const img = images[index];
       if (!img || !img.taken_at) return [];
-      return images.filter((i) => !i.plant_id && sameDay(i.taken_at, img.taken_at));
+      return images.filter((i) => !isAssigned(i) && sameDay(i.taken_at, img.taken_at));
     }
 
     function updateBulkButton() {
@@ -101,7 +140,7 @@
       if (mates.length > 1) {
         btn.disabled = false;
         btn.textContent = `Assign all ${mates.length} from ${fmtDate(images[index].taken_at)}`;
-        hint.textContent = 'Photos taken on the same day are usually the same plant session.';
+        hint.textContent = 'Photos taken on the same day are usually from the same session.';
       } else {
         btn.disabled = true;
         btn.textContent = 'Assign day\u2019s photos';
@@ -124,13 +163,13 @@
 
     async function assignCurrent() {
       const img = images[index];
-      const plantId = plantSel.value ? Number(plantSel.value) : null;
-      if (!img || !plantId) {
-        toast('Choose a plant first.', 'err');
+      const target = selectedTarget();
+      if (!img || (!target.plant_id && !target.seed_packet_id)) {
+        toast('Choose a plant or seed packet first.', 'err');
         return;
       }
       try {
-        const updated = await api.patch(`/api/album-images/${img.id}`, { plant_id: plantId });
+        const updated = await api.patch(`/api/album-images/${img.id}`, target);
         if (unassignedOnly.checked) {
           images.splice(index, 1);
           if (index >= images.length) index = Math.max(0, images.length - 1);
@@ -149,7 +188,7 @@
       const img = images[index];
       if (!img) return;
       try {
-        const updated = await api.patch(`/api/album-images/${img.id}`, { plant_id: null });
+        const updated = await api.patch(`/api/album-images/${img.id}`, { plant_id: null, seed_packet_id: null });
         if (unassignedOnly.checked) {
           advance();
         } else {
@@ -164,23 +203,24 @@
 
     async function bulkAssign() {
       const mates = dayMates();
-      const plantId = plantSel.value ? Number(plantSel.value) : null;
-      if (mates.length < 2 || !plantId) {
-        toast('Choose a plant first.', 'err');
+      const target = selectedTarget();
+      if (mates.length < 2 || (!target.plant_id && !target.seed_packet_id)) {
+        toast('Choose a plant or seed packet first.', 'err');
         return;
       }
-      const name = plants.find((p) => p.id === plantId)?.variety_name || 'plant';
+      const name = targetName(target);
       try {
         const result = await api.post('/api/album-images/bulk-assign', {
           image_ids: mates.map((m) => m.id),
-          plant_id: plantId,
+          ...target,
         });
         const ids = new Set(mates.map((m) => m.id));
         if (unassignedOnly.checked) {
           images = images.filter((i) => !ids.has(i.id));
           if (index >= images.length) index = Math.max(0, images.length - 1);
         } else {
-          images = images.map((i) => (ids.has(i.id) ? { ...i, plant_id: plantId, plant_variety: name } : i));
+          const varietyPatch = target.plant_id ? { plant_variety: name } : { packet_variety: name };
+          images = images.map((i) => (ids.has(i.id) ? { ...i, ...target, ...varietyPatch } : i));
         }
         render();
         toast(`Assigned ${result.updated} photos to ${name}.`);
@@ -196,7 +236,7 @@
     $('#match-reload').addEventListener('click', () => loadImages().catch((e) => toast(e.message, 'err')));
     albumSel.addEventListener('change', () => loadImages().catch((e) => toast(e.message, 'err')));
     unassignedOnly.addEventListener('change', () => loadImages().catch((e) => toast(e.message, 'err')));
-    plantSel.addEventListener('change', updateBulkButton);
+    targetSel.addEventListener('change', updateBulkButton);
     $('#match-prev').addEventListener('click', () => go(-1));
     $('#match-next').addEventListener('click', () => go(1));
     document.addEventListener('keydown', (event) => {
@@ -206,7 +246,7 @@
       else if (event.key === 'ArrowRight') go(1);
     });
 
-    Promise.all([loadAlbums(), loadPlants()])
+    Promise.all([loadAlbums(), loadTargets()])
       .then(loadImages)
       .catch((error) => toast(`Could not load: ${error.message}`, 'err'));
   }

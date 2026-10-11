@@ -145,9 +145,13 @@ class AlbumImage(SQLModel, table=True):
     tags: str = ""
     # The plant this photo shows, assigned by hand on the /match page.
     plant_id: Optional[int] = Field(default=None, foreign_key="plants.id", index=True)
+    # The seed packet this photo shows, assigned by hand on the /match page.
+    # Mutually exclusive with plant_id — a photo is matched to one or the other.
+    seed_packet_id: Optional[int] = Field(default=None, foreign_key="seed_packets.id", index=True)
 
     album: Optional["Album"] = Relationship(back_populates="images")
     plant: Optional["Plant"] = Relationship(back_populates="album_images")
+    seed_packet: Optional["SeedPacket"] = Relationship(back_populates="album_images")
 
 class Location(SQLModel, table=True):
     __tablename__ = "locations"
@@ -440,6 +444,9 @@ class SeedPacket(SQLModel, table=True):
     date_added: str = Field(default="", index=True)  # ISO YYYY-MM-DD
 
     vendor: Optional["SeedSource"] = Relationship()
+
+    # Photos matched to this packet on the /match page.
+    album_images: List["AlbumImage"] = Relationship(back_populates="seed_packet")
 
 
 # --------------------------------------------------------------------------- #

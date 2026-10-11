@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 from sqlmodel import Session, select
 
 from app.database import get_session
-from app.models import Album, AlbumImage, Plant
+from app.models import Album, AlbumImage, Plant, SeedPacket
 from app.routers.immich import _asset_metadata
 from app import immich as immich_client
 from app.schemas import (
@@ -400,13 +400,14 @@ def add_from_album(
 
 
 # ---------------------------------------------------------------------------
-# Photo <-> plant matching (the /match page)
+# Photo <-> plant/packet matching (the /match page)
 # ---------------------------------------------------------------------------
 
 
-def _image_read(img: AlbumImage, variety: Optional[str]) -> AlbumImageRead:
+def _image_read(img: AlbumImage, variety: Optional[str], packet_variety: Optional[str]) -> AlbumImageRead:
     read = AlbumImageRead.model_validate(img)
     read.plant_variety = variety
+    read.packet_variety = packet_variety
     return read
 
 
@@ -414,21 +415,24 @@ def _image_read(img: AlbumImage, variety: Optional[str]) -> AlbumImageRead:
 def list_album_images(
     album_id: Optional[int] = None,
     plant_id: Optional[int] = None,
+    seed_packet_id: Optional[int] = None,
     unassigned_only: bool = False,
     limit: int = 200,
     offset: int = 0,
     session: Session = Depends(get_session),
 ) -> List[AlbumImageRead]:
-    """List album photos, oldest-taken first, with their plant assignment.
+    """List album photos, oldest-taken first, with their plant/packet assignment.
 
-    Filters: ``album_id``, ``plant_id`` (photos of one plant), or
-    ``unassigned_only`` for the matching workflow.
+    Filters: ``album_id``, ``plant_id`` (photos of one plant),
+    ``seed_packet_id`` (photos of one seed packet), or ``unassigned_only``
+    for the matching workflow (neither a plant nor a packet assigned).
     """
     limit = max(1, min(limit, 1000))
     offset = max(0, offset)
     stmt = (
-        select(AlbumImage, Plant.variety_name)
+        select(AlbumImage, Plant.variety_name, SeedPacket.variety_name)
         .outerjoin(Plant, Plant.id == AlbumImage.plant_id)
+        .outerjoin(SeedPacket, SeedPacket.id == AlbumImage.seed_packet_id)
         .order_by(
             AlbumImage.taken_at.is_(None),
             AlbumImage.taken_at,
@@ -441,10 +445,12 @@ def list_album_images(
         stmt = stmt.where(AlbumImage.album_id == album_id)
     if plant_id is not None:
         stmt = stmt.where(AlbumImage.plant_id == plant_id)
+    if seed_packet_id is not None:
+        stmt = stmt.where(AlbumImage.seed_packet_id == seed_packet_id)
     if unassigned_only:
-        stmt = stmt.where(AlbumImage.plant_id.is_(None))
+        stmt = stmt.where(AlbumImage.plant_id.is_(None), AlbumImage.seed_packet_id.is_(None))
     rows = session.exec(stmt).all()
-    return [_image_read(img, variety) for img, variety in rows]
+    return [_image_read(img, variety, pkt_variety) for img, variety, pkt_variety in rows]
 
 
 @router.patch("/api/album-images/{image_id}", response_model=AlbumImageRead)
@@ -453,21 +459,36 @@ def assign_album_image(
     body: ImageAssignRequest,
     session: Session = Depends(get_session),
 ) -> AlbumImageRead:
-    """Assign a photo to a plant (``plant_id: null`` unassigns it)."""
+    """Assign a photo to a plant or a seed packet (both null unassigns it).
+
+    Plant and packet are mutually exclusive — assigning one clears the other.
+    """
     img = session.get(AlbumImage, image_id)
     if img is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Photo not found")
     variety: Optional[str] = None
-    if body.plant_id is not None:
+    packet_variety: Optional[str] = None
+    if body.seed_packet_id is not None:
+        packet = session.get(SeedPacket, body.seed_packet_id)
+        if packet is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Seed packet not found")
+        packet_variety = packet.variety_name
+        img.seed_packet_id = body.seed_packet_id
+        img.plant_id = None
+    elif body.plant_id is not None:
         plant = session.get(Plant, body.plant_id)
         if plant is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Plant not found")
         variety = plant.variety_name
-    img.plant_id = body.plant_id
+        img.plant_id = body.plant_id
+        img.seed_packet_id = None
+    else:
+        img.plant_id = None
+        img.seed_packet_id = None
     session.add(img)
     session.commit()
     session.refresh(img)
-    return _image_read(img, variety)
+    return _image_read(img, variety, packet_variety)
 
 
 @router.post("/api/album-images/bulk-assign")
@@ -475,13 +496,23 @@ def bulk_assign_album_images(
     body: ImageBulkAssignRequest,
     session: Session = Depends(get_session),
 ) -> dict:
-    """Assign many photos to one plant at once (``plant_id: null`` unassigns)."""
+    """Assign many photos to one plant or one seed packet at once (both null unassigns)."""
+    if body.seed_packet_id is not None and session.get(SeedPacket, body.seed_packet_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Seed packet not found")
     if body.plant_id is not None and session.get(Plant, body.plant_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Plant not found")
     ids = list(dict.fromkeys(body.image_ids))
     images = session.exec(select(AlbumImage).where(AlbumImage.id.in_(ids))).all()
     for img in images:
-        img.plant_id = body.plant_id
+        if body.seed_packet_id is not None:
+            img.seed_packet_id = body.seed_packet_id
+            img.plant_id = None
+        elif body.plant_id is not None:
+            img.plant_id = body.plant_id
+            img.seed_packet_id = None
+        else:
+            img.plant_id = None
+            img.seed_packet_id = None
         session.add(img)
     session.commit()
     return {"updated": len(images)}

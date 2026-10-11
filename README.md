@@ -129,16 +129,18 @@ images into blog posts, or import whole albums from your Immich server
 an album reuses its existing Verdant album instead of duplicating it, and
 **🧹 Merge duplicates** folds any older double-imports into one. On the
 **🎯 Match photos** page you can flip through imported photos and assign each
-one to a plant — assigned photos show up in a gallery on the plant's profile.
+one to a plant or a seed packet — plant photos show up in a gallery on the
+plant's profile.
 
 ![Photo albums](docs/screenshots/photos.png)
 
 The 🎯 Match photos page (linked from the Photos tab) is where imported
 photos get claimed: flip through them one by one, see each photo's taken
-date, camera, GPS, and tags, and assign it to a plant with a keystroke.
-Bulk-assign a whole day's photos at once when you already know what they are.
+date, camera, GPS, and tags, and assign it to a plant or a seed packet with
+a keystroke. Bulk-assign a whole day's photos at once when you already know
+what they are.
 
-![Match photos to plants](docs/screenshots/match.png)
+![Match photos to plants & seed packets](docs/screenshots/match.png)
 
 There's also a dedicated full-screen slideshow page — pick an album, pick an
 interval, and let the garden scroll by on a TV or tablet.
@@ -889,6 +891,13 @@ correct, and the container's clock/timezone matches yours — `DIGEST_TIME` is
 server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
+
+- **2.58.0** — **🎯 Match photos to seed packets too.** The Match page's
+  "This photo shows…" dropdown was plants-only — now it's two groups,
+  **🌿 Plants** and **🫘 Seed packets**, so a photo can be claimed by the
+  packet it came from. Plant and packet are mutually exclusive per photo;
+  assigning one clears the other, and the unassigned filter respects both.
+  The `seed_packet_id` filter joins `GET /api/album-images/` too.
 
 - **2.57.0** — **🧭 The big taskbar is gone.** The desktop nav moves out of
   the header into a slim left sidebar — same five groups (**Grow**, **Track**,
