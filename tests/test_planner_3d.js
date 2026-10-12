@@ -535,6 +535,49 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
   check('wing flap oscillates', walkApi.butterflyWing(0, 0) !== walkApi.butterflyWing(0.12, 0));
   check('butterflies hidden at night', typeof walkApi.updateButterflies === 'function');
 
+  // ---- v2.62.0: CC0 model pack — pure mapping helpers ----
+  check('crop model mapping exposed', typeof buildApi.cropModelFor === 'function');
+  check('corn maps to staged corn model', buildApi.cropModelFor('Sweet Corn', 3) === 'kenney_crops_cornStageD');
+  check('corn stage A for seedlings', buildApi.cropModelFor('corn', 0) === 'kenney_crops_cornStageA');
+  check('carrot maps to carrot plant', buildApi.cropModelFor('Carrot', 2) === 'kenney_crop_carrot');
+  check('pumpkin maps to pumpkin plant', buildApi.cropModelFor('Pumpkin', 2) === 'kenney_crop_pumpkin');
+  check('squash maps to pumpkin plant', buildApi.cropModelFor('Zucchini', 1) === 'kenney_crop_pumpkin');
+  check('melon maps to melon plant', buildApi.cropModelFor('Cantaloupe', 1) === 'kenney_crop_melon');
+  check('turnip maps to turnip plant', buildApi.cropModelFor('Turnip', 1) === 'kenney_crop_turnip');
+  check('beet maps to turnip plant', buildApi.cropModelFor('Beet', 1) === 'kenney_crop_turnip');
+  check('lettuce young -> leafs A', buildApi.cropModelFor('Lettuce', 0) === 'kenney_crops_leafsStageA');
+  check('lettuce mature -> leafs B', buildApi.cropModelFor('Lettuce', 3) === 'kenney_crops_leafsStageB');
+  check('wheat young -> wheat A', buildApi.cropModelFor('Wheat', 1) === 'kenney_crops_wheatStageA');
+  check('wheat mature -> wheat B', buildApi.cropModelFor('Wheat', 2) === 'kenney_crops_wheatStageB');
+  check('tomato has no plant model (produce marker instead)', buildApi.cropModelFor('Tomato', 2) === null);
+  check('unknown species -> null (procedural fallback)', buildApi.cropModelFor('Mystery Bean', 1) === null);
+  check('produce marker tomato', buildApi.produceModelFor('Cherry Tomato') === 'quaternius_tomato');
+  check('produce marker carrot', buildApi.produceModelFor('Carrot') === 'quaternius_carrot');
+  check('produce marker corn', buildApi.produceModelFor('Sweet Corn') === 'quaternius_corn');
+  check('produce marker pumpkin', buildApi.produceModelFor('Pumpkin') === 'quaternius_pumpkin');
+  check('produce marker pepper', buildApi.produceModelFor('Bell Pepper') === 'quaternius_pepper_green');
+  check('no produce marker for lettuce', buildApi.produceModelFor('Lettuce') === null);
+
+  // growth stage from planting dates
+  const daysAgo = (n) => { const d = new Date(Date.now() - n * 86400000); return d.toISOString().slice(0, 10); };
+  check('growth stage seedling', buildApi.growthStage({ date_planted: daysAgo(5), days_to_maturity: 70 }) === 0);
+  check('growth stage mid', buildApi.growthStage({ date_planted: daysAgo(30), days_to_maturity: 70 }) === 1);
+  check('growth stage maturing', buildApi.growthStage({ date_planted: daysAgo(50), days_to_maturity: 70 }) === 2);
+  check('growth stage harvest', buildApi.growthStage({ date_planted: daysAgo(65), days_to_maturity: 70 }) === 3);
+  check('growth stage defaults mid without dates', buildApi.growthStage({}) === 1);
+  check('growth stage defaults mid with bad date', buildApi.growthStage({ date_planted: 'nope', days_to_maturity: 70 }) === 1);
+  check('growth progress null without dates', buildApi.growthProgress({}) === null);
+  const pr = buildApi.growthProgress({ date_planted: daysAgo(35), days_to_maturity: 70 });
+  check('growth progress ~0.5 halfway', pr !== null && Math.abs(pr - 0.5) < 0.05);
+
+  // cattle panel arch: height comes from the 16ft panel, ~7ft at 4ft span
+  const cph = buildApi.cattlePanelHeight;
+  const h4 = cph(4);
+  check('panel height ~7ft at 4ft span', h4 > 6.5 && h4 < 7.5);
+  check('panel height sane at 6ft span', cph(6) > 5.5 && cph(6) < 7.5);
+  check('panel height clamped for wide spans', cph(12) >= 4 && cph(12) <= 8.5);
+  check('panel height taller for narrow spans', cph(2) > h4);
+
   console.log(failures ? `\n${failures} check(s) failed.` : '\nAll checks passed.');
   process.exit(failures ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

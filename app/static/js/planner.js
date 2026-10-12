@@ -586,6 +586,7 @@
     const dayNightBtn = $('#view-daynight');
     const tapeBtn = $('#view-tape');
     const soundBtn = $('#view-sound');
+    const fsBtn = $('#view-fullscreen');
     const wrap3d = $('#planner-3d');
     const hint2d = $('#planner-2d-hint');
     const hint3d = $('#planner-3d-hint');
@@ -835,6 +836,9 @@
       const CDN = 'https://cdn.jsdelivr.net/npm/three@0.147.0';
       await loadScript(`${CDN}/build/three.min.js`);
       await loadScript(`${CDN}/examples/js/controls/OrbitControls.js`);
+      // CC0 model pack (v2.62.0): GLTFLoader vendored locally so models load
+      // fully self-hosted. Failure here must never break the 3D view.
+      try { await loadScript('/static/js/vendor/GLTFLoader.js'); } catch (err) { /* procedural fallback */ }
       const THREE = globalThis.THREE;
       if (!THREE || !THREE.OrbitControls) throw new Error('3d unavailable');
       // Bloom post-processing is a nice-to-have: if any pass fails to load,
@@ -1025,6 +1029,10 @@
       T = { THREE, renderer, scene, camera, controls, sun, composer, group: null, TEX: null,
         sky: { sunSprite, moonSprite, stars, hemi, dome: skyDome }, clouds: [], lamps: [], lampLights: [] };
       wrap3d._three = T; // handle for tests / debugging
+      // Preload the CC0 model pack now (awaited: builders decide model vs
+      // procedural at scene-build time). Slow/failed loads fall back silently.
+      try { await preloadModels(THREE); } catch (err) { /* procedural fallback */ }
+      T.modelsReady = true; // for tests / screenshot waits
       sizeThree();
       return T;
     }
@@ -1051,6 +1059,153 @@
         }
       });
     }
+
+    /* ---------------- CC0 model pack (v2.62.0) ---------------- */
+    // Curated Kenney / Quaternius GLBs in /static/models (all CC0). Loaded
+    // once in ensureThree; every builder below falls back to its procedural
+    // version when a model is missing or fails. Clones share the cached
+    // geometry/materials, so a missing/broken GLB can never break the scene.
+    const MODEL_BASE = '/static/models/';
+    const MODEL_FILES = [
+      'kenney_tree_oak', 'kenney_tree_detailed', 'kenney_tree_small',
+      'kenney_plant_bush', 'kenney_plant_bushDetailed', 'kenney_plant_bushSmall',
+      'kenney_flower_redA', 'kenney_flower_redB', 'kenney_flower_yellowA',
+      'kenney_flower_yellowB', 'kenney_flower_purpleA', 'kenney_flower_purpleB',
+      'kenney_grass', 'kenney_grass_large', 'kenney_grass_leafs',
+      'kenney_rock_smallA', 'kenney_rock_largeA',
+      'kenney_fence_planks', 'kenney_fence_planksDouble', 'kenney_fence_gate',
+      'kenney_fence_corner', 'kenney_fence_simple',
+      'kenney_path_stone', 'kenney_path_stoneCircle', 'kenney_path_wood', 'kenney_path_woodEnd',
+      'kenney_sign', 'kenney_pot_large', 'kenney_pot_small',
+      'kenney_mushroom_red', 'kenney_mushroom_redGroup', 'kenney_mushroom_tan',
+      'kenney_log_stack',
+      'kenney_crop_carrot', 'kenney_crop_melon', 'kenney_crop_pumpkin', 'kenney_crop_turnip',
+      'kenney_crops_cornStageA', 'kenney_crops_cornStageB', 'kenney_crops_cornStageC', 'kenney_crops_cornStageD',
+      'kenney_crops_wheatStageA', 'kenney_crops_wheatStageB',
+      'kenney_crops_leafsStageA', 'kenney_crops_leafsStageB',
+      'kenney_crops_dirtRow', 'kenney_crops_dirtDoubleRow', 'kenney_crops_dirtSingle',
+      'quaternius_tomato', 'quaternius_carrot', 'quaternius_corn',
+      'quaternius_pumpkin', 'quaternius_pepper_green',
+    ];
+    const modelCache = {}; // name -> { obj, size }
+    let modelsLoading = null;
+
+    function preloadModels(THREE) {
+      if (modelsLoading) return modelsLoading;
+      modelsLoading = (async () => {
+        if (!THREE || !THREE.GLTFLoader) return;
+        const loader = new THREE.GLTFLoader();
+        const loadOne = (name) => new Promise((resolve) => {
+          let done = false;
+          const finish = (ok) => { if (!done) { done = true; resolve(ok); } };
+          try {
+            loader.load(MODEL_BASE + name + '.glb',
+              (gltf) => {
+                try {
+                  const obj = gltf.scene;
+                  const box = new THREE.Box3().setFromObject(obj);
+                  const size = new THREE.Vector3(); box.getSize(size);
+                  if (!(size.y > 0)) return finish(false);
+                  const c = new THREE.Vector3(); box.getCenter(c);
+                  // normalize: centered in XZ, base sitting at y=0
+                  obj.position.x -= c.x; obj.position.z -= c.z; obj.position.y -= box.min.y;
+                  obj.traverse((o) => {
+                    if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.userData.fromModel = true; }
+                  });
+                  modelCache[name] = { obj, size };
+                  finish(true);
+                } catch (e) { finish(false); }
+              },
+              undefined,
+              () => finish(false));
+          } catch (e) { finish(false); }
+          setTimeout(() => finish(false), 12000); // per-model cap
+        });
+        const all = Promise.allSettled(MODEL_FILES.map(loadOne));
+        const timeout = new Promise((r) => setTimeout(r, 20000)); // overall cap
+        await Promise.race([all, timeout]);
+      })();
+      return modelsLoading;
+    }
+
+    // Clone a cached model into the scene. Returns null when unavailable —
+    // callers MUST fall back to procedural building.
+    // opts: { height } fit bbox height | { scale } | { scaleXYZ:[x,y,z] },
+    //   { rotY }, { pos:[x,y,z] }, { plantingId } (build-mode breaking),
+    //   { ownMaterials } (ghost preview: private materials so the green/red
+    //   tint never touches the shared cache).
+    function spawnModel(name, opts) {
+      const t = modelCache[name];
+      if (!t || !t.obj) return null;
+      opts = opts || {};
+      const m = t.obj.clone(true);
+      if (opts.height) m.scale.setScalar(opts.height / (t.size.y || 1));
+      else if (opts.scaleXYZ) m.scale.set(opts.scaleXYZ[0], opts.scaleXYZ[1], opts.scaleXYZ[2]);
+      else if (opts.scale) m.scale.setScalar(opts.scale);
+      if (opts.rotY) m.rotation.y = opts.rotY;
+      if (opts.pos) m.position.set(opts.pos[0], opts.pos[1], opts.pos[2]);
+      m.traverse((o) => {
+        if (!o.isMesh) return;
+        o.userData.fromModel = true;
+        if (opts.ownMaterials) {
+          o.material = Array.isArray(o.material) ? o.material.map((x) => x.clone()) : o.material.clone();
+        }
+      });
+      if (opts.plantingId != null) m.userData.plantingId = opts.plantingId;
+      return m;
+    }
+
+    // Pure: 0..1 growth progress from planting dates, null when unknown.
+    function growthProgress(p) {
+      if (!p || !p.date_planted || !p.days_to_maturity) return null;
+      const start = new Date(p.date_planted + 'T12:00:00');
+      const dtm = Number(p.days_to_maturity);
+      if (isNaN(start.getTime()) || !(dtm > 0)) return null;
+      return Math.max(0, Math.min(1, (Date.now() - start.getTime()) / 86400000 / dtm));
+    }
+    // Pure: 0..3 growth stage (A..D). Unknown dates -> mid stage.
+    function growthStage(p) {
+      const pr = growthProgress(p);
+      if (pr == null) return 1;
+      if (pr < 0.3) return 0;
+      if (pr < 0.55) return 1;
+      if (pr < 0.8) return 2;
+      return 3;
+    }
+    // Pure: Kenney crop-plant model for a species + stage. Null = no model
+    // fits (caller falls back to the procedural plant).
+    function cropModelFor(species, stage) {
+      const s = (species || '').toLowerCase();
+      const st = Math.max(0, Math.min(3, stage == null ? 1 : stage));
+      const ab = st >= 2 ? 'B' : 'A';
+      if (/corn|maize/.test(s)) return 'kenney_crops_cornStage' + 'ABCD'[st];
+      if (/carrot/.test(s)) return 'kenney_crop_carrot';
+      if (/melon|cantaloupe|watermelon/.test(s)) return 'kenney_crop_melon';
+      if (/pumpkin|squash|zucchini|gourd/.test(s)) return 'kenney_crop_pumpkin';
+      if (/turnip|beet|radish|rutabaga|parsnip/.test(s)) return 'kenney_crop_turnip';
+      if (/wheat|oat|barley|rye|sorghum|grain|rice/.test(s)) return 'kenney_crops_wheatStage' + ab;
+      if (/lettuce|spinach|kale|arugula|chard|basil|herb|mint|cilantro|parsley|dill|bok\s?choy|cabbage|broccoli|cauliflower|celery|onion|garlic|leek|collard/.test(s)) return 'kenney_crops_leafsStage' + ab;
+      return null;
+    }
+    // Pure: Quaternius produce marker for harvest-ready plantings. Null = skip.
+    function produceModelFor(species) {
+      const s = (species || '').toLowerCase();
+      if (/tomato/.test(s)) return 'quaternius_tomato';
+      if (/carrot/.test(s)) return 'quaternius_carrot';
+      if (/corn|maize/.test(s)) return 'quaternius_corn';
+      if (/pumpkin|squash|zucchini|gourd/.test(s)) return 'quaternius_pumpkin';
+      if (/pepper|paprika/.test(s)) return 'quaternius_pepper_green';
+      return null;
+    }
+    // Target display heights (ft) for crop models in beds.
+    const CROP_HEIGHTS = {
+      kenney_crops_cornStageA: 0.8, kenney_crops_cornStageB: 1.3,
+      kenney_crops_cornStageC: 1.7, kenney_crops_cornStageD: 2.0,
+      kenney_crop_carrot: 0.85, kenney_crop_melon: 0.6, kenney_crop_pumpkin: 0.6,
+      kenney_crop_turnip: 0.9,
+      kenney_crops_leafsStageA: 0.65, kenney_crops_leafsStageB: 1.0,
+      kenney_crops_wheatStageA: 0.6, kenney_crops_wheatStageB: 0.95,
+    };
 
     // Build (and cache on T) the shared pixel textures for one scene build.
     function buildTextures(THREE) {
@@ -1100,6 +1255,9 @@
       const darkWoodMat = pixMaterial(THREE, TEX.darkWood);
       const soilMat = pixMaterial(THREE, TEX.soil);
       if (kind === 'pot') {
+        // v2.62.0: Kenney hexagonal planter; terracotta fallback below.
+        const pm = spawnModel('kenney_pot_small', { height: 0.85 });
+        if (pm) { g.add(pm); g.userData.topY = 0.85; return; }
         // smooth tapered terracotta pot + rim + soil
         const s = Math.max(0.6, Math.min(w, h) * 0.7);
         const body = cyl(THREE, s * 0.52, s * 0.4, bodyH, pixMaterial(THREE, TEX.terracotta));
@@ -1178,15 +1336,40 @@
       return Math.max(5, Math.min(7, Math.round(len * 1.25)));
     }
 
+    // Pure: height of a real 16ft cattle panel bent into an arch of `span`
+    // feet. The arc length is fixed at 16ft, so H is solved from the
+    // half-ellipse perimeter (Ramanujan) via bisection, then clamped to a
+    // sane walk-through range.
+    function cattlePanelHeight(span) {
+      const a = Math.max(0.5, span) / 2;
+      const arcLen = (b) => Math.PI * (3 * (a + b) - Math.sqrt((3 * a + b) * (a + 3 * b))) / 2;
+      let lo = 0.5, hi = 14;
+      for (let i = 0; i < 48; i++) {
+        const m = (lo + hi) / 2;
+        if (arcLen(m) < 16) lo = m; else hi = m;
+      }
+      return Math.min(8.5, Math.max(4, (lo + hi) / 2));
+    }
+
     function buildArch(THREE, g, w, h, height, TEX, opts) {
       // Soft garden archway: smooth half-ellipse tube ribs + fine wire mesh
       // (or translucent plastic for the hoop-house variant). Vines are soft
       // leaf blobs hugging the ribs. Walk-under-able: no collision.
       opts = opts || {};
-      const span = Math.min(w, h);
-      const len = Math.max(w, h);
-      const H = Math.max(1.5, height || 7);
-      const spanAlongX = w <= h; // rib arcs live in the X-Y plane when the footprint is taller than wide
+      // A real 16ft cattle panel bent into an arch gives a ~4ft-wide,
+      // ~7ft-tall walk-through. If the footprint's short side is narrower
+      // than a usable walk-through, flip the arch: the profile crosses the
+      // LONG side, so a narrow footprint becomes a short archway instead of
+      // a long, thin, unusable tunnel.
+      const narrow = Math.min(w, h) < 3.5;
+      const span = narrow ? Math.max(w, h) : Math.min(w, h);
+      const len = narrow ? Math.min(w, h) : Math.max(w, h);
+      const spanAlongX = narrow ? w >= h : w <= h; // rib arcs live in the X-Y plane when the profile crosses x
+      // Height comes from the panel, not a free parameter: a 16ft cattle
+      // panel bent to `span` width. Solve the half-ellipse arc length = 16
+      // for H (Ramanujan perimeter, bisection). An explicit height_ft still
+      // wins when the user set one.
+      const H = +height > 0 ? +height : cattlePanelHeight(span);
       const metalMat = new THREE.MeshStandardMaterial({
         // flat galvanized gray — no dark map, low metalness (no envmap in the
         // scene, so high metalness would render near-black)
@@ -1203,43 +1386,61 @@
             roughness: 0.5, metalness: 0.15,
           });
 
-      // Ribs: smooth half-ellipse tubes (torus arc scaled to the crown height).
+      // Real cattle panels are 16ft x 50in: a long tunnel is built from
+      // multiple panels side by side, not one stretched sheet. Panel-ize the
+      // tunnel (~4ft panels with a small gap) so first person reads a series
+      // of proper arches instead of a long thin tube. Each panel is ~5ft wide
+      // at the feet and ~7ft at the crown, like a real bent panel.
       const R = span / 2;
-      const nRibs = archRibCount(len);
-      const ribOff = (r) => (nRibs === 1 ? 0 : -len / 2 + (r / (nRibs - 1)) * len);
-      for (let r = 0; r < nRibs; r++) {
-        const off = ribOff(r);
+      const PANEL = 4, GAP = opts.plastic ? 0 : 0.22;
+      const nPanels = Math.max(1, Math.round(len / PANEL));
+      const bounds = [];
+      for (let pi = 0; pi <= nPanels; pi++) bounds.push(-len / 2 + (pi * len) / nPanels);
+      // ribs at every panel boundary + one mid-rib per panel
+      const ribOffs = [];
+      bounds.forEach((b, i) => {
+        ribOffs.push(b);
+        if (i < nPanels) ribOffs.push((b + bounds[i + 1]) / 2);
+      });
+      const addRib = (off) => {
         const rib = new THREE.Mesh(new THREE.TorusGeometry(R, 0.13, 12, 40, Math.PI), metalMat);
         rib.scale.y = H / R; // circle -> half-ellipse with crown H
         if (spanAlongX) rib.position.set(0, 0, off);
         else { rib.rotation.y = Math.PI / 2; rib.position.set(off, 0, 0); }
         g.add(rib);
-      }
+      };
+      ribOffs.forEach(addRib);
 
-      // Wire-mesh / plastic skin: one curved ribbon surface spanning the tunnel.
+      // Wire-mesh / plastic skin: one curved ribbon per panel (gaps only for
+      // wire — a hoop house keeps one continuous plastic sheet).
       const M = 28;
-      const pos = [], uv = [], idx = [];
-      const uRep = Math.max(1, Math.round(len / 0.75));
-      const vRep = Math.max(2, Math.round((Math.PI * (span / 2 + H)) / 2 / 0.75));
-      for (let j = 0; j <= M; j++) {
-        const p = archArcPoint(span, H, j / M);
-        const v = (j / M) * vRep;
-        if (spanAlongX) { pos.push(p.x, p.y, -len / 2, p.x, p.y, len / 2); }
-        else { pos.push(-len / 2, p.y, p.x, len / 2, p.y, p.x); }
-        uv.push(0, v, uRep, v);
+      const GRID = 0.5; // mesh cell size: finer reads better up close
+      for (let pi = 0; pi < nPanels; pi++) {
+        const p0 = bounds[pi] + (pi > 0 ? GAP / 2 : 0);
+        const p1 = bounds[pi + 1] - (pi < nPanels - 1 ? GAP / 2 : 0);
+        const pos = [], uv = [], idx = [];
+        const uRep = Math.max(1, Math.round((p1 - p0) / GRID));
+        const vRep = Math.max(2, Math.round((Math.PI * (span / 2 + H)) / 2 / GRID));
+        for (let j = 0; j <= M; j++) {
+          const p = archArcPoint(span, H, j / M);
+          const v = (j / M) * vRep;
+          if (spanAlongX) { pos.push(p.x, p.y, p0, p.x, p.y, p1); }
+          else { pos.push(p0, p.y, p.x, p1, p.y, p.x); }
+          uv.push(0, v, uRep, v);
+        }
+        for (let j = 0; j < M; j++) {
+          const a = j * 2, b = a + 1, c = a + 2, d = a + 3;
+          idx.push(a, b, c, b, d, c);
+        }
+        const skinGeo = new THREE.BufferGeometry();
+        skinGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+        skinGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+        skinGeo.setIndex(idx);
+        skinGeo.computeVertexNormals();
+        const skin = new THREE.Mesh(skinGeo, meshMat);
+        skin.userData.noShadow = true; // alpha-tested mesh would cast a solid blob shadow
+        g.add(skin);
       }
-      for (let j = 0; j < M; j++) {
-        const a = j * 2, b = a + 1, c = a + 2, d = a + 3;
-        idx.push(a, b, c, b, d, c);
-      }
-      const skinGeo = new THREE.BufferGeometry();
-      skinGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-      skinGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-      skinGeo.setIndex(idx);
-      skinGeo.computeVertexNormals();
-      const skin = new THREE.Mesh(skinGeo, meshMat);
-      skin.userData.noShadow = true; // alpha-tested mesh would cast a solid blob shadow
-      g.add(skin);
 
       // Soft leaf blobs hugging the ribs (seeded = stable). Skipped for the
       // plastic hoop-house variant (clean greenhouse look).
@@ -1247,9 +1448,9 @@
       if (!opts.plastic) {
         const blobGeo = new THREE.IcosahedronGeometry(0.24, 1);
         const vineRibs = new Set();
-        while (vineRibs.size < Math.min(3, nRibs)) vineRibs.add((rng() * nRibs) | 0);
+        while (vineRibs.size < Math.min(3, ribOffs.length)) vineRibs.add((rng() * ribOffs.length) | 0);
         vineRibs.forEach((r) => {
-          const off = ribOff(r);
+          const off = ribOffs[r];
           const n = 3 + ((rng() * 3) | 0);
           for (let i = 0; i < n; i++) {
             const t = Math.min(0.95, 0.08 + (0.84 * (i + rng() * 0.6)) / n);
@@ -1330,6 +1531,48 @@
     }
 
     function buildFence(THREE, g, w, h, TEX, sides) {
+      // v2.62.0: Kenney wooden picket models. An L-corner piece joins exactly
+      // two perpendicular runs (rotY mapped from the model's +x/-z arms);
+      // otherwise short rail stubs run from the center post to each neighbor.
+      // Falls back to the procedural chain-link below when models are missing.
+      sides = sides || {};
+      const has = (k) => !!sides[k];
+      const n = has('n'), s = has('s'), e = has('e'), wSide = has('w');
+      const count = (n ? 1 : 0) + (s ? 1 : 0) + (e ? 1 : 0) + (wSide ? 1 : 0);
+      let modeled = false;
+      const cornerRot = { ne: 0, es: -Math.PI / 2, sw: Math.PI, wn: Math.PI / 2 };
+      if (count === 2) {
+        const key = (n && e) ? 'ne' : (e && s) ? 'es' : (s && wSide) ? 'sw' : (wSide && n) ? 'wn' : null;
+        if (key) {
+          const cm = spawnModel('kenney_fence_corner', { rotY: cornerRot[key] });
+          if (cm) { g.add(cm); modeled = true; }
+        }
+      }
+      const stub = (px, pz, rotY) => {
+        const m = spawnModel('kenney_fence_planksDouble', { scaleXYZ: [0.55, 1, 1], rotY });
+        if (m) { m.position.set(px, 0, pz); g.add(m); return true; }
+        return false;
+      };
+      if (!modeled) {
+        if (count === 0) {
+          // lone fence cell: one full picket section
+          const m = spawnModel('kenney_fence_planksDouble', { scaleXYZ: [1, 1.4, 1] });
+          if (m) { g.add(m); modeled = true; }
+        } else {
+          if (n) modeled = stub(0, -0.26, Math.PI / 2) || modeled;
+          if (s) modeled = stub(0, 0.26, Math.PI / 2) || modeled;
+          if (wSide) modeled = stub(-0.26, 0, 0) || modeled;
+          if (e) modeled = stub(0.26, 0, 0) || modeled;
+        }
+      }
+      if (modeled) {
+        // slim center post anchors the rails
+        const post = cyl(THREE, 0.07, 0.09, 0.5, pixMaterial(THREE, TEX.darkWood));
+        post.position.y = 0.25;
+        g.add(post);
+        g.userData.topY = 0.5;
+        return;
+      }
       // Chain-link: round center post + fine mesh planes only on sides
       // facing another fence segment. Single fence = just a post.
       sides = sides || {};
@@ -1374,6 +1617,13 @@
     }
 
     function buildPath(THREE, g, TEX) {
+      // v2.62.0: Kenney stone tile (reads as a stepping stone). Slight
+      // deterministic rotation so runs don't look stamped. Slab fallback below.
+      const m = spawnModel('kenney_path_stone', { scale: 1 });
+      if (m) {
+        m.rotation.y = (((g.userData.containerId || 0) % 4) * 0.09);
+        g.add(m); g.userData.topY = 0.1; return;
+      }
       // Flat stone slab for walkways. No collider (walked over).
       const slab = box(THREE, 0.96, 0.15, 0.96, pixMaterial(THREE, TEX.stone));
       slab.position.y = 0.075;
@@ -1429,6 +1679,10 @@
     }
 
     function buildFenceGate(THREE, g, w, h, TEX, sides) {
+      // v2.62.0: Kenney gate model (1x1 cell). Neighboring runs' stubs reach
+      // the shared edge, so no connectors needed. Procedural fallback below.
+      const gm = spawnModel('kenney_fence_gate', { scale: 1 });
+      if (gm) { g.add(gm); g.userData.topY = 0.6; return; }
       // 1x1 chain-link gate: round frame posts + fine mesh panel + handle.
       // Auto-connects visually to adjacent fence segments via fenceSides.
       sides = sides || {};
@@ -1484,6 +1738,9 @@
     }
 
     function buildFruitTree(THREE, g, TEX) {
+      // v2.62.0: Kenney oak model; procedural apple tree is the fallback.
+      const m = spawnModel('kenney_tree_oak', { height: 3.6 });
+      if (m) { g.add(m); g.userData.topY = 3.6; return; }
       // Apple tree: round trunk + soft canopy blobs + little apples.
       const barkMat = pixMaterial(THREE, TEX.darkWood);
       const trunk = cyl(THREE, 0.16, 0.22, 1.7, barkMat, 12);
@@ -1774,10 +2031,67 @@
         });
       }
       const baseY = (kind === 'arch' || kind === 'hoop house') ? 0 : (g.userData.topY || 1);
+      const useModels = kind !== 'arch'; // arch keeps its procedural climbers
       spots.forEach(([spx, spz], i) => {
         const p = ps[i];
-        buildPlantSoft(THREE, g, spx, spz, baseY, p && p.species_type, (c.id * 1009 + i * 101) | 0, kind === 'arch', p && p.id);
+        const seed = (c.id * 1009 + i * 101) | 0;
+        if (useModels) {
+          const st = growthStage(p);
+          const mf = cropModelFor(p && p.species_type, st);
+          const rng = mulberry32(seed ^ 0x51f3);
+          const m = mf && spawnModel(mf, {
+            height: CROP_HEIGHTS[mf] || 0.8,
+            rotY: rng() * Math.PI * 2,
+            plantingId: p && p.id,
+          });
+          if (m) {
+            m.position.set(spx, baseY - 0.03, spz);
+            g.add(m);
+            // tilled mound under each plant
+            const mound = spawnModel('kenney_crops_dirtSingle', { height: 0.26, rotY: rng() * Math.PI });
+            if (mound) { mound.position.set(spx, baseY - 0.02, spz); g.add(mound); }
+            // harvest-ready produce marker beside the plant
+            const pr = growthProgress(p);
+            if (pr != null && pr >= 0.8) {
+              const prod = produceModelFor(p && p.species_type);
+              if (prod) {
+                const pm = spawnModel(prod, { height: 0.34, rotY: rng() * Math.PI * 2 });
+                if (pm) { pm.position.set(spx + 0.42, baseY, spz + 0.18); g.add(pm); }
+              }
+            }
+            return;
+          }
+        }
+        buildPlantSoft(THREE, g, spx, spz, baseY, p && p.species_type, seed, kind === 'arch', p && p.id);
       });
+    }
+
+    // Bed name-stake + deterministic corner decor (v2.62.0). Only for planted
+    // vessels with room; skipped silently when models are unavailable.
+    const VESSEL_KINDS = ['raised bed', 'grow bag', 'planter', 'pot'];
+    const SCATTER_MODELS = [
+      ['kenney_plant_bushSmall', 0.55], ['kenney_flower_redA', 0.5], ['kenney_flower_yellowA', 0.5],
+      ['kenney_flower_purpleA', 0.5], ['kenney_grass', 0.45], ['kenney_rock_smallA', 0.3],
+      ['kenney_mushroom_red', 0.35], ['kenney_mushroom_tan', 0.3],
+    ];
+    function addBedMarkerAndScatter(THREE, g, w, h, kind, c) {
+      if (!VESSEL_KINDS.includes(kind)) return;
+      if (!plantingsFor(c.id).length) return;
+      if (Math.min(w, h) < 2) return;
+      const topY = g.userData.topY || 1;
+      const rng = mulberry32(((c.id * 2654435761) % 4294967296) | 0);
+      // garden sign as a plant-label stake, front-right inside corner
+      const sign = spawnModel('kenney_sign', { height: 1.15, rotY: 0.5 });
+      if (sign) { sign.position.set(w / 2 - 0.4, topY - 0.12, h / 2 - 0.4); g.add(sign); }
+      // 1-2 decor items at the remaining corners (seeded = stable)
+      const corners = [[-1, -1], [-1, 1], [1, -1]];
+      const n = 1 + Math.floor(rng() * 2);
+      for (let i = 0; i < n && corners.length; i++) {
+        const [sx, sz] = corners.splice(Math.floor(rng() * corners.length), 1)[0];
+        const [mf, ht] = SCATTER_MODELS[Math.floor(rng() * SCATTER_MODELS.length)];
+        const d = spawnModel(mf, { height: ht, rotY: rng() * Math.PI * 2 });
+        if (d) { d.position.set(sx * (w / 2 - 0.35), topY - 0.05, sz * (h / 2 - 0.35)); g.add(d); }
+      }
     }
 
     function makeLabel(text) {
@@ -1919,6 +2233,17 @@
     function buildFireflies(THREE) {
       // ~40 glowing points, night only. Animated in the walk-mode loop;
       // static in orbit mode so the on-demand renderer can sleep.
+      // Round soft-glow sprite texture so near-camera points don't render as squares.
+      const glowCanvas = document.createElement('canvas');
+      glowCanvas.width = glowCanvas.height = 64;
+      const gg = glowCanvas.getContext('2d');
+      const grad = gg.createRadialGradient(32, 32, 0, 32, 32, 32);
+      grad.addColorStop(0, 'rgba(255,255,255,1)');
+      grad.addColorStop(0.35, 'rgba(255,255,255,0.55)');
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      gg.fillStyle = grad;
+      gg.fillRect(0, 0, 64, 64);
+      const glowTex = new THREE.CanvasTexture(glowCanvas);
       const N = 40, rng = mulberry32(7777);
       const pos = new Float32Array(N * 3), base = [], phases = new Float32Array(N);
       for (let i = 0; i < N; i++) {
@@ -1933,7 +2258,7 @@
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
       const mat = new THREE.PointsMaterial({
-        color: 0xeaff8a, size: 0.3, transparent: true, opacity: 0.95,
+        color: 0xeaff8a, size: 0.3, map: glowTex, transparent: true, opacity: 0.95,
         blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
       });
       const pts = new THREE.Points(geo, mat);
@@ -2111,9 +2436,11 @@
         else if (kind === 'drip line') buildDripLine(THREE, g, w, h, TEX, fenceSides(c.grid_x || 0, c.grid_y || 0, dc));
         else buildVessel(THREE, g, w, h, kind, TEX);
         addPlants3D(THREE, g, w, h, kind, c, TEX);
+        addBedMarkerAndScatter(THREE, g, w, h, kind, c);
         const label = makeLabel(c.name);
         label.position.y = (g.userData.topY || 1) + 1.2;
         g.add(label);
+        g.userData.label = label; // walk mode hides these (crosshair target only)
         g.traverse((o) => { if (o.isMesh && !o.userData.noShadow) o.castShadow = true; });
         group.add(g);
       });
@@ -2237,17 +2564,50 @@
       } catch (e) { return false; }
     }
 
+    // Minimal pointer-lock look control (v2.62.0). Replaces three's
+    // PointerLockControls, which exposes no sensitivity setting. Mirrors its
+    // behavior (0.002 base factor, pitch clamp) plus a sane default.
+    function makeLookControl(THREE, camera, dom) {
+      const listeners = {};
+      const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+      const ctl = {
+        isLocked: false,
+        sensitivity: 1.15,
+        lock() { try { dom.requestPointerLock(); } catch (e) { /* noop */ } },
+        unlock() { try { document.exitPointerLock(); } catch (e) { /* noop */ } },
+        addEventListener(t, fn) { (listeners[t] = listeners[t] || []).push(fn); },
+      };
+      const emit = (t) => (listeners[t] || []).forEach((fn) => { try { fn(); } catch (e) { /* noop */ } });
+      ctl._onMove = (e) => {
+        if (!ctl.isLocked) return;
+        const s = 0.002 * ctl.sensitivity;
+        euler.setFromQuaternion(camera.quaternion);
+        euler.y -= e.movementX * s;
+        euler.x -= e.movementY * s;
+        euler.x = Math.max(-1.45, Math.min(1.45, euler.x));
+        camera.quaternion.setFromEuler(euler);
+      };
+      ctl._onLockChange = () => {
+        const locked = document.pointerLockElement === dom;
+        if (locked === ctl.isLocked) return;
+        ctl.isLocked = locked;
+        emit(locked ? 'lock' : 'unlock');
+      };
+      ctl.dispose = () => {
+        document.removeEventListener('mousemove', ctl._onMove);
+        document.removeEventListener('pointerlockchange', ctl._onLockChange);
+      };
+      document.addEventListener('mousemove', ctl._onMove);
+      document.addEventListener('pointerlockchange', ctl._onLockChange);
+      return ctl;
+    }
+
     async function ensureWalk() {
       if (walk) return walk;
       await ensureThree();
       const THREE = T.THREE;
-      if (!THREE.PointerLockControls) {
-        const CDN = 'https://cdn.jsdelivr.net/npm/three@0.147.0';
-        await loadScript(`${CDN}/examples/js/controls/PointerLockControls.js`);
-      }
-      if (!THREE.PointerLockControls) throw new Error('walk unavailable');
-      const plc = new THREE.PointerLockControls(T.camera, T.renderer.domElement);
-      walk = { plc, keys: {}, locked: false, loopId: 0, last: 0, x: 0, z: 0, yaw: 0 };
+      const plc = makeLookControl(THREE, T.camera, T.renderer.domElement);
+      walk = { plc, keys: {}, locked: false, loopId: 0, last: 0, x: 0, z: 0, yaw: 0, vx: 0, vz: 0 };
       plc.addEventListener('lock', () => { walk.locked = true; startWalkLoop(); });
       plc.addEventListener('unlock', () => { walk.locked = false; });
       window.addEventListener('keydown', (e) => {
@@ -2318,14 +2678,29 @@
       if (k.KeyS || k.ArrowDown) mz -= 1;
       if (k.KeyD || k.ArrowRight) mx += 1;
       if (k.KeyA || k.ArrowLeft) mx -= 1;
-      if (!mx && !mz) return;
       const sp = (k.ShiftLeft || k.ShiftRight) ? SPRINT_SPEED : SPRINT_SPEED / 2;
-      const len = Math.hypot(mx, mz);
-      const nx = walk.x + ((fx * mz + rx * mx) / len) * sp * dt;
-      const nz = walk.z + ((fz * mz + rz * mx) / len) * sp * dt;
-      const r = resolvePlayerCollision(nx, nz, walkColliders());
-      walk.x = r.x;
-      walk.z = r.z;
+      // desired velocity (v2.62.0: smooth accel/damping instead of binary)
+      let dvx = 0, dvz = 0;
+      if (mx || mz) {
+        const len = Math.hypot(mx, mz);
+        dvx = ((fx * mz + rx * mx) / len) * sp;
+        dvz = ((fz * mz + rz * mx) / len) * sp;
+      }
+      if (walk.vx == null) { walk.vx = 0; walk.vz = 0; }
+      const rate = (mx || mz) ? 10 : 14; // snappy start, quick but smooth stop
+      const t = 1 - Math.exp(-rate * dt);
+      walk.vx += (dvx - walk.vx) * t;
+      walk.vz += (dvz - walk.vz) * t;
+      if (Math.abs(walk.vx) < 0.02 && Math.abs(walk.vz) < 0.02 && !mx && !mz) {
+        walk.vx = walk.vz = 0;
+      } else {
+        const ox = walk.x, oz = walk.z;
+        const r = resolvePlayerCollision(ox + walk.vx * dt, oz + walk.vz * dt, walkColliders());
+        walk.x = r.x; walk.z = r.z;
+        // Recompute velocity from actual motion: wall sliding keeps its
+        // tangential part, head-on impact zeroes out (no lunge on release).
+        if (dt > 0) { walk.vx = (r.x - ox) / dt; walk.vz = (r.z - oz) / dt; }
+      }
       if (T && T.camera) T.camera.position.set(walk.x, EYE, walk.z);
     }
 
@@ -2341,6 +2716,7 @@
       }
       movePlayer(dt);
       updateGhost();
+      updateWalkLabel(); // crosshair-target label only (v2.62.0)
       driftClouds(dt); // slow cloud drift, walk mode only (battery-friendly)
       updateFireflies(now / 1000); // firefly drift, walk mode only
       updateButterflies(now / 1000); // butterfly wander + wing flap, walk mode only
@@ -2354,6 +2730,23 @@
       walk.last = 0;
       const frame = (t) => { walk.loopId = 0; if (walkStep(t)) walk.loopId = raf(frame); };
       walk.loopId = raf(frame);
+    }
+
+    // v2.62.0: floating name labels clutter first person. Hide them all in
+    // walk mode, showing only the single item under the crosshair (~10ft).
+    function updateWalkLabel() {
+      if (!T || !T.group) return;
+      T.group.children.forEach((ch) => {
+        if (ch.userData && ch.userData.label) ch.userData.label.visible = !walkMode;
+      });
+      if (!walkMode || !(walk && walk.locked)) return;
+      const a = aimHit();
+      if (a && a.containerId != null && a.point && T.camera) {
+        if (T.camera.position.distanceTo(a.point) <= 10) {
+          const grp = T.group.children.find((o) => o.userData && o.userData.containerId === a.containerId);
+          if (grp && grp.userData.label) grp.userData.label.visible = true;
+        }
+      }
     }
 
     function stopWalkLoop() {
@@ -2371,6 +2764,7 @@
       walkMode = true;
       // start at the south edge, facing the garden (yaw 0 faces -z)
       walk.x = 0; walk.z = rows / 2 + 3; walk.yaw = 0; walk.keys = {};
+      walk.vx = 0; walk.vz = 0; // no lunge from a previous session's velocity
       T.camera.position.set(walk.x, EYE, walk.z);
       T.camera.lookAt(0, EYE, 0);
       T.controls.enabled = false;
@@ -2892,6 +3286,11 @@
       const tint = new THREE.Color(ok ? 0x00cc44 : 0xcc2222);
       ghost.traverse((o) => {
         if (o.isMesh) {
+          // Model clones share the cache's materials: give the ghost private
+          // copies before tinting, or every instance in the scene would tint.
+          if (o.userData.fromModel) {
+            o.material = Array.isArray(o.material) ? o.material.map((x) => x.clone()) : o.material.clone();
+          }
           o.material.transparent = true;
           o.material.opacity = 0.6;
           o.material.emissive = tint;
@@ -2931,6 +3330,8 @@
       cellFromWorld, rectsOverlap, cellFree, needsBreakConfirm, placeFootprint,
       buildSlots, buildSelected, buildSelect, buildCycle, buildToggleTab,
       nextContainerName, updateGhost, aimHit, breakAim, placeAim, editAim,
+      growthProgress, growthStage, cropModelFor, produceModelFor,
+      cattlePanelHeight,
       get tab() { return buildTab; },
       get index() { return buildIndex; },
       _setTab: (t) => { buildTab = t; buildIndex = 0; paintHotbar(); },
@@ -2957,6 +3358,9 @@
       if (soundBtn) {
         soundBtn.className = (view === '3d' ? '' : ' hidden') + ' ' + off;
         soundBtn.textContent = Sound.enabled ? '🔊' : '🔇';
+      }
+      if (fsBtn) {
+        fsBtn.className = (view === '3d' ? '' : ' hidden') + ' ' + off;
       }
     }
 
@@ -3011,6 +3415,29 @@
         paintViewButtons();
         if (Sound.enabled) Sound.thunk(); // little confirmation blip
       });
+    }
+    // v2.62.0: fullscreen 3D view. Esc exits natively; resize on change.
+    function isFullscreen() {
+      return !!(typeof document !== 'undefined' && document.fullscreenElement);
+    }
+    function toggleFullscreen() {
+      if (typeof document === 'undefined') return;
+      try {
+        if (isFullscreen()) document.exitFullscreen();
+        else if (wrap3d.requestFullscreen) wrap3d.requestFullscreen();
+        else if (wrap3d.webkitRequestFullscreen) wrap3d.webkitRequestFullscreen();
+      } catch (err) { /* noop */ }
+    }
+    if (fsBtn) {
+      const paintFs = () => { fsBtn.textContent = isFullscreen() ? '⛶ ✓' : '⛶'; };
+      fsBtn.addEventListener('click', () => { if (view === '3d') toggleFullscreen(); });
+      if (typeof document !== 'undefined' && document.addEventListener) {
+        document.addEventListener('fullscreenchange', () => {
+          paintFs();
+          if (view === '3d') sizeThree();
+        });
+      }
+      paintFs();
     }
     if (typeof window !== 'undefined' && window.addEventListener) {
       window.addEventListener('resize', () => { if (view === '3d') sizeThree(); });

@@ -312,6 +312,8 @@ curated, extension-service-sourced list.
 ![Backyard planner](docs/screenshots/planner.png)
 ![Backyard planner in 3D](docs/screenshots/planner-3d.png)
 ![Walk-mode creative building](docs/screenshots/planner-build.png)
+![Planner 3D with real crop and fence models](docs/screenshots/planner-3d-models.png)
+![Planner 3D at night with models](docs/screenshots/planner-3d-models-night.png)
 
 Empty containers don't sit idle: **🔄 succession ideas** read the season,
 your first-frost date, and the crop guide, then suggest what each free
@@ -947,6 +949,27 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.62.0** — **Real 3D models in the planner + first-person fixes.** The
+  diorama now uses 53 curated CC0 models (Kenney Nature Kit, Quaternius):
+  wooden picket fences (auto-joining runs, L-corners, gates), stone path
+  tiles, hexagonal planters, an oak fruit tree, and — the big one — **real
+  crop plants that grow through the season**: corn goes seedling→mature over
+  four stages picked from each planting's dates, carrots/melons/pumpkins/
+  turnips/leafy greens/grains get their own models, and **harvest-ready
+  plantings show the actual produce** (tomato, carrot, corn, pumpkin, pepper)
+  on the bed. Planted beds get a garden-sign name stake plus a little
+  deterministic corner decor (bushes, flowers, rocks, mushrooms). Every model
+  falls back to the procedural version if it ever fails to load.
+  **Cattle-panel arch rebuilt the way real panels work**: long tunnels are now
+  a series of ~4ft panel arches with small gaps (not one stretched tube), and
+  the wire mesh is finer — walking through one in first person finally reads
+  right. **Walk mode decluttered**: floating name labels are orbit-only now;
+  in first person you get just the label of whatever's under your crosshair
+  within ~10ft. **Movement is smooth** (velocity accel/damping, wall sliding
+  without hard stops or lunge), the look control has a sane sensitivity, and
+  there's a **⛶ fullscreen toggle** for the 3D view (Esc exits).
+  Archway asset scout: no fitting CC0 archway turned up (castle-kit pieces
+  are externally textured and stylistically wrong), so none were forced in.
 - **2.61.0** — **Creative-mode building in the planner, reskinned as a soft
   miniature diorama.** Walk mode grew a hotbar: 22 slots across three rows
   (8/8/6) — 16 BLOCKS (bed, bag, pot, planter, pallet, arch, cold frame,
