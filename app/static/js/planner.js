@@ -723,9 +723,10 @@
       softNoise(ctx, S, rng, ['#5d646b', '#82898f', '#52585f'], 520, 1, 3);
     }
     function paintWireMesh(ctx, S, rng) {
-      // transparent canvas; fine wire grid reads through alphaTest
-      ctx.strokeStyle = '#a8b0b9'; ctx.lineWidth = 2;
-      for (let i = 0; i <= S; i += 6) {
+      // transparent canvas; wire grid reads through alphaTest. Lines are bold
+      // enough to read as mesh from the orbit camera, not just up close.
+      ctx.strokeStyle = '#bcc4cd'; ctx.lineWidth = 3;
+      for (let i = 0; i <= S; i += 8) {
         ctx.beginPath(); ctx.moveTo(i + 0.5, 0); ctx.lineTo(i + 0.5, S); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(0, i + 0.5); ctx.lineTo(S, i + 0.5); ctx.stroke();
       }
@@ -1187,7 +1188,9 @@
       const H = Math.max(1.5, height || 7);
       const spanAlongX = w <= h; // rib arcs live in the X-Y plane when the footprint is taller than wide
       const metalMat = new THREE.MeshStandardMaterial({
-        map: TEX.metal, color: 0xaab2bc, roughness: 0.45, metalness: 0.6,
+        // flat galvanized gray — no dark map, low metalness (no envmap in the
+        // scene, so high metalness would render near-black)
+        color: 0x9aa3a8, roughness: 0.5, metalness: 0.25,
       });
       const leafMat = new THREE.MeshStandardMaterial({ color: 0x43a53b, roughness: 0.9, metalness: 0 });
       const meshMat = opts.plastic
@@ -1197,7 +1200,7 @@
           })
         : new THREE.MeshStandardMaterial({
             map: TEX.wireMesh, alphaTest: 0.4, side: THREE.DoubleSide,
-            roughness: 0.55, metalness: 0.45,
+            roughness: 0.5, metalness: 0.15,
           });
 
       // Ribs: smooth half-ellipse tubes (torus arc scaled to the crown height).
@@ -2168,7 +2171,8 @@
       }
       if (T.scene.fog) T.scene.fog.color.copy(srgbToLinear(THREE, pal.horizon));
       if (T.gridLines) {
-        T.gridLines.material.opacity = night ? 0.16 : 0.35;
+        // grid lines fade out entirely at night — they glowed against dark grass
+        T.gridLines.material.opacity = night ? 0 : 0.35;
         T.gridLines.material.color.set(night ? 0x2a5522 : 0x3f7a32);
       }
       T.sky.hemi.intensity = night ? 0.25 : 0.9;
