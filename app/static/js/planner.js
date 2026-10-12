@@ -572,7 +572,7 @@
     const hint2d = $('#planner-2d-hint');
     const hint3d = $('#planner-3d-hint');
     const orbitHintText = 'Drag to orbit · scroll or pinch to zoom · right-drag to pan · click a container to edit it.';
-    const walkHintText = 'Click the garden to grab the mouse · WASD / arrows to walk · Shift to sprint · ESC to release · click a container to edit it.';
+    const walkHintText = 'Click to grab the mouse · WASD walk · Shift sprint · Left-click break · Right-click place · E edit · Q blocks/plants · 1-7/wheel pick · ESC release.';
 
     // crosshair shown in walk mode
     const crosshair = document.createElement('div');
@@ -915,15 +915,15 @@
         const hits = T.group ? ray.intersectObjects(T.group.children, true) : [];
         for (const h of hits) { if (openFromHit(h)) break; }
       });
-      // walk-mode click (pointer locked): raycast from screen center
+      // walk-mode clicks (pointer locked): raycast from screen center.
+      // Left = break, right = place (build mode). E edits the aimed container.
       renderer.domElement.addEventListener('click', () => {
         if (walkMode && walk && !walk.locked) { try { walk.plc.lock(); } catch (err) { /* noop */ } }
       });
-      renderer.domElement.addEventListener('click', () => {
+      renderer.domElement.addEventListener('mousedown', (e) => {
         if (!(walkMode && walk && walk.locked)) return;
-        ray.setFromCamera(new THREE.Vector2(0, 0), camera);
-        const hits = T.group ? ray.intersectObjects(T.group.children, true) : [];
-        for (const h of hits) { if (openFromHit(h)) break; }
+        if (e.button === 0) breakAim();
+        else if (e.button === 2) placeAim();
       });
 
       T = { THREE, renderer, scene, camera, controls, sun, group: null, TEX: null };
@@ -1088,7 +1088,7 @@
       g.userData.topY = hh;
     }
 
-    function buildPlantVoxel(THREE, g, px, pz, baseY, species, seed, TEX, big) {
+    function buildPlantVoxel(THREE, g, px, pz, baseY, species, seed, TEX, big, plantingId) {
       // Minecraft cross-quad: two intersecting pixel-art planes.
       const arch = plantArchetype(species);
       const mat = new THREE.MeshStandardMaterial({
@@ -1103,6 +1103,7 @@
       p1.userData.noShadow = true;
       p2.userData.noShadow = true;
       grp.add(p1, p2);
+      if (plantingId != null) grp.userData.plantingId = plantingId; // build-mode breaking
       const rng = mulberry32(seed);
       grp.rotation.y = rng() * Math.PI;
       const s = 0.9 + rng() * 0.35;
@@ -1140,7 +1141,7 @@
       const baseY = kind === 'arch' ? 0 : (g.userData.topY || 1);
       spots.forEach(([spx, spz], i) => {
         const p = ps[i];
-        buildPlantVoxel(THREE, g, spx, spz, baseY, p && p.species_type, (c.id * 1009 + i * 101) | 0, TEX, kind === 'arch');
+        buildPlantVoxel(THREE, g, spx, spz, baseY, p && p.species_type, (c.id * 1009 + i * 101) | 0, TEX, kind === 'arch', p && p.id);
       });
     }
 
@@ -1225,6 +1226,7 @@
       );
       ground.position.y = -0.5;
       ground.receiveShadow = true;
+      ground.userData.isGround = true; // build-mode placement targets this
       group.add(ground);
 
       buildClouds(THREE, group, rng);
@@ -1386,6 +1388,7 @@
         walk.yaw = e.y;
       }
       movePlayer(dt);
+      updateGhost();
       render3D();
       return true;
     }
@@ -1416,6 +1419,9 @@
       T.controls.enabled = false;
       crosshair.style.display = 'block';
       hint3d.textContent = walkHintText;
+      hotbar.style.display = 'block';
+      paintHotbar();
+      bindBuildInputs();
       paintViewButtons();
       render3D();
       toast('Click the garden to grab the mouse, then walk with WASD.');
@@ -1432,6 +1438,8 @@
       if (T) {
         T.controls.enabled = true;
         crosshair.style.display = 'none';
+        hotbar.style.display = 'none';
+        clearGhost();
         hint3d.textContent = orbitHintText;
         buildScene3D(); // reframes the orbit camera
       }
@@ -1455,6 +1463,299 @@
       _exit: () => exitWalkMode(),
     };
     /* -------------- end walk mode -------------- */
+
+    /* ---------------- build mode (Minecraft creative) ---------------- */
+    // Hotbar + place/break while walking. Every mutation goes through the
+    // real API and the 3D scene is rebuilt after each change. Creative
+    // rules: infinite inventory, and the ground itself is never breakable.
+
+    const HOTBAR = {
+      blocks: [
+        { key: 'raised bed', emoji: '🟫', label: 'Bed' },
+        { key: 'grow bag', emoji: '⬛', label: 'Bag' },
+        { key: 'pot', emoji: '🟧', label: 'Pot' },
+        { key: 'planter', emoji: '🟨', label: 'Planter' },
+        { key: 'pallet', emoji: '🟤', label: 'Pallet' },
+        { key: 'arch', emoji: '⛩️', label: 'Arch' },
+        { key: 'cold frame', emoji: '🪟', label: 'ColdFr' },
+      ],
+      plants: [
+        { key: 'tomato', emoji: '🍅', label: 'Tomato', species: 'Tomato' },
+        { key: 'pepper', emoji: '🫑', label: 'Pepper', species: 'Pepper' },
+        { key: 'basil', emoji: '🌿', label: 'Basil', species: 'Basil' },
+        { key: 'lettuce', emoji: '🥬', label: 'Lettuce', species: 'Lettuce' },
+        { key: 'carrot', emoji: '🥕', label: 'Carrot', species: 'Carrot' },
+        { key: 'flower', emoji: '🌸', label: 'Flower', species: 'Flower' },
+      ],
+    };
+    let buildTab = 'blocks';
+    let buildIndex = 0;
+    let ghost = null; // translucent placement preview (scene-level, not in T.group)
+    let buildInputsBound = false;
+    let buildRay = null;
+
+    // ---- pure helpers (also exposed to tests via wrap3d._build) ----
+    function cellFromWorld(wx, wz, ncols, nrows) {
+      // inverse of the container placement: wx = gx + w/2 - cols/2
+      return { gx: Math.floor(wx + ncols / 2), gy: Math.floor(wz + nrows / 2) };
+    }
+    function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
+      return ax < bx + bw && bx < ax + aw && ay < by + bh && by < ay + ah;
+    }
+    function cellFree(gx, gy, w, h, list, ncols, nrows, ignoreId) {
+      if (gx < 0 || gy < 0 || gx + w > ncols || gy + h > nrows) return false;
+      return !(list || []).some((c) => c.id !== ignoreId && rectsOverlap(
+        gx, gy, w, h, c.grid_x || 0, c.grid_y || 0, c.grid_w || 1, c.grid_h || 1));
+    }
+    function buildSlots() { return buildTab === 'blocks' ? HOTBAR.blocks : HOTBAR.plants; }
+    function buildSelected() { const s = buildSlots(); return s[buildIndex] || s[0]; }
+    function buildSelect(i) {
+      const n = buildSlots().length;
+      buildIndex = ((i % n) + n) % n;
+      paintHotbar();
+    }
+    function buildCycle(d) { buildSelect(buildIndex + d); }
+    function buildToggleTab() {
+      buildTab = buildTab === 'blocks' ? 'plants' : 'blocks';
+      buildIndex = 0;
+      paintHotbar();
+    }
+    function nextContainerName(kind) {
+      const base = String(kind || 'grow bag').replace(/\b\w/g, (c) => c.toUpperCase());
+      const names = new Set((containers || []).map((c) => (c.name || '').toLowerCase()));
+      let n = 1;
+      while (names.has(`${base} ${n}`.toLowerCase())) n++;
+      return `${base} ${n}`;
+    }
+    function needsBreakConfirm(c) { return plantingsFor(c.id).length > 0; }
+
+    // ---- hotbar DOM (Minecraft-style, keyboard/wheel driven) ----
+    const hotbar = document.createElement('div');
+    hotbar.style.cssText = 'position:absolute;left:50%;bottom:12px;transform:translateX(-50%);' +
+      'display:none;z-index:6;pointer-events:none;text-align:center;';
+    const hotbarTab = document.createElement('div');
+    const hotbarSlots = document.createElement('div');
+    hotbar.appendChild(hotbarTab);
+    hotbar.appendChild(hotbarSlots);
+    wrap3d.appendChild(hotbar);
+
+    function paintHotbar() {
+      hotbarTab.textContent = (buildTab === 'blocks' ? '▣ BLOCKS' : '❀ PLANTS') + ' · Q switch · 1-7/wheel pick';
+      hotbarTab.style.cssText = 'color:#fff;font-size:11px;font-weight:700;letter-spacing:1px;' +
+        'text-shadow:0 1px 2px #000;margin-bottom:4px;';
+      hotbarSlots.innerHTML = buildSlots().map((s, i) => {
+        const on = i === buildIndex;
+        return '<div style="display:inline-block;width:54px;margin:0 2px;padding:4px 2px;' +
+          'background:rgba(18,18,18,.75);border:2px solid ' + (on ? '#fff' : '#5a5a5a') + ';' +
+          (on ? 'box-shadow:0 0 0 2px #fff;' : '') + 'border-radius:3px;vertical-align:top;">' +
+          '<div style="font-size:22px;line-height:1.25">' + s.emoji + '</div>' +
+          '<div style="font-size:9px;color:#ddd;white-space:nowrap;overflow:hidden">' + s.label + '</div>' +
+          '<div style="font-size:9px;color:#9f9;font-weight:700">∞</div></div>';
+      }).join('');
+    }
+    paintHotbar();
+
+    function unlockPointer() {
+      if (walk && walk.plc && walk.plc.isLocked) { try { walk.plc.unlock(); } catch (e) { /* noop */ } }
+      if (walk) walk.locked = false;
+    }
+
+    // Raycast from the crosshair; walks up to find planting / container / ground.
+    function aimHit() {
+      if (!T || !T.group) return null;
+      const THREE = T.THREE;
+      if (!buildRay) buildRay = new THREE.Raycaster();
+      T.camera.updateMatrixWorld(); // aim exactly where the camera is now, not last frame's matrix
+      buildRay.setFromCamera(new THREE.Vector2(0, 0), T.camera);
+      const hits = buildRay.intersectObjects(T.group.children, true);
+      for (const h of hits) {
+        if (h.object.isSprite) continue; // labels float above; aim through them
+        let o = h.object, plantingId = null, containerId = null, isGround = false;
+        while (o) {
+          const ud = o.userData || {};
+          if (plantingId === null && ud.plantingId != null) plantingId = ud.plantingId;
+          if (containerId === null && ud.containerId != null) containerId = ud.containerId;
+          if (ud.isGround) isGround = true;
+          o = o.parent;
+        }
+        return { plantingId, containerId, isGround, point: h.point };
+      }
+      return null;
+    }
+
+    // Rebuild the 3D scene without yanking the walk camera out of first person.
+    function refreshScene3D() {
+      if (!T) return;
+      let pos = null, quat = null;
+      if (walkMode) {
+        pos = T.camera.position.clone();
+        quat = T.camera.quaternion.clone();
+      }
+      buildScene3D();
+      if (walkMode && pos) {
+        T.camera.position.copy(pos);
+        T.camera.quaternion.copy(quat);
+        render3D();
+      }
+    }
+
+    async function breakAim() {
+      const a = aimHit();
+      if (!a) return;
+      if (a.plantingId != null) {
+        try {
+          await api.del(`/api/containers/plantings/${a.plantingId}`);
+          plantings = plantings.filter((p) => p.id !== a.plantingId);
+          toast('Planting removed.');
+          refreshScene3D();
+        } catch (err) { toast(err.message || 'Could not remove planting.', 'error'); }
+        return;
+      }
+      if (a.containerId == null) return;
+      const c = containers.find((x) => x.id === a.containerId);
+      if (!c) return;
+      const n = plantingsFor(c.id).length;
+      if (n > 0) {
+        unlockPointer(); // confirm() needs a free mouse
+        if (!confirm(`Break ${c.name}? Its ${n} planting${n === 1 ? '' : 's'} go${n === 1 ? 'es' : ''} too.`)) return;
+      }
+      try {
+        await api.del(`/api/containers/${c.id}`);
+        containers = containers.filter((x) => x.id !== c.id);
+        plantings = plantings.filter((p) => p.container_id !== c.id);
+        toast(`${c.name} broken.`);
+        refreshScene3D();
+      } catch (err) { toast(err.message || 'Could not break that.', 'error'); }
+    }
+
+    async function placeAim() {
+      const a = aimHit();
+      if (!a) return;
+      const sel = buildSelected();
+      if (buildTab === 'blocks') {
+        if (!a.isGround) { toast('Aim at the ground to place blocks.', 'error'); return; }
+        const { gx, gy } = cellFromWorld(a.point.x, a.point.z, cols, rows);
+        if (!cellFree(gx, gy, 1, 1, containers, cols, rows, null)) { toast('No room there.', 'error'); return; }
+        const name = nextContainerName(sel.key);
+        let created = null;
+        try {
+          // create() auto-picks the first free spot; then move it to the aimed cell.
+          created = await api.post('/api/containers/', {
+            name, kind: sel.key, grid_w: 1, grid_h: 1, season_year: year,
+          });
+          const moved = await api.patch(`/api/containers/${created.id}`, { grid_x: gx, grid_y: gy });
+          containers.push(moved);
+          toast(`${name} placed.`);
+          refreshScene3D();
+        } catch (err) {
+          if (created && created.id) { try { await api.del(`/api/containers/${created.id}`); } catch (e) { /* noop */ } }
+          toast(err.message || 'Could not place that.', 'error');
+        }
+      } else {
+        if (a.containerId == null) { toast('Aim at a container to plant.', 'error'); return; }
+        const c = containers.find((x) => x.id === a.containerId);
+        if (!c) return;
+        try {
+          const plant = await api.post('/api/plants/', { variety_name: sel.label, species_type: sel.species });
+          const np = await api.post('/api/containers/plantings', { container_id: c.id, plant_id: plant.id });
+          plantings.push(np);
+          toast(`${sel.label} planted in ${c.name}.`);
+          refreshScene3D();
+        } catch (err) { toast(err.message || 'Could not plant that.', 'error'); }
+      }
+    }
+
+    function editAim() {
+      const a = aimHit();
+      const c = a && a.containerId != null ? containers.find((x) => x.id === a.containerId) : null;
+      if (!c) return;
+      unlockPointer();
+      openModal(c);
+    }
+
+    function disposeGhostMeshes(gr) {
+      // NB: shared TEX maps are NOT disposed here — buildScene3D owns them.
+      gr.traverse((o) => {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => m.dispose());
+      });
+    }
+
+    function clearGhost() {
+      if (ghost && T) { T.scene.remove(ghost); disposeGhostMeshes(ghost); }
+      ghost = null;
+    }
+
+    // Translucent green/red preview of the selected block at the aimed cell.
+    // Runs every walk-loop frame; rebuilds only when cell/validity/selection changes.
+    function updateGhost() {
+      if (!T) return;
+      const show = walkMode && walk && walk.locked && buildTab === 'blocks';
+      const a = show ? aimHit() : null;
+      let cell = null, ok = false;
+      if (a && a.isGround) {
+        cell = cellFromWorld(a.point.x, a.point.z, cols, rows);
+        ok = cellFree(cell.gx, cell.gy, 1, 1, containers, cols, rows, null);
+      }
+      const sel = buildSelected();
+      const key = show && cell ? `${sel.key}@${cell.gx},${cell.gy}:${ok ? 'g' : 'r'}` : '';
+      if (!key) { clearGhost(); return; }
+      if (ghost && ghost.userData.key === key) return;
+      clearGhost();
+      const THREE = T.THREE;
+      ghost = new THREE.Group();
+      if (sel.key === 'arch') buildArch(THREE, ghost, 1, 1, 4, T.TEX);
+      else if (sel.key === 'pallet') buildPallet(THREE, ghost, 1, 1, T.TEX);
+      else buildVessel(THREE, ghost, 1, 1, sel.key, T.TEX);
+      const tint = new THREE.Color(ok ? 0x00cc44 : 0xcc2222);
+      ghost.traverse((o) => {
+        if (o.isMesh) {
+          o.material.transparent = true;
+          o.material.opacity = 0.6;
+          o.material.emissive = tint;
+          o.material.emissiveIntensity = 0.6;
+          o.castShadow = false;
+        }
+      });
+      ghost.position.set(cell.gx + 0.5 - cols / 2, 0.03, cell.gy + 0.5 - rows / 2);
+      ghost.userData.key = key;
+      T.scene.add(ghost);
+    }
+
+    function buildTyping() {
+      const a = document.activeElement;
+      return !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+    }
+
+    function bindBuildInputs() {
+      if (buildInputsBound || !T) return;
+      buildInputsBound = true;
+      const el = T.renderer.domElement;
+      el.addEventListener('contextmenu', (e) => { if (walkMode) e.preventDefault(); });
+      el.addEventListener('wheel', (e) => {
+        if (!walkMode) return;
+        e.preventDefault();
+        buildCycle(e.deltaY > 0 ? 1 : -1);
+      }, { passive: false });
+      window.addEventListener('keydown', (e) => {
+        if (!walkMode || buildTyping()) return;
+        if (e.code === 'KeyQ') buildToggleTab();
+        else if (e.code === 'KeyE') editAim();
+        else if (/^Digit[1-7]$/.test(e.code)) buildSelect(Number(e.code.slice(5)) - 1);
+      });
+    }
+
+    wrap3d._build = { // handle for tests / debugging
+      cellFromWorld, rectsOverlap, cellFree, needsBreakConfirm,
+      buildSlots, buildSelected, buildSelect, buildCycle, buildToggleTab,
+      nextContainerName, updateGhost, aimHit, breakAim, placeAim, editAim,
+      get tab() { return buildTab; },
+      get index() { return buildIndex; },
+      _setTab: (t) => { buildTab = t; buildIndex = 0; paintHotbar(); },
+      _hotbar: () => hotbar,
+      _ghost: () => ghost,
+    };
+    /* -------------- end build mode -------------- */
 
     function paintViewButtons() {
       const on = 'bg-sage-200 px-3 py-1 font-semibold text-navy-800';

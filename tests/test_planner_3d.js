@@ -230,6 +230,66 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
   check('walk loop stops when mode exits', kept === false && walkApi._get().loopId === 0);
   delete global.requestAnimationFrame;
 
+  // ---- build mode (Minecraft creative): pure helpers + hotbar ----
+  const buildApi = named['#planner-3d']._build;
+  check('build test handle exposed', !!buildApi);
+
+  // cellFromWorld: inverse of container placement (wx = gx + w/2 - cols/2); cols 24, rows 16
+  let cell = buildApi.cellFromWorld(0, 0, 24, 16);
+  check('cellFromWorld center', cell.gx === 12 && cell.gy === 8);
+  cell = buildApi.cellFromWorld(-12, -8, 24, 16);
+  check('cellFromWorld corner', cell.gx === 0 && cell.gy === 0);
+  cell = buildApi.cellFromWorld(11.9, 7.9, 24, 16);
+  check('cellFromWorld edge floors', cell.gx === 23 && cell.gy === 15);
+
+  // rectsOverlap
+  check('rects overlap', buildApi.rectsOverlap(0, 0, 2, 2, 1, 1, 2, 2) === true);
+  check('rects touching edges do not overlap', buildApi.rectsOverlap(0, 0, 2, 2, 2, 0, 2, 2) === false);
+  check('rects disjoint', buildApi.rectsOverlap(0, 0, 1, 1, 5, 5, 1, 1) === false);
+
+  // cellFree against the stub containers: id 12 arch at (2,2,4,4), id 13 pallet at (8,2,4,3)
+  const clist = [
+    { id: 12, grid_x: 2, grid_y: 2, grid_w: 4, grid_h: 4 },
+    { id: 13, grid_x: 8, grid_y: 2, grid_w: 4, grid_h: 3 },
+  ];
+  check('cellFree empty spot', buildApi.cellFree(0, 0, 1, 1, clist, 24, 16, null) === true);
+  check('cellFree inside container blocked', buildApi.cellFree(3, 3, 1, 1, clist, 24, 16, null) === false);
+  check('cellFree overlapping edge blocked', buildApi.cellFree(5, 3, 2, 2, clist, 24, 16, null) === false);
+  check('cellFree out of bounds rejected', buildApi.cellFree(-1, 0, 1, 1, clist, 24, 16, null) === false);
+  check('cellFree past grid edge rejected', buildApi.cellFree(24, 0, 1, 1, clist, 24, 16, null) === false);
+  check('cellFree ignoreId skips self', buildApi.cellFree(3, 3, 1, 1, clist, 24, 16, 12) === true);
+  check('cellFree ignoreId still blocked by others', buildApi.cellFree(9, 3, 1, 1, clist, 24, 16, 12) === false);
+
+  // hotbar tabs / selection
+  check('hotbar starts on blocks tab', buildApi.tab === 'blocks' && buildApi.buildSlots().length === 7);
+  buildApi.buildSelect(2);
+  check('buildSelect sets index', buildApi.index === 2 && buildApi.buildSelected().key === 'pot');
+  buildApi.buildCycle(1);
+  check('buildCycle forward', buildApi.index === 3);
+  buildApi.buildCycle(-1);
+  check('buildCycle backward', buildApi.index === 2);
+  buildApi.buildSelect(6);
+  buildApi.buildCycle(1);
+  check('buildCycle wraps around', buildApi.index === 0);
+  buildApi.buildToggleTab();
+  check('Q toggles to plants tab', buildApi.tab === 'plants' && buildApi.index === 0 && buildApi.buildSlots().length === 6);
+  check('plants tab first slot is tomato', buildApi.buildSelected().key === 'tomato');
+  buildApi.buildToggleTab();
+  check('Q toggles back to blocks', buildApi.tab === 'blocks' && buildApi.index === 0);
+  const hb = buildApi._hotbar();
+  const hbSlotsHtml = hb._children[1].innerHTML;
+  check('hotbar renders block slots', hbSlotsHtml.includes('🟫') && hbSlotsHtml.includes('∞'));
+  buildApi._setTab('plants');
+  check('hotbar renders plant slots', hb._children[1].innerHTML.includes('🍅'));
+  buildApi._setTab('blocks');
+
+  // nextContainerName avoids clashes (stub containers: 'Bean Arch', 'Pallet Bin')
+  check('nextContainerName no clash', buildApi.nextContainerName('raised bed') === 'Raised Bed 1');
+
+  // needsBreakConfirm: stub planting id 31 sits in container 12
+  check('break confirm when plantings exist', buildApi.needsBreakConfirm({ id: 12 }) === true);
+  check('no confirm when empty', buildApi.needsBreakConfirm({ id: 13 }) === false);
+
   console.log(failures ? `\n${failures} check(s) failed.` : '\nAll checks passed.');
   process.exit(failures ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

@@ -282,8 +282,16 @@ layout into the new year and shuffle things around. Flip to the **3D view** and
 the yard renders as a little Minecraft world — pixel-textured grass blocks,
 plank-sided raised beds, terracotta pots, fabric grow bags, and cross-quad
 pixel plants (tomatoes even grow tiny red fruit). Hit **🚶 Walk** to drop to
-eye level and stroll between the beds with WASD + mouse (Shift to sprint);
-click a container while walking to edit it. Orbiting still works too, and
+eye level and stroll between the beds with WASD + mouse (Shift to sprint).
+Walk mode is **⛏️ creative mode**: a Minecraft-style hotbar (Q switches between
+**BLOCKS** and **PLANTS**, 1–7 or the mouse wheel picks a slot, everything is
+∞) lets you build the garden by walking around it — **left-click breaks** the
+aimed planting or container (breaking a planted container asks first), and
+**right-click places** the selected block on the aimed grass cell — a green/red
+ghost preview shows exactly where it'll land — or plants the selected seedling
+into the aimed container. **E** edits the aimed container, ESC releases the
+mouse. Every placement and break goes through the real API and edits your real
+garden. Orbiting still works too, and
 everything renders on demand so it sips battery. A slim **🌤️ weather ribbon** runs under
 the site header on every page — current conditions, tonight's low, tomorrow's
 high, rain chance, and wind gusts. On the planner, **garden alerts** underneath
@@ -303,6 +311,7 @@ curated, extension-service-sourced list.
 
 ![Backyard planner](docs/screenshots/planner.png)
 ![Backyard planner in 3D](docs/screenshots/planner-3d.png)
+![Walk-mode creative building](docs/screenshots/planner-build.png)
 
 Empty containers don't sit idle: **🔄 succession ideas** read the season,
 your first-frost date, and the crop guide, then suggest what each free
@@ -937,6 +946,17 @@ correct, and the container's clock/timezone matches yours — `DIGEST_TIME` is
 server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
+
+- **2.61.0** — **⛏️ Creative-mode building in the planner.** Walk mode grew a
+  Minecraft hotbar: 7 BLOCKS (bed, bag, pot, planter, pallet, arch, cold
+  frame) and 6 PLANTS (tomato, pepper, basil, lettuce, carrot, flower), all
+  infinite. **Left-click breaks** the aimed planting or container — breaking a
+  container that holds plantings asks for confirmation first, and the ground
+  itself can't be broken. **Right-click places** the selected block on the
+  aimed 1-ft grass cell with a green/red ghost preview, or plants the selected
+  seedling into the aimed container. **Q** switches tabs, **1–7**/wheel picks
+  slots, **E** edits the aimed container. Everything goes through the real
+  API; the 3D scene refreshes after each change without leaving first person.
 
 - **2.60.0** — **⛏️ The planner goes Minecraft.** The 3D view is now a voxel
   world: 16×16 pixel textures with crisp NearestFilter rendering, grass-block
