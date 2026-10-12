@@ -51,7 +51,7 @@ function makeEl() {
 const named = {};
 ['panel-planner', 'planner-canvas', 'planner-3d', 'planner-empty',
  'planner-2d-hint', 'planner-3d-hint',
- 'view-2d', 'view-3d', 'view-walk', 'view-daynight',
+ 'view-2d', 'view-3d', 'view-walk', 'view-daynight', 'view-tape', 'view-sound',
  'planner-year', 'planner-copy', 'planner-add',
  'grid-cols', 'grid-rows', 'grid-apply',
  'rotation-banner', 'rotation-list', 'rotation-dismiss',
@@ -261,14 +261,14 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
   check('cellFree ignoreId still blocked by others', buildApi.cellFree(9, 3, 1, 1, clist, 24, 16, 12) === false);
 
   // hotbar tabs / selection
-  check('hotbar starts on blocks tab', buildApi.tab === 'blocks' && buildApi.buildSlots().length === 11);
+  check('hotbar starts on blocks tab', buildApi.tab === 'blocks' && buildApi.buildSlots().length === 16);
   buildApi.buildSelect(2);
   check('buildSelect sets index', buildApi.index === 2 && buildApi.buildSelected().key === 'pot');
   buildApi.buildCycle(1);
   check('buildCycle forward', buildApi.index === 3);
   buildApi.buildCycle(-1);
   check('buildCycle backward', buildApi.index === 2);
-  buildApi.buildSelect(10);
+  buildApi.buildSelect(15);
   buildApi.buildCycle(1);
   check('buildCycle wraps around', buildApi.index === 0);
   buildApi.buildToggleTab();
@@ -359,15 +359,95 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
   walkApi._toggleDayNight();
   check('toggle flips back to day', walkApi.dayNight === 'day');
 
-  // hotbar grew: 11 blocks, new kinds present
+  // hotbar grew: 16 blocks across two rows of 8, new kinds present
   const blockKeys = buildApi.buildSlots().map((s) => s.key);
-  check('BLOCKS hotbar has 11 slots', blockKeys.length === 11);
-  check('new dressing kinds in hotbar', ['lamp', 'fence', 'bucket', 'path'].every((k) => blockKeys.includes(k)));
+  check('BLOCKS hotbar has 16 slots', blockKeys.length === 16);
+  check('dressing kinds in hotbar', ['lamp', 'fence', 'bucket', 'path'].every((k) => blockKeys.includes(k)));
+  check('new asset kinds in hotbar', ['rain barrel', 'compost bin', 'hoop house', 'fence gate', 'bird bath'].every((k) => blockKeys.includes(k)));
   buildApi._setTab('blocks');
   buildApi.buildSelect(10);
   check('slot 11 selectable (wheel cycles all)', buildApi.buildSelected().key === 'path');
-  buildApi.buildSelect(11);
+  buildApi.buildSelect(15);
+  check('slot 16 selectable', buildApi.buildSelected().key === 'bird bath');
+  buildApi.buildSelect(16);
   check('selection wraps past the end', buildApi.buildSelected().key === 'raised bed');
+  const hbHtml = buildApi._hotbar()._children[1].innerHTML;
+  check('hotbar wraps to two rows of 8', (hbHtml.match(/margin-bottom:4px/g) || []).length === 2);
+  buildApi._setTab('plants');
+  const plantHtml = buildApi._hotbar()._children[1].innerHTML;
+  check('PLANTS tab stays one row', (plantHtml.match(/margin-bottom:4px/g) || []).length === 1);
+  buildApi._setTab('blocks');
+
+  // new pixel painters registered (auto-covered by the painter loop above too)
+  ['paintBarrel', 'paintCompost', 'paintHoopPlastic', 'paintBasin'].forEach((n) => {
+    check(`painter ${n} registered`, typeof walkApi.painters[n] === 'function');
+  });
+
+  // per-kind placement footprints: hoop house is 4x8, everything else 1x1
+  check('hoop house footprint 4x8', JSON.stringify(buildApi.placeFootprint('hoop house')) === '[4,8]');
+  check('default footprint 1x1', JSON.stringify(buildApi.placeFootprint('rain barrel')) === '[1,1]' &&
+    JSON.stringify(buildApi.placeFootprint('bogus kind')) === '[1,1]');
+  check('4x8 fits on empty grid', buildApi.cellFree(0, 0, 4, 8, [], 24, 16, null) === true);
+  check('4x8 blocked by overlap', buildApi.cellFree(0, 0, 4, 8,
+    [{ id: 1, grid_x: 2, grid_y: 2, grid_w: 1, grid_h: 1 }], 24, 16, null) === false);
+  check('4x8 blocked out of bounds', buildApi.cellFree(21, 0, 4, 8, [], 24, 16, null) === false);
+  check('4x8 ignores the ignored id', buildApi.cellFree(0, 0, 4, 8,
+    [{ id: 7, grid_x: 0, grid_y: 0, grid_w: 4, grid_h: 8 }], 24, 16, 7) === true);
+
+  // fence gate joins the fence connection set, both directions
+  const gateCells = walkApi.fenceCells([{ kind: 'fence gate', grid_x: 5, grid_y: 5, grid_w: 1, grid_h: 1 }]);
+  check('fence gate counts as a fence cell', gateCells.has('5,5'));
+  const fenceCells2 = walkApi.fenceCells([{ kind: 'fence', grid_x: 4, grid_y: 5, grid_w: 1, grid_h: 1 }]);
+  const both = new Set([...fenceCells2, ...gateCells]);
+  check('fence meshes toward adjacent gate', walkApi.fenceSides(4, 5, both).e === true);
+  check('gate meshes toward adjacent fence', walkApi.fenceSides(5, 5, both).w === true);
+  check('lone gate has no connections', Object.values(walkApi.fenceSides(9, 9, both)).every((v) => v === false));
+
+  // measuring tape: pure distance math, 1 unit = 1 ft
+  check('tape 3-4-5 triangle', walkApi.tapeDistance({ x: 0, z: 0 }, { x: 3, z: 4 }) === 5);
+  check('tape zero distance', walkApi.tapeDistance({ x: 1, z: 1 }, { x: 1, z: 1 }) === 0);
+  check('tape diagonal', Math.abs(walkApi.tapeDistance({ x: 0, z: 0 }, { x: 10, z: 10 }) - Math.SQRT2 * 10) < 1e-9);
+
+  // sound synth: stubbed AudioContext, thunk + crunch run, mute respected
+  const madeNodes = [];
+  global.window.AudioContext = function () {
+    this.currentTime = 0; this.sampleRate = 44100; this.destination = {};
+    this.createOscillator = () => { const o = { type: '', frequency: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {}, start() {}, stop() {} }; madeNodes.push(o); return o; };
+    this.createGain = () => { const g = { gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {} }; madeNodes.push(g); return g; };
+    this.createBuffer = (ch, len) => ({ getChannelData: () => new Float32Array(len) });
+    this.createBufferSource = () => { const s = { buffer: null, connect() {}, start() {} }; madeNodes.push(s); return s; };
+    this.createBiquadFilter = () => ({ type: '', frequency: {}, connect() {} });
+  };
+  walkApi.Sound.enabled = true;
+  let soundThrew = false;
+  try { walkApi.Sound.thunk(); walkApi.Sound.crunch(); } catch (e) { soundThrew = true; }
+  check('sound synth runs on stubbed AudioContext', !soundThrew && madeNodes.length > 0);
+  const nodesBeforeMute = madeNodes.length;
+  walkApi.Sound.enabled = false;
+  walkApi.Sound.thunk(); walkApi.Sound.crunch();
+  check('sound muted when disabled', madeNodes.length === nodesBeforeMute);
+  walkApi.Sound.enabled = true;
+
+  // break particles: spawn count + expiry, with an injected minimal THREE
+  const pMeshes = [];
+  const fakeTHREE = {
+    BoxGeometry: function () { this.dispose = () => {}; },
+    MeshBasicMaterial: function (opts) { this.opacity = 1; this.color = opts && opts.color; this.dispose = () => {}; },
+    Mesh: function (geo, mat) {
+      this.geometry = geo; this.material = mat;
+      this.position = { x: 0, y: 0, z: 0, set() {} };
+      this.rotation = { x: 0, y: 0 };
+      pMeshes.push(this);
+    },
+  };
+  walkApi._setT({ THREE: fakeTHREE, scene: { add() {}, remove() {} } });
+  walkApi.spawnParticles(0, 1, 0);
+  check('break spawns 12 particles', walkApi.particleCount() === 12 && pMeshes.length === 12);
+  walkApi.updateParticles(1.0); // age past every particle's life
+  check('particles expire and clean up', walkApi.particleCount() === 0);
+  walkApi._setT(null);
+  walkApi.spawnParticles(0, 1, 0);
+  check('no particles without a 3D context', walkApi.particleCount() === 0);
 
   console.log(failures ? `\n${failures} check(s) failed.` : '\nAll checks passed.');
   process.exit(failures ? 1 : 0);

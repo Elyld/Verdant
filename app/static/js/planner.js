@@ -5,7 +5,7 @@
 
   const { $, esc, api, toast } = globalThis.Verdant;
 
-  const KIND_ICON = { 'grow bag': '🛍️', 'raised bed': '🟫', 'pot': '🪴', 'planter': '🗄️', 'arch': '🌉', 'pallet': '🪵', 'lamp': '💡', 'fence': '⛓️', 'bucket': '🪣', 'path': '🪨' };
+  const KIND_ICON = { 'grow bag': '🛍️', 'raised bed': '🟫', 'pot': '🪴', 'planter': '🗄️', 'arch': '🌉', 'pallet': '🪵', 'lamp': '💡', 'fence': '⛓️', 'bucket': '🪣', 'path': '🪨', 'rain barrel': '🛢️', 'compost bin': '🟤', 'hoop house': '🏠', 'fence gate': '🚪', 'bird bath': '🐦' };
   const KIND_TONE = {
     'grow bag': 'bg-sage-100 ring-sage-300',
     'raised bed': 'bg-amber-100 ring-amber-300',
@@ -17,9 +17,14 @@
     'fence': 'bg-stone-100 ring-stone-300',
     'bucket': 'bg-sky-50 ring-sky-200',
     'path': 'bg-stone-200 ring-stone-400',
+    'rain barrel': 'bg-sky-200 ring-sky-400',
+    'compost bin': 'bg-amber-200 ring-amber-400',
+    'hoop house': 'bg-slate-100 ring-slate-300',
+    'fence gate': 'bg-stone-100 ring-stone-400',
+    'bird bath': 'bg-cyan-100 ring-cyan-300',
   };
-  const FOOTPRINTS = { 'grow bag': [2, 2], 'raised bed': [4, 4], 'pot': [1, 1], 'planter': [3, 1], 'arch': [4, 4], 'pallet': [4, 3], 'lamp': [1, 1], 'fence': [1, 1], 'bucket': [1, 1], 'path': [1, 1] };
-  const KIND_HEIGHT = { 'arch': 7 }; // default height in feet, used by the 3D view
+  const FOOTPRINTS = { 'grow bag': [2, 2], 'raised bed': [4, 4], 'pot': [1, 1], 'planter': [3, 1], 'arch': [4, 4], 'pallet': [4, 3], 'lamp': [1, 1], 'fence': [1, 1], 'bucket': [1, 1], 'path': [1, 1], 'rain barrel': [1, 1], 'compost bin': [1, 1], 'hoop house': [4, 8], 'fence gate': [1, 1], 'bird bath': [1, 1] };
+  const KIND_HEIGHT = { 'arch': 7, 'hoop house': 6 }; // default height in feet, used by the 3D view
 
   function initPlanner() {
     const canvas = $('#planner-canvas');
@@ -573,6 +578,8 @@
     const view3dBtn = $('#view-3d');
     const viewWalkBtn = $('#view-walk');
     const dayNightBtn = $('#view-daynight');
+    const tapeBtn = $('#view-tape');
+    const soundBtn = $('#view-sound');
     const wrap3d = $('#planner-3d');
     const hint2d = $('#planner-2d-hint');
     const hint3d = $('#planner-3d-hint');
@@ -723,6 +730,32 @@
       // speckled gray flagstone
       noiseFill(ctx, S, rng, ['#9aa0a6', '#8b9096', '#a7adb3', '#7d838a']);
       for (let i = 0; i < 14; i++) px(ctx, (rng() * S) | 0, (rng() * S) | 0, 1, 1, '#5f656c'); // dark speckles
+    }
+
+    function paintBarrel(ctx, S, rng) {
+      // blue plastic rain barrel: saturated blue body, darker ridge bands
+      noiseFill(ctx, S, rng, ['#2b6cb0', '#2f78c2', '#265e9c', '#3579bd']);
+      for (let y = 2; y < S; y += 5) px(ctx, 0, y, S, 1, '#1d4e89'); // ridge shadow
+      for (let y = 3; y < S; y += 5) px(ctx, 0, y, S, 1, '#4d8fd4'); // ridge highlight
+    }
+
+    function paintCompost(ctx, S, rng) {
+      // dark slatted compost bin: near-black brown slats with gaps
+      noiseFill(ctx, S, rng, ['#3a2d20', '#443423', '#2f2417', '#4d3a26']);
+      for (let y = 0; y < S; y += 4) px(ctx, 0, y, S, 1, '#14100a'); // slat gaps
+      for (let i = 0; i < 10; i++) px(ctx, (rng() * S) | 0, (rng() * S) | 0, 1, 1, '#5d4a30'); // wood flecks
+    }
+
+    function paintHoopPlastic(ctx, S, rng) {
+      // greenhouse film: milky white with a faint ribbed sheen (material is translucent)
+      noiseFill(ctx, S, rng, ['#eef2f4', '#e4ebef', '#f6fafb', '#dde6ea']);
+      for (let x = 0; x < S; x += 4) px(ctx, x, 0, 1, S, '#ffffff'); // sheen lines
+    }
+
+    function paintBasin(ctx, S, rng) {
+      // weathered stone basin: pale gray with mossy flecks
+      noiseFill(ctx, S, rng, ['#b9bdc2', '#aeb3b9', '#c4c9ce', '#9fa5ab']);
+      for (let i = 0; i < 12; i++) px(ctx, (rng() * S) | 0, (rng() * S) | 0, 1, 1, '#7a8a5a'); // moss
     }
 
     // Pixel-sprite maps: one char per pixel, '.' = transparent.
@@ -993,6 +1026,15 @@
         ptr.y = -((e.clientY - r.top) / r.height) * 2 + 1;
         ray.setFromCamera(ptr, camera);
         const hits = T.group ? ray.intersectObjects(T.group.children, true) : [];
+        if (tapeMode) {
+          // measuring tape: first ground hit wins
+          for (const h of hits) {
+            let o = h.object, ground = false;
+            while (o) { if (o.userData && o.userData.isGround) { ground = true; break; } o = o.parent; }
+            if (ground) { tapeClick(h.point.x, h.point.z); break; }
+          }
+          return;
+        }
         for (const h of hits) { if (openFromHit(h)) break; }
       });
       // walk-mode clicks (pointer locked): raycast from screen center.
@@ -1052,6 +1094,10 @@
       TEX.wireMesh = makePixTexture(THREE, 16, paintWireMesh, 23, [1, 1]); // [1,1] enables RepeatWrapping for UV tiling
       TEX.bucket = makePixTexture(THREE, 16, paintBucket, 24);
       TEX.stone = makePixTexture(THREE, 16, paintStone, 25);
+      TEX.barrel = makePixTexture(THREE, 16, paintBarrel, 26);
+      TEX.compost = makePixTexture(THREE, 16, paintCompost, 27);
+      TEX.hoopPlastic = makePixTexture(THREE, 16, paintHoopPlastic, 28);
+      TEX.basin = makePixTexture(THREE, 16, paintBasin, 29);
       TEX.plants = {};
       Object.keys(SPRITES).forEach((name) => {
         TEX.plants[name] = makePixTexture(THREE, 16, (ctx) => paintSprite(ctx, name), 21);
@@ -1163,20 +1209,27 @@
       return { x: (nx / nl) * 0.16, y: (ny / nl) * 0.16 };
     }
 
-    function buildArch(THREE, g, w, h, height, TEX) {
+    function buildArch(THREE, g, w, h, height, TEX, opts) {
       // Cattle-panel archway: curved wire-mesh hoops arcing over the short
       // dimension (ribs spaced along the long dimension), vines climbing ON
       // the ribs. Walk-under-able: no collision (see walkColliders).
+      // opts.plastic -> hoop-house variant: translucent plastic skin, no vines.
+      opts = opts || {};
       const span = Math.min(w, h);
       const len = Math.max(w, h);
       const H = Math.max(1.5, height || 7);
       const spanAlongX = w <= h; // rib arcs live in the X-Y plane when the footprint is taller than wide
       const metalMat = pixMaterial(THREE, TEX.metal);
       const leafMat = pixMaterial(THREE, TEX.leafBlob);
-      const meshMat = new THREE.MeshStandardMaterial({
-        map: TEX.wireMesh, alphaTest: 0.4, side: THREE.DoubleSide,
-        roughness: 0.55, metalness: 0.45,
-      });
+      const meshMat = opts.plastic
+        ? new THREE.MeshStandardMaterial({
+            map: TEX.hoopPlastic, transparent: true, opacity: 0.42, side: THREE.DoubleSide,
+            roughness: 0.35, metalness: 0, depthWrite: false,
+          })
+        : new THREE.MeshStandardMaterial({
+            map: TEX.wireMesh, alphaTest: 0.4, side: THREE.DoubleSide,
+            roughness: 0.55, metalness: 0.45,
+          });
 
       // Ribs: stepped voxel arcs, shared geometry across every segment.
       const segGeo = new THREE.BoxGeometry(0.15, 0.15, 0.13);
@@ -1219,8 +1272,10 @@
       g.add(skin);
 
       // Vines climbing ON the ribs (seeded = stable): a few ribs, blobs at
-      // intervals along each rib's arc, hugging the curve.
+      // intervals along each rib's arc, hugging the curve. Skipped for the
+      // plastic hoop-house variant (clean greenhouse look).
       const rng = mulberry32((w * 131 + h * 17 + ((g.userData.containerId || 0) * 7)) | 0);
+      if (!opts.plastic) {
       const blobGeo = new THREE.BoxGeometry(0.34, 0.34, 0.34);
       const vineRibs = new Set();
       while (vineRibs.size < Math.min(3, nRibs)) vineRibs.add((rng() * nRibs) | 0);
@@ -1238,6 +1293,7 @@
           g.add(b);
         }
       });
+      }
       g.userData.topY = H;
     }
 
@@ -1252,11 +1308,13 @@
         e: cellSet.has(`${gx + 1},${gy}`),
       };
     }
-    // Pure: set of "gx,gy" cells covered by fence containers.
+    // Pure: set of "gx,gy" cells covered by fence containers. Fence gates
+    // count too, so a gate dropped into a fence run meshes both ways.
     function fenceCells(list) {
       const set = new Set();
       (list || []).forEach((c) => {
-        if ((c.kind || '') !== 'fence') return;
+        const k = c.kind || '';
+        if (k !== 'fence' && k !== 'fence gate') return;
         const w = c.grid_w || 1, h = c.grid_h || 1;
         for (let dx = 0; dx < w; dx++) for (let dy = 0; dy < h; dy++) set.add(`${(c.grid_x || 0) + dx},${(c.grid_y || 0) + dy}`);
       });
@@ -1351,6 +1409,117 @@
       g.userData.topY = 0.15;
     }
 
+    function buildRainBarrel(THREE, g, TEX) {
+      // Blue voxel rain barrel: stepped cylinder body, lid, spigot near base.
+      const body = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.44, 0.4, 1.6, 10),
+        pixMaterial(THREE, TEX.barrel)
+      );
+      body.position.y = 0.8;
+      g.add(body);
+      const lid = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.47, 0.47, 0.12, 10),
+        pixMaterial(THREE, TEX.metal)
+      );
+      lid.position.y = 1.66;
+      g.add(lid);
+      const spigot = box(THREE, 0.16, 0.16, 0.3, pixMaterial(THREE, TEX.metal));
+      spigot.position.set(0, 0.35, 0.48);
+      g.add(spigot);
+      g.userData.topY = 1.75;
+    }
+
+    function buildCompostBin(THREE, g, TEX) {
+      // Dark slatted compost cube with a slightly ajar lid.
+      const mat = pixMaterial(THREE, TEX.compost);
+      const body = box(THREE, 0.95, 0.95, 0.95, mat);
+      body.position.y = 0.475;
+      g.add(body);
+      const lid = box(THREE, 1.0, 0.12, 1.0, pixMaterial(THREE, TEX.darkWood));
+      lid.position.y = 1.0;
+      lid.rotation.z = 0.06; // slightly ajar, like it's in use
+      g.add(lid);
+      g.userData.topY = 1.1;
+    }
+
+    function buildHoopHouse(THREE, g, w, h, height, TEX) {
+      // Bigger cousin of the cattle-panel arch: galvanized ribs + translucent
+      // plastic skin. Solid in v1 (no walking inside — see walkColliders).
+      buildArch(THREE, g, w, h, height || KIND_HEIGHT['hoop house'] || 6, TEX, { plastic: true });
+      // end-wall frames so it reads as a structure, not a tunnel
+      const metalMat = pixMaterial(THREE, TEX.metal);
+      const span = Math.min(w, h), len = Math.max(w, h);
+      const H = Math.max(1.5, height || KIND_HEIGHT['hoop house'] || 6);
+      const p0 = archArcPoint(span, H, 0), p1 = archArcPoint(span, H, 1);
+      [[-len / 2], [len / 2]].forEach(([off]) => {
+        const foot1 = box(THREE, 0.2, 1.2, 0.2, metalMat);
+        const foot2 = box(THREE, 0.2, 1.2, 0.2, metalMat);
+        if (w <= h) { foot1.position.set(p0.x, 0.6, off); foot2.position.set(p1.x, 0.6, off); }
+        else { foot1.position.set(off, 0.6, p0.x); foot2.position.set(off, 0.6, p1.x); }
+        g.add(foot1, foot2);
+      });
+    }
+
+    function buildFenceGate(THREE, g, w, h, TEX, sides) {
+      // 1x1 chain-link gate: frame posts on both sides + mesh panel + handle.
+      // Auto-connects visually to adjacent fence segments via fenceSides.
+      sides = sides || {};
+      const metalMat = pixMaterial(THREE, TEX.metal);
+      const meshMat = new THREE.MeshStandardMaterial({
+        map: TEX.wireMesh, alphaTest: 0.4, side: THREE.DoubleSide,
+        roughness: 0.7, metalness: 0.4,
+      });
+      const post1 = box(THREE, 0.2, 1.15, 0.2, metalMat);
+      post1.position.set(-0.42, 0.575, 0);
+      const post2 = box(THREE, 0.2, 1.15, 0.2, metalMat);
+      post2.position.set(0.42, 0.575, 0);
+      g.add(post1, post2);
+      const panel = new THREE.Mesh(new THREE.PlaneGeometry(0.72, 0.85), meshMat);
+      panel.position.set(0, 0.6, 0);
+      panel.userData.noShadow = true;
+      g.add(panel);
+      const handle = box(THREE, 0.1, 0.1, 0.14, pixMaterial(THREE, TEX.darkWood));
+      handle.position.set(0.28, 0.62, 0.08);
+      g.add(handle);
+      // connect to neighboring fence runs on the gate's long axis sides
+      const fc = sides;
+      const mkPanel = (pw, px, pz, rotY) => {
+        const p = new THREE.Mesh(new THREE.PlaneGeometry(pw, 0.85), meshMat);
+        p.position.set(px, 0.6, pz);
+        p.rotation.y = rotY;
+        p.userData.noShadow = true;
+        g.add(p);
+      };
+      if (fc.n) mkPanel(0.5, 0, -0.25, 0);
+      if (fc.s) mkPanel(0.5, 0, 0.25, 0);
+      if (fc.w) mkPanel(0.5, -0.25, 0, Math.PI / 2);
+      if (fc.e) mkPanel(0.5, 0.25, 0, Math.PI / 2);
+      g.userData.topY = 1.15;
+    }
+
+    function buildBirdBath(THREE, g, TEX) {
+      // Stone pedestal (stacked boxes) + wide shallow basin + water top.
+      const stoneMat = pixMaterial(THREE, TEX.basin);
+      const base = box(THREE, 0.5, 0.18, 0.5, stoneMat);
+      base.position.y = 0.09;
+      const stem = box(THREE, 0.28, 0.7, 0.28, stoneMat);
+      stem.position.y = 0.53;
+      const basin = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.55, 0.4, 0.25, 10),
+        stoneMat
+      );
+      basin.position.y = 1.0;
+      g.add(base, stem, basin);
+      const water = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.46, 0.46, 0.04, 10),
+        new THREE.MeshStandardMaterial({ color: 0x4fa3d8, transparent: true, opacity: 0.75, roughness: 0.15, metalness: 0 })
+      );
+      water.position.y = 1.1;
+      water.userData.noShadow = true;
+      g.add(water);
+      g.userData.topY = 1.15;
+    }
+
     function buildPlantVoxel(THREE, g, px, pz, baseY, species, seed, TEX, big, plantingId) {
       // Minecraft cross-quad: two intersecting pixel-art planes.
       const arch = plantArchetype(species);
@@ -1401,7 +1570,7 @@
           ]);
         });
       }
-      const baseY = kind === 'arch' ? 0 : (g.userData.topY || 1);
+      const baseY = (kind === 'arch' || kind === 'hoop house') ? 0 : (g.userData.topY || 1);
       spots.forEach(([spx, spz], i) => {
         const p = ps[i];
         buildPlantVoxel(THREE, g, spx, spz, baseY, p && p.species_type, (c.id * 1009 + i * 101) | 0, TEX, kind === 'arch', p && p.id);
@@ -1528,8 +1697,13 @@
           T.lamps.push({ x: g.position.x + lp.x, y: lp.y, z: g.position.z + lp.z });
         }
         else if (kind === 'fence') buildFence(THREE, g, w, h, TEX, fenceSides(c.grid_x || 0, c.grid_y || 0, fc));
+        else if (kind === 'fence gate') buildFenceGate(THREE, g, w, h, TEX, fenceSides(c.grid_x || 0, c.grid_y || 0, fc));
         else if (kind === 'bucket') buildBucket(THREE, g, TEX);
         else if (kind === 'path') buildPath(THREE, g, TEX);
+        else if (kind === 'rain barrel') buildRainBarrel(THREE, g, TEX);
+        else if (kind === 'compost bin') buildCompostBin(THREE, g, TEX);
+        else if (kind === 'hoop house') buildHoopHouse(THREE, g, w, h, c.height_ft || KIND_HEIGHT['hoop house'] || 6, TEX);
+        else if (kind === 'bird bath') buildBirdBath(THREE, g, TEX);
         else buildVessel(THREE, g, w, h, kind, TEX);
         addPlants3D(THREE, g, w, h, kind, c, TEX);
         const label = makeLabel(c.name);
@@ -1740,6 +1914,7 @@
       movePlayer(dt);
       updateGhost();
       driftClouds(dt); // slow cloud drift, walk mode only (battery-friendly)
+      updateParticles(dt); // break-particle juice, walk mode only
       render3D();
       return true;
     }
@@ -1757,6 +1932,7 @@
 
     async function enterWalkMode() {
       if (isTouchOnly()) { toast('Walk mode needs a keyboard + mouse.'); return; }
+      setTapeMode(false); // tape is orbit-only
       try { await ensureWalk(); }
       catch (err) {
         toast('Could not load walk controls — check your connection and try again.', 'error');
@@ -1801,17 +1977,23 @@
       resolvePlayerCollision, mulberry32, plantArchetype, walkColliders, makePixTexture,
       archArcPoint, archRibCells, archRibCount, archVineOffset,
       fenceSides, fenceCells, nearestLampIds, driftClouds,
+      tapeDistance, setTapeMode, clearTape,
+      spawnParticles, particleCount, updateParticles,
+      get Sound() { return Sound; },
+      get tapeMode() { return tapeMode; },
+      get tapePoints() { return tapePoints; },
       get dayNight() { return dayNight; },
       _toggleDayNight: () => toggleDayNight(),
       painters: {
         paintGrassTop, paintDirtSide, paintDirt, paintWoodPlanks, paintDarkWood,
         paintSoil, paintFabric, paintTerracotta, paintLeafBlob, paintMetal, paintWireMesh,
-        paintBucket, paintStone,
+        paintBucket, paintStone, paintBarrel, paintCompost, paintHoopPlastic, paintBasin,
         paintSprite, SPRITES,
       },
       get mode() { return walkMode; },
       _get: () => walk,
       _set: (w) => { walk = w; },
+      _setT: (t) => { T = t; },
       _setMode: (m) => { walkMode = m; },
       _startLoop: () => startWalkLoop(),
       _stopLoop: () => stopWalkLoop(),
@@ -1820,6 +2002,158 @@
       _exit: () => exitWalkMode(),
     };
     /* -------------- end walk mode -------------- */
+
+    /* ---------------- game feel: sounds + break particles ---------------- */
+    // Tiny WebAudio synth, zero assets. Default ON; 🔊 button toggles.
+    const Sound = {
+      enabled: true, _ctx: null,
+      ac() {
+        if (!this._ctx) {
+          try {
+            const AC = (typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext)) || null;
+            if (AC) this._ctx = new AC();
+          } catch (e) { this._ctx = null; }
+        }
+        return this._ctx;
+      },
+      thunk() { // place: short low sine thump
+        const c = this.ac();
+        if (!c || !this.enabled) return;
+        try {
+          const o = c.createOscillator(), g = c.createGain();
+          o.type = 'sine';
+          o.frequency.setValueAtTime(150, c.currentTime);
+          o.frequency.exponentialRampToValueAtTime(60, c.currentTime + 0.12);
+          g.gain.setValueAtTime(0.25, c.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.15);
+          o.connect(g); g.connect(c.destination);
+          o.start(); o.stop(c.currentTime + 0.16);
+        } catch (e) { /* audio is decorative */ }
+      },
+      crunch() { // break: filtered noise burst
+        const c = this.ac();
+        if (!c || !this.enabled) return;
+        try {
+          const len = Math.floor(c.sampleRate * 0.2);
+          const buf = c.createBuffer(1, len, c.sampleRate);
+          const d = buf.getChannelData(0);
+          for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+          const src = c.createBufferSource(); src.buffer = buf;
+          const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 900;
+          const g = c.createGain();
+          g.gain.setValueAtTime(0.3, c.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.2);
+          src.connect(f); f.connect(g); g.connect(c.destination);
+          src.start();
+        } catch (e) { /* audio is decorative */ }
+      },
+    };
+
+    // Break particles: ~12 small voxel cubes burst from the broken
+    // container's center, gravity + fade over ~0.6s. Runs in the walk-mode
+    // rAF loop (build mode is walk-only, so no orbit animation needed).
+    let particles = [];
+    const PARTICLE_COLORS = [0x8a6b46, 0x6e4f2e, 0x5cb85c, 0x9aa0a6, 0x2b6cb0];
+    function spawnParticles(x, y, z) {
+      if (!T || !T.THREE) return;
+      const THREE = T.THREE;
+      const rng = mulberry32((Date.now() & 0xffff) | 1);
+      for (let i = 0; i < 12; i++) {
+        const s = 0.1 + rng() * 0.12;
+        const m = new THREE.Mesh(
+          new THREE.BoxGeometry(s, s, s),
+          new THREE.MeshBasicMaterial({
+            color: PARTICLE_COLORS[(rng() * PARTICLE_COLORS.length) | 0],
+            transparent: true, opacity: 1,
+          })
+        );
+        m.position.set(x + (rng() - 0.5) * 0.5, y + rng() * 0.4, z + (rng() - 0.5) * 0.5);
+        T.scene.add(m);
+        particles.push({
+          mesh: m,
+          vx: (rng() - 0.5) * 3.2, vy: 2.2 + rng() * 2.6, vz: (rng() - 0.5) * 3.2,
+          life: 0.55 + rng() * 0.15, age: 0,
+        });
+      }
+    }
+    function updateParticles(dt) {
+      if (!particles.length || !T) return;
+      const alive = [];
+      for (const p of particles) {
+        p.age += dt;
+        if (p.age >= p.life) {
+          T.scene.remove(p.mesh);
+          p.mesh.geometry.dispose();
+          p.mesh.material.dispose();
+          continue;
+        }
+        p.vy -= 7.5 * dt; // gravity
+        p.mesh.position.x += p.vx * dt;
+        p.mesh.position.y += p.vy * dt;
+        p.mesh.position.z += p.vz * dt;
+        if (p.mesh.position.y < 0.05) { p.mesh.position.y = 0.05; p.vy *= -0.35; p.vx *= 0.7; p.vz *= 0.7; }
+        p.mesh.material.opacity = 1 - p.age / p.life;
+        p.mesh.rotation.x += dt * 4; p.mesh.rotation.y += dt * 3;
+        alive.push(p);
+      }
+      particles = alive;
+    }
+    function particleCount() { return particles.length; }
+
+    /* ---------------- measuring tape (orbit mode) ---------------- */
+    // 📏 toolbar button toggles tape mode; click two ground points in orbit
+    // mode, get a line + "12.5 ft" label (1 unit = 1 ft). ESC clears.
+    let tapeMode = false;
+    let tapePoints = []; // [{x, z}] world coords, max 2
+    let tapeGroup = null;
+    function tapeDistance(a, b) { // pure; feet
+      return Math.hypot(a.x - b.x, a.z - b.z);
+    }
+    function clearTape() {
+      tapePoints = [];
+      if (tapeGroup && T) { T.scene.remove(tapeGroup); disposeGroup(tapeGroup); }
+      tapeGroup = null;
+      render3D();
+    }
+    function drawTape() {
+      if (!T || tapePoints.length < 2) return;
+      const THREE = T.THREE;
+      if (tapeGroup) { T.scene.remove(tapeGroup); disposeGroup(tapeGroup); }
+      tapeGroup = new THREE.Group();
+      const [a, b] = tapePoints;
+      const geo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(a.x, 0.15, a.z), new THREE.Vector3(b.x, 0.15, b.z),
+      ]);
+      tapeGroup.add(new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xffffff })));
+      const dot = (p) => {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8),
+          new THREE.MeshBasicMaterial({ color: 0xffd23e }));
+        m.position.set(p.x, 0.15, p.z);
+        tapeGroup.add(m);
+      };
+      dot(a); dot(b);
+      const d = tapeDistance(a, b);
+      const label = makeLabel(`${d.toFixed(1)} ft`);
+      label.position.set((a.x + b.x) / 2, 1.4, (a.z + b.z) / 2);
+      tapeGroup.add(label);
+      T.scene.add(tapeGroup);
+      render3D();
+    }
+    function tapeClick(wx, wz) {
+      tapePoints.push({ x: wx, z: wz });
+      if (tapePoints.length > 2) tapePoints = [{ x: wx, z: wz }]; // third click starts a new tape
+      if (tapePoints.length === 2) drawTape();
+      else render3D();
+    }
+    function setTapeMode(on) {
+      tapeMode = !!on;
+      if (!tapeMode) clearTape();
+      paintViewButtons();
+      hint3d.textContent = tapeMode
+        ? '📏 Tape: click two points on the ground to measure · ESC clears.'
+        : (walkMode ? walkHintText : orbitHintText);
+      render3D();
+    }
 
     /* ---------------- build mode (Minecraft creative) ---------------- */
     // Hotbar + place/break while walking. Every mutation goes through the
@@ -1839,6 +2173,11 @@
         { key: 'fence', emoji: '⛓️', label: 'Fence' },
         { key: 'bucket', emoji: '🪣', label: 'Bucket' },
         { key: 'path', emoji: '🪨', label: 'Path' },
+        { key: 'rain barrel', emoji: '🛢️', label: 'Barrel' },
+        { key: 'compost bin', emoji: '🟤', label: 'Compost' },
+        { key: 'hoop house', emoji: '🏠', label: 'HoopHs' },
+        { key: 'fence gate', emoji: '🚪', label: 'Gate' },
+        { key: 'bird bath', emoji: '🐦', label: 'Bath' },
       ],
       plants: [
         { key: 'tomato', emoji: '🍅', label: 'Tomato', species: 'Tomato' },
@@ -1856,6 +2195,10 @@
     let buildRay = null;
 
     // ---- pure helpers (also exposed to tests via wrap3d._build) ----
+    // Per-kind build-mode placement footprints. Everything defaults to 1x1;
+    // the hoop house is a 4x8 structure.
+    const PLACE_FOOTPRINTS = { 'hoop house': [4, 8] };
+    function placeFootprint(key) { return PLACE_FOOTPRINTS[key] || [1, 1]; }
     function cellFromWorld(wx, wz, ncols, nrows) {
       // inverse of the container placement: wx = gx + w/2 - cols/2
       return { gx: Math.floor(wx + ncols / 2), gy: Math.floor(wz + nrows / 2) };
@@ -1904,7 +2247,7 @@
       hotbarTab.textContent = (buildTab === 'blocks' ? '▣ BLOCKS' : '❀ PLANTS') + ' · Q switch · 1-9/wheel pick';
       hotbarTab.style.cssText = 'color:#fff;font-size:11px;font-weight:700;letter-spacing:1px;' +
         'text-shadow:0 1px 2px #000;margin-bottom:4px;';
-      hotbarSlots.innerHTML = buildSlots().map((s, i) => {
+      const slotHtml = (s, i) => {
         const on = i === buildIndex;
         return '<div style="display:inline-block;width:54px;margin:0 2px;padding:4px 2px;' +
           'background:rgba(18,18,18,.75);border:2px solid ' + (on ? '#fff' : '#5a5a5a') + ';' +
@@ -1912,7 +2255,16 @@
           '<div style="font-size:22px;line-height:1.25">' + s.emoji + '</div>' +
           '<div style="font-size:9px;color:#ddd;white-space:nowrap;overflow:hidden">' + s.label + '</div>' +
           '<div style="font-size:9px;color:#9f9;font-weight:700">∞</div></div>';
-      }).join('');
+      };
+      // two rows of 8 when the tab is long (BLOCKS has 16); PLANTS stays one row
+      const slots = buildSlots();
+      let html = '';
+      for (let r = 0; r * 8 < slots.length; r++) {
+        html += '<div style="margin-bottom:4px;">' +
+          slots.slice(r * 8, r * 8 + 8).map((s, j) => slotHtml(s, r * 8 + j)).join('') +
+          '</div>';
+      }
+      hotbarSlots.innerHTML = html;
     }
     paintHotbar();
 
@@ -1963,10 +2315,21 @@
     async function breakAim() {
       const a = aimHit();
       if (!a) return;
+      // voxel-cube burst at the break point (before the scene rebuilds)
+      const burstAt = (x, y, z) => { spawnParticles(x, y, z); Sound.crunch(); };
+      const containerCenter = (c) => {
+        if (T && T.group) {
+          const grp = T.group.children.find((o) => o.userData && o.userData.containerId === c.id);
+          if (grp) return { x: grp.position.x, y: (grp.userData.topY || 1) / 2 + 0.3, z: grp.position.z };
+        }
+        const w = c.grid_w || 1, h = c.grid_h || 1;
+        return { x: (c.grid_x || 0) + w / 2 - cols / 2, y: 0.8, z: (c.grid_y || 0) + h / 2 - rows / 2 };
+      };
       if (a.plantingId != null) {
         try {
           await api.del(`/api/containers/plantings/${a.plantingId}`);
           plantings = plantings.filter((p) => p.id !== a.plantingId);
+          if (a.point) burstAt(a.point.x, a.point.y, a.point.z);
           toast('Planting removed.');
           refreshScene3D();
         } catch (err) { toast(err.message || 'Could not remove planting.', 'error'); }
@@ -1980,10 +2343,12 @@
         unlockPointer(); // confirm() needs a free mouse
         if (!confirm(`Break ${c.name}? Its ${n} planting${n === 1 ? '' : 's'} go${n === 1 ? 'es' : ''} too.`)) return;
       }
+      const boom = containerCenter(c);
       try {
         await api.del(`/api/containers/${c.id}`);
         containers = containers.filter((x) => x.id !== c.id);
         plantings = plantings.filter((p) => p.container_id !== c.id);
+        burstAt(boom.x, boom.y, boom.z);
         toast(`${c.name} broken.`);
         refreshScene3D();
       } catch (err) { toast(err.message || 'Could not break that.', 'error'); }
@@ -1995,17 +2360,19 @@
       const sel = buildSelected();
       if (buildTab === 'blocks') {
         if (!a.isGround) { toast('Aim at the ground to place blocks.', 'error'); return; }
+        const [pw, ph] = placeFootprint(sel.key);
         const { gx, gy } = cellFromWorld(a.point.x, a.point.z, cols, rows);
-        if (!cellFree(gx, gy, 1, 1, containers, cols, rows, null)) { toast('No room there.', 'error'); return; }
+        if (!cellFree(gx, gy, pw, ph, containers, cols, rows, null)) { toast('No room there.', 'error'); return; }
         const name = nextContainerName(sel.key);
         let created = null;
         try {
           // create() auto-picks the first free spot; then move it to the aimed cell.
           created = await api.post('/api/containers/', {
-            name, kind: sel.key, grid_w: 1, grid_h: 1, season_year: year,
+            name, kind: sel.key, grid_w: pw, grid_h: ph, season_year: year,
           });
           const moved = await api.patch(`/api/containers/${created.id}`, { grid_x: gx, grid_y: gy });
           containers.push(moved);
+          Sound.thunk();
           toast(`${name} placed.`);
           refreshScene3D();
         } catch (err) {
@@ -2053,12 +2420,13 @@
       if (!T) return;
       const show = walkMode && walk && walk.locked && buildTab === 'blocks';
       const a = show ? aimHit() : null;
+      const sel = buildSelected();
+      const [pw, ph] = placeFootprint(sel.key);
       let cell = null, ok = false;
       if (a && a.isGround) {
         cell = cellFromWorld(a.point.x, a.point.z, cols, rows);
-        ok = cellFree(cell.gx, cell.gy, 1, 1, containers, cols, rows, null);
+        ok = cellFree(cell.gx, cell.gy, pw, ph, containers, cols, rows, null);
       }
-      const sel = buildSelected();
       const key = show && cell ? `${sel.key}@${cell.gx},${cell.gy}:${ok ? 'g' : 'r'}` : '';
       if (!key) { clearGhost(); return; }
       if (ghost && ghost.userData.key === key) return;
@@ -2069,8 +2437,13 @@
       else if (sel.key === 'pallet') buildPallet(THREE, ghost, 1, 1, T.TEX);
       else if (sel.key === 'lamp') buildLamp(THREE, ghost, 1, 1, T.TEX);
       else if (sel.key === 'fence') buildFence(THREE, ghost, 1, 1, T.TEX, fenceSides(cell.gx, cell.gy, fenceCells(containers)));
+      else if (sel.key === 'fence gate') buildFenceGate(THREE, ghost, 1, 1, T.TEX, fenceSides(cell.gx, cell.gy, fenceCells(containers)));
       else if (sel.key === 'bucket') buildBucket(THREE, ghost, T.TEX);
       else if (sel.key === 'path') buildPath(THREE, ghost, T.TEX);
+      else if (sel.key === 'rain barrel') buildRainBarrel(THREE, ghost, T.TEX);
+      else if (sel.key === 'compost bin') buildCompostBin(THREE, ghost, T.TEX);
+      else if (sel.key === 'hoop house') buildHoopHouse(THREE, ghost, pw, ph, 6, T.TEX);
+      else if (sel.key === 'bird bath') buildBirdBath(THREE, ghost, T.TEX);
       else buildVessel(THREE, ghost, 1, 1, sel.key, T.TEX);
       const tint = new THREE.Color(ok ? 0x00cc44 : 0xcc2222);
       ghost.traverse((o) => {
@@ -2082,7 +2455,7 @@
           o.castShadow = false;
         }
       });
-      ghost.position.set(cell.gx + 0.5 - cols / 2, 0.03, cell.gy + 0.5 - rows / 2);
+      ghost.position.set(cell.gx + pw / 2 - cols / 2, 0.03, cell.gy + ph / 2 - rows / 2);
       ghost.userData.key = key;
       T.scene.add(ghost);
     }
@@ -2111,7 +2484,7 @@
     }
 
     wrap3d._build = { // handle for tests / debugging
-      cellFromWorld, rectsOverlap, cellFree, needsBreakConfirm,
+      cellFromWorld, rectsOverlap, cellFree, needsBreakConfirm, placeFootprint,
       buildSlots, buildSelected, buildSelect, buildCycle, buildToggleTab,
       nextContainerName, updateGhost, aimHit, breakAim, placeAim, editAim,
       get tab() { return buildTab; },
@@ -2134,6 +2507,13 @@
         dayNightBtn.className = (view === '3d' ? '' : ' hidden') + ' ' + (dayNight === 'night' ? on : off);
         dayNightBtn.textContent = dayNight === 'night' ? '🌙 Night' : '☀️ Day';
       }
+      if (tapeBtn) {
+        tapeBtn.className = (view === '3d' ? '' : ' hidden') + ' ' + (tapeMode ? on : off);
+      }
+      if (soundBtn) {
+        soundBtn.className = (view === '3d' ? '' : ' hidden') + ' ' + off;
+        soundBtn.textContent = Sound.enabled ? '🔊' : '🔇';
+      }
     }
 
     async function setView(v) {
@@ -2150,6 +2530,7 @@
         render3D();
       } else {
         exitWalkMode();
+        setTapeMode(false);
         view = '2d';
       }
       const is3d = view === '3d';
@@ -2174,8 +2555,24 @@
     if (dayNightBtn) {
       dayNightBtn.addEventListener('click', () => { if (view === '3d') toggleDayNight(); });
     }
+    if (tapeBtn) {
+      tapeBtn.addEventListener('click', () => {
+        if (view !== '3d' || walkMode) return; // orbit mode only
+        setTapeMode(!tapeMode);
+      });
+    }
+    if (soundBtn) {
+      soundBtn.addEventListener('click', () => {
+        Sound.enabled = !Sound.enabled;
+        paintViewButtons();
+        if (Sound.enabled) Sound.thunk(); // little confirmation blip
+      });
+    }
     if (typeof window !== 'undefined' && window.addEventListener) {
       window.addEventListener('resize', () => { if (view === '3d') sizeThree(); });
+      window.addEventListener('keydown', (e) => {
+        if (e.code === 'Escape' && tapeMode && !walkMode) setTapeMode(false);
+      });
     }
     paintViewButtons();
     /* ---------------- end 3D view ---------------- */

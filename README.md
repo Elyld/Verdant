@@ -948,20 +948,28 @@ server local time. Test with `POST /api/digest/send`.
 ## Changelog
 
 - **2.61.0** — **⛏️ Creative-mode building in the planner.** Walk mode grew a
-  Minecraft hotbar: 11 BLOCKS (bed, bag, pot, planter, pallet, arch, cold
-  frame, lamp, fence, bucket, path) and 6 PLANTS (tomato, pepper, basil,
-  lettuce, carrot, flower), all infinite. **Left-click breaks** the aimed planting or container — breaking a
+  Minecraft hotbar: 16 BLOCKS (bed, bag, pot, planter, pallet, arch, cold
+  frame, lamp, fence, bucket, path, rain barrel, compost bin, hoop house,
+  fence gate, bird bath) across two rows of 8, and 6 PLANTS (tomato, pepper,
+  basil, lettuce, carrot, flower), all infinite. **Left-click breaks** the aimed planting or container — breaking a
   container that holds plantings asks for confirmation first, and the ground
   itself can't be broken. **Right-click places** the selected block on the
-  aimed 1-ft grass cell with a green/red ghost preview, or plants the selected
-  seedling into the aimed container. **Q** switches tabs, **1–9**/wheel picks
-  slots, **E** edits the aimed container. Everything goes through the real
+  aimed grass cells with a green/red ghost preview (per-kind footprints: the
+  hoop house is 4×8), or plants the selected seedling into the aimed container.
+  **Q** switches tabs, **1–9**/wheel picks slots, **E** edits the aimed container. Everything goes through the real
   API; the 3D scene refreshes after each change without leaving first person.
   World dressing: **☀️/🌙 day/night toggle** (blocky square sun, drifting
   clouds, starfield and glowing lamps at night), plus new placeables — **💡
   lamp posts** (real point lights at night, capped at 8 for perf), **⛓️
   chain-link fence** (segments auto-connect into runs), **🪣 5-gal buckets**,
-  and **🪨 stone path slabs** (flat enough to walk over).
+  **🪨 stone path slabs** (flat enough to walk over), **🛢️ rain barrels**,
+  **🟤 compost bins**, **🏠 hoop houses** (translucent plastic skin over
+  galvanized ribs), **🚪 fence gates** (mesh into adjacent fence runs), and
+  **🐦 bird baths**. Planning tools: **📏 measuring tape** in orbit mode —
+  click two ground points for a live "12.5 ft" readout (ESC clears). Game
+  feel: **voxel-cube particle bursts** when things break and tiny WebAudio
+  **place/break sounds** (🔊 toggle, default on) — a real game engine isn't
+  needed; the juice is hand-rolled.
 
 - **2.60.0** — **⛏️ The planner goes Minecraft.** The 3D view is now a voxel
   world: 16×16 pixel textures with crisp NearestFilter rendering, grass-block
