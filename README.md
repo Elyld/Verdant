@@ -978,6 +978,10 @@ server local time. Test with `POST /api/digest/send`.
   pass: **bloom postprocessing** (lamps, sun and fireflies glow), **tall grass
   + wildflowers** scattered on empty cells (seeded, stable across rebuilds),
   **fireflies** (40 points, night only), warmer sun + tuned hemisphere light.
+  Lively pass: saturated palette (rich grass, warm wood, punchy terracotta),
+  denser grass tufts clustered near beds, fuller plant clusters with vivid
+  fruit, **butterflies** (8, day only — flapping wings, wandering paths),
+  shed with steep gabled roof + window, thicker arch ribs.
   Planning tools: **📏 measuring tape** in orbit mode —
   click two ground points for a live "12.5 ft" readout (ESC clears). Game
   feel: **particle bursts** when things break and tiny WebAudio **place/break

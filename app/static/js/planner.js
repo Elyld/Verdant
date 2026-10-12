@@ -661,56 +661,70 @@
 
     // 64x64 soft painters. Each takes (ctx, S, rng).
     function paintGrass(ctx, S, rng) {
-      baseCoat(ctx, S, '#69b455');
-      softNoise(ctx, S, rng, ['#5da84b', '#7acc66', '#64b356', '#74c05e'], 900, 1, 4);
+      baseCoat(ctx, S, '#4da53a');
+      softNoise(ctx, S, rng, ['#3f8f31', '#5fbf49', '#4aa839', '#6fd056', '#37902c'], 1100, 1, 4.5);
     }
     function paintGroundSide(ctx, S, rng) {
       // soft dark skirt under the platform
       const g = ctx.createLinearGradient(0, 0, 0, S);
-      g.addColorStop(0, '#4c8a3e'); g.addColorStop(1, '#2e5b26');
+      g.addColorStop(0, '#3f7a33'); g.addColorStop(1, '#26521f');
       ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
       softNoise(ctx, S, rng, ['#3c7030', '#548c40'], 260, 1, 5);
     }
     function paintSoil(ctx, S, rng) {
-      baseCoat(ctx, S, '#4a3520');
-      softNoise(ctx, S, rng, ['#3a2a18', '#54402a', '#5d4a30', '#2f2113'], 700, 1, 3.5);
+      baseCoat(ctx, S, '#4a3524');
+      softNoise(ctx, S, rng, ['#332413', '#5c4227', '#6b4e2e', '#2b1e10', '#75562f'], 800, 1, 3.5);
     }
     function paintWood(ctx, S, rng) {
-      baseCoat(ctx, S, '#a0824f');
+      baseCoat(ctx, S, '#8a5a2b');
       // long soft grain streaks
-      for (let i = 0; i < 22; i++) {
-        ctx.strokeStyle = rng() < 0.5 ? '#8a6c3e' : '#b5935e';
-        ctx.globalAlpha = 0.35; ctx.lineWidth = 1 + rng() * 2;
+      for (let i = 0; i < 26; i++) {
+        ctx.strokeStyle = rng() < 0.5 ? '#5e3a17' : '#b07a3f';
+        ctx.globalAlpha = 0.42; ctx.lineWidth = 1 + rng() * 2.5;
         const y = rng() * S;
         ctx.beginPath(); ctx.moveTo(0, y);
         ctx.bezierCurveTo(S * 0.3, y + (rng() - 0.5) * 8, S * 0.7, y + (rng() - 0.5) * 8, S, y);
         ctx.stroke();
       }
       ctx.globalAlpha = 1;
-      softNoise(ctx, S, rng, ['#96794a', '#ab8857'], 200, 1, 3);
+      softNoise(ctx, S, rng, ['#754c1e', '#9c6b35'], 220, 1, 3);
+    }
+    function paintLightWood(ctx, S, rng) {
+      // lighter boards for raised-bed rims so the form reads
+      baseCoat(ctx, S, '#c49a63');
+      for (let i = 0; i < 16; i++) {
+        ctx.strokeStyle = rng() < 0.5 ? '#a87f4c' : '#d9b47e';
+        ctx.globalAlpha = 0.4; ctx.lineWidth = 1 + rng() * 2;
+        const y = rng() * S;
+        ctx.beginPath(); ctx.moveTo(0, y);
+        ctx.bezierCurveTo(S * 0.3, y + (rng() - 0.5) * 8, S * 0.7, y + (rng() - 0.5) * 8, S, y);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      softNoise(ctx, S, rng, ['#b0864f', '#d6ad77'], 200, 1, 3);
     }
     function paintDarkWood(ctx, S, rng) {
-      baseCoat(ctx, S, '#6e5636');
-      softNoise(ctx, S, rng, ['#5e482c', '#7d6440'], 500, 1, 3.5);
+      baseCoat(ctx, S, '#5f4626');
+      softNoise(ctx, S, rng, ['#4a3619', '#735631', '#3d2c14'], 550, 1, 3.5);
     }
     function paintFabric(ctx, S, rng) {
       baseCoat(ctx, S, '#35393f');
       softNoise(ctx, S, rng, ['#2b2e33', '#41464d', '#3d4248'], 600, 1, 2.5);
     }
     function paintTerracotta(ctx, S, rng) {
-      baseCoat(ctx, S, '#c1663e');
+      baseCoat(ctx, S, '#c96f3f');
       const g = ctx.createLinearGradient(0, 0, 0, S);
       g.addColorStop(0, 'rgba(255,255,255,0.10)'); g.addColorStop(1, 'rgba(0,0,0,0.14)');
       ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
-      softNoise(ctx, S, rng, ['#b25a36', '#d4764c'], 420, 1, 3);
+      softNoise(ctx, S, rng, ['#a8542c', '#e08450', '#96421f'], 480, 1, 3);
     }
     function paintMetal(ctx, S, rng) {
-      baseCoat(ctx, S, '#7d838a');
-      softNoise(ctx, S, rng, ['#6a7076', '#8b9096', '#757b82'], 500, 1, 3);
+      baseCoat(ctx, S, '#6f767d');
+      softNoise(ctx, S, rng, ['#5d646b', '#82898f', '#52585f'], 520, 1, 3);
     }
     function paintWireMesh(ctx, S, rng) {
       // transparent canvas; fine wire grid reads through alphaTest
-      ctx.strokeStyle = '#9aa2ab'; ctx.lineWidth = 1;
+      ctx.strokeStyle = '#a8b0b9'; ctx.lineWidth = 2;
       for (let i = 0; i <= S; i += 6) {
         ctx.beginPath(); ctx.moveTo(i + 0.5, 0); ctx.lineTo(i + 0.5, S); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(0, i + 0.5); ctx.lineTo(S, i + 0.5); ctx.stroke();
@@ -725,16 +739,16 @@
       softNoise(ctx, S, rng, ['#dfe5ea', '#f2f5f7'], 200, 1, 3);
     }
     function paintStone(ctx, S, rng) {
-      baseCoat(ctx, S, '#9aa0a6');
-      softNoise(ctx, S, rng, ['#8b9096', '#a7adb3', '#7d838a', '#b5bac0'], 650, 1, 3.5);
+      baseCoat(ctx, S, '#8f959b');
+      softNoise(ctx, S, rng, ['#787e85', '#a3a9af', '#6b7177', '#b9bfc5'], 700, 1, 3.5);
     }
     function paintBarrel(ctx, S, rng) {
-      baseCoat(ctx, S, '#2f78c2');
+      baseCoat(ctx, S, '#2f7cd4');
       const g = ctx.createLinearGradient(0, 0, S, 0);
       g.addColorStop(0, 'rgba(0,0,0,0.18)'); g.addColorStop(0.3, 'rgba(255,255,255,0.14)');
       g.addColorStop(1, 'rgba(0,0,0,0.16)');
       ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
-      softNoise(ctx, S, rng, ['#2b6cb0', '#3b85cc'], 300, 1, 3);
+      softNoise(ctx, S, rng, ['#2568b8', '#4a94e0', '#1f5aa8'], 320, 1, 3);
     }
     function paintCompost(ctx, S, rng) {
       baseCoat(ctx, S, '#3a2d20');
@@ -749,12 +763,12 @@
       softNoise(ctx, S, rng, ['#a9aeb4', '#c6cbd0', '#9fa5ab'], 550, 1, 3.5);
     }
     function paintLeaf(ctx, S, rng) {
-      baseCoat(ctx, S, '#4e9e3f');
-      softNoise(ctx, S, rng, ['#3f8f37', '#5cb85c', '#357a2e', '#66b95a'], 700, 1, 4);
+      baseCoat(ctx, S, '#43a53b');
+      softNoise(ctx, S, rng, ['#359231', '#55c04d', '#2c7a28', '#63d155', '#277a24'], 750, 1, 4);
     }
     function paintGrassTuft(ctx, S, rng) {
       // soft meadow blades on transparency
-      const greens = ['#4e9e3f', '#5cb85c', '#3f8f37', '#6fbf5a'];
+      const greens = ['#43a53b', '#55c04d', '#359231', '#6fd056', '#2c7a28'];
       ctx.lineCap = 'round';
       for (let i = 0; i < 22; i++) {
         ctx.strokeStyle = greens[(rng() * greens.length) | 0];
@@ -766,7 +780,7 @@
       }
     }
     function paintWildflower(ctx, S, rng, colorIdx) {
-      const heads = ['#e0483e', '#f2c531', '#f5f5f5'];
+      const heads = ['#e5321e', '#ffc21f', '#ffffff'];
       const head = heads[colorIdx == null ? (rng() * 3) | 0 : colorIdx % 3];
       ctx.strokeStyle = '#3f8f37'; ctx.lineWidth = 3; ctx.lineCap = 'round';
       ctx.beginPath(); ctx.moveTo(S / 2, S);
@@ -890,9 +904,9 @@
       controls.maxDistance = 130;
       controls.addEventListener('change', () => render3D());
 
-      scene.add(new THREE.HemisphereLight(0xbdd8ff, 0x8a9a6a, 0.9));
+      scene.add(new THREE.HemisphereLight(0xaed0ff, 0x9aa050, 1.0)); // lively sky/ground bounce
       const hemi = scene.children[scene.children.length - 1];
-      const sun = new THREE.DirectionalLight(0xfff1d4, 0.95); // slightly warmer
+      const sun = new THREE.DirectionalLight(0xffe3ae, 1.1); // warm, stronger key
       sun.castShadow = true;
       sun.shadow.mapSize.set(2048, 2048);
       sun.shadow.camera.near = 1;
@@ -1046,6 +1060,7 @@
       TEX.soil = makePixTexture(THREE, S, paintSoil, 17);
       TEX.wood = makePixTexture(THREE, S, paintWood, 15);
       TEX.darkWood = makePixTexture(THREE, S, paintDarkWood, 16);
+      TEX.lightWood = makePixTexture(THREE, S, paintLightWood, 161);
       TEX.fabric = makePixTexture(THREE, S, paintFabric, 18);
       TEX.terracotta = makePixTexture(THREE, S, paintTerracotta, 19);
       TEX.metal = makePixTexture(THREE, S, paintMetal, 22);
@@ -1089,8 +1104,9 @@
         const body = cyl(THREE, s * 0.52, s * 0.4, bodyH, pixMaterial(THREE, TEX.terracotta));
         body.position.y = bodyH / 2;
         g.add(body);
-        const rim = cyl(THREE, s * 0.56, s * 0.54, 0.14, pixMaterial(THREE, TEX.terracotta));
-        rim.position.y = bodyH - 0.07;
+        const rimMat = new THREE.MeshStandardMaterial({ color: 0xd98a5a, roughness: 0.85, metalness: 0 });
+        const rim = cyl(THREE, s * 0.58, s * 0.56, 0.18, rimMat);
+        rim.position.y = bodyH - 0.09;
         g.add(rim);
         const soil = cyl(THREE, s * 0.46, s * 0.46, 0.08, soilMat, 16);
         soil.position.y = bodyH - 0.1;
@@ -1114,14 +1130,15 @@
         const body = box(THREE, bw, bodyH, bd, woodMat);
         body.position.y = bodyH / 2;
         g.add(body);
-        const rimH = 0.12, rimT = 0.16;
+        const rimMat = pixMaterial(THREE, TEX.lightWood); // lighter rim so the form reads
+        const rimH = 0.14, rimT = 0.18;
         [[0, 1, bw + 0.1, rimT], [0, -1, bw + 0.1, rimT]].forEach(([x, s, rw, rd]) => {
-          const rim = box(THREE, rw, rimH, rd, darkWoodMat);
+          const rim = box(THREE, rw, rimH, rd, rimMat);
           rim.position.set(x, bodyH - rimH / 2 + 0.02, s * (bd / 2 - rimT / 2 + 0.04));
           g.add(rim);
         });
         [[1, 0], [-1, 0]].forEach(([s]) => {
-          const rim = box(THREE, rimT, rimH, bd + 0.1, darkWoodMat);
+          const rim = box(THREE, rimT, rimH, bd + 0.1, rimMat);
           rim.position.set(s * (bw / 2 - rimT / 2 + 0.04), bodyH - rimH / 2 + 0.02, 0);
           g.add(rim);
         });
@@ -1170,9 +1187,9 @@
       const H = Math.max(1.5, height || 7);
       const spanAlongX = w <= h; // rib arcs live in the X-Y plane when the footprint is taller than wide
       const metalMat = new THREE.MeshStandardMaterial({
-        map: TEX.metal, roughness: 0.45, metalness: 0.6,
+        map: TEX.metal, color: 0xaab2bc, roughness: 0.45, metalness: 0.6,
       });
-      const leafMat = new THREE.MeshStandardMaterial({ color: 0x4e9e3f, roughness: 0.9, metalness: 0 });
+      const leafMat = new THREE.MeshStandardMaterial({ color: 0x43a53b, roughness: 0.9, metalness: 0 });
       const meshMat = opts.plastic
         ? new THREE.MeshStandardMaterial({
             map: TEX.hoopPlastic, transparent: true, opacity: 0.42, side: THREE.DoubleSide,
@@ -1189,7 +1206,7 @@
       const ribOff = (r) => (nRibs === 1 ? 0 : -len / 2 + (r / (nRibs - 1)) * len);
       for (let r = 0; r < nRibs; r++) {
         const off = ribOff(r);
-        const rib = new THREE.Mesh(new THREE.TorusGeometry(R, 0.09, 10, 32, Math.PI), metalMat);
+        const rib = new THREE.Mesh(new THREE.TorusGeometry(R, 0.13, 12, 40, Math.PI), metalMat);
         rib.scale.y = H / R; // circle -> half-ellipse with crown H
         if (spanAlongX) rib.position.set(0, 0, off);
         else { rib.rotation.y = Math.PI / 2; rib.position.set(off, 0, 0); }
@@ -1473,12 +1490,13 @@
       branch.rotation.z = Math.PI / 2 - 0.25;
       branch.position.set(0.3, 1.6, 0);
       g.add(branch);
-      const leafMat = new THREE.MeshStandardMaterial({ color: 0x4e9e3f, roughness: 0.9, metalness: 0 });
+      const leafMat = new THREE.MeshStandardMaterial({ color: 0x43a53b, roughness: 0.9, metalness: 0 });
       const blobGeo = new THREE.IcosahedronGeometry(1, 1);
       const rng = mulberry32(((g.userData.containerId || 1) * 31 + 7) | 0);
       const blobs = [
-        [0, 2.5, 0, 1.35], [-0.7, 2.1, 0.25, 0.85], [0.7, 2.15, -0.2, 0.85],
-        [0.1, 3.0, -0.25, 0.9], [-0.25, 2.7, 0.5, 0.75],
+        [0, 2.6, 0, 1.5], [-0.85, 2.2, 0.3, 1.0], [0.85, 2.25, -0.25, 1.0],
+        [0.15, 3.2, -0.3, 1.05], [-0.3, 2.9, 0.55, 0.9], [0.5, 2.0, 0.65, 0.8],
+        [-0.55, 2.35, -0.6, 0.85],
       ];
       blobs.forEach(([x, y, z, s]) => {
         const b = new THREE.Mesh(blobGeo, leafMat);
@@ -1487,32 +1505,36 @@
         b.rotation.y = rng() * Math.PI;
         g.add(b);
       });
-      const appleMat = new THREE.MeshStandardMaterial({ color: 0xd63c2f, roughness: 0.5, metalness: 0 });
-      for (let i = 0; i < 6; i++) {
-        const a = new THREE.Mesh(blobGeo, appleMat);
-        const th = rng() * Math.PI * 2, rr = 0.7 + rng() * 0.5;
-        a.scale.setScalar(0.11 + rng() * 0.04);
-        a.position.set(Math.cos(th) * rr, 2.1 + rng() * 1.0, Math.sin(th) * rr);
+      const appleMat = new THREE.MeshStandardMaterial({ color: 0xe0301e, roughness: 0.45, metalness: 0 });
+      for (let i = 0; i < 9; i++) {
+        const a = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 8), appleMat);
+        const th = rng() * Math.PI * 2, rr = 0.8 + rng() * 0.6;
+        a.scale.setScalar(0.14 + rng() * 0.05);
+        a.position.set(Math.cos(th) * rr, 2.1 + rng() * 1.2, Math.sin(th) * rr);
         a.userData.noShadow = true;
         g.add(a);
       }
-      g.userData.topY = 3.5;
+      g.userData.topY = 3.8;
     }
 
     function buildShed(THREE, g, w, h, TEX) {
-      // Small garden shed: plank walls, smooth gable roof, door face.
+      // Small garden shed: plank walls, STEEP contrasting gable roof with
+      // overhanging eaves, trimmed door, framed window. Must read as a shed
+      // from the orbit angle, not a brown box.
       const woodMat = pixMaterial(THREE, TEX.wood);
       const darkMat = pixMaterial(THREE, TEX.darkWood);
+      const trimMat = pixMaterial(THREE, TEX.lightWood);
       const walls = box(THREE, w - 0.15, 2.2, h - 0.15, woodMat);
       walls.position.y = 1.1;
       g.add(walls);
-      // gable roof: two sloped slabs + triangle gable ends; ridge along the long axis
-      const L = Math.max(w, h), S = Math.min(w, h), apexH = 1.0;
+      // gable roof: steep pitch, dark contrasting slabs, generous eaves
+      const L = Math.max(w, h), S = Math.min(w, h), apexH = 1.6;
       const roof = new THREE.Group();
-      const slopeLen = Math.hypot(S / 2 + 0.25, apexH);
-      const ang = Math.atan2(apexH, S / 2 + 0.25);
+      const slopeLen = Math.hypot(S / 2 + 0.35, apexH);
+      const ang = Math.atan2(apexH, S / 2 + 0.35);
+      const roofMat = new THREE.MeshStandardMaterial({ color: 0x4a3220, roughness: 0.95, metalness: 0 });
       [-1, 1].forEach((s) => {
-        const slab = box(THREE, slopeLen + 0.1, 0.14, L + 0.35, darkMat);
+        const slab = box(THREE, slopeLen + 0.15, 0.16, L + 0.5, roofMat);
         slab.position.set((s * S) / 4, 2.2 + apexH / 2, 0);
         slab.rotation.z = -s * ang;
         roof.add(slab);
@@ -1529,13 +1551,37 @@
       });
       if (w < h) roof.rotation.y = Math.PI / 2;
       g.add(roof);
+      // door with light trim frame
+      const dz = h / 2;
       const door = box(THREE, 0.95, 1.75, 0.12, darkMat);
-      door.position.set(0, 0.88, h / 2 - 0.02);
+      door.position.set(-0.8, 0.88, dz - 0.02);
       g.add(door);
+      [[-0.8 - 0.55, 0], [-0.8 + 0.55, 0]].forEach(([tx]) => {
+        const jamb = box(THREE, 0.14, 1.9, 0.14, trimMat);
+        jamb.position.set(tx, 0.95, dz + 0.02);
+        g.add(jamb);
+      });
+      const lintel = box(THREE, 1.24, 0.14, 0.14, trimMat);
+      lintel.position.set(-0.8, 1.88, dz + 0.02);
+      g.add(lintel);
       const knob = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), pixMaterial(THREE, TEX.metal));
-      knob.position.set(0.32, 0.95, h / 2 + 0.05);
+      knob.position.set(-0.48, 0.95, dz + 0.05);
       g.add(knob);
-      g.userData.topY = 3.4;
+      // window with frame + cross mullions on the front wall
+      const wx = 1.1, wy = 1.35;
+      const frame = box(THREE, 0.9, 0.8, 0.1, trimMat);
+      frame.position.set(wx, wy, dz - 0.02);
+      g.add(frame);
+      const pane = box(THREE, 0.72, 0.62, 0.12, new THREE.MeshStandardMaterial({ color: 0x9fc8e8, roughness: 0.25, metalness: 0.1 }));
+      pane.position.set(wx, wy, dz - 0.01);
+      g.add(pane);
+      const mullV = box(THREE, 0.06, 0.62, 0.13, trimMat);
+      mullV.position.set(wx, wy, dz);
+      g.add(mullV);
+      const mullH = box(THREE, 0.72, 0.06, 0.13, trimMat);
+      mullH.position.set(wx, wy, dz);
+      g.add(mullH);
+      g.userData.topY = 3.9;
     }
 
     function buildPergola(THREE, g, w, h, TEX) {
@@ -1625,33 +1671,33 @@
     // Pure: soft foliage cluster for a plant archetype + seed. Deterministic
     // so rebuilds are stable. Returns {blobs:[{dx,dy,dz,s}], fruits:[...]}.
     const PLANT_GREENS = {
-      tomato: 0x4e9e3f, pepper: 0x3f8f37, leafy: 0x5cb85c,
-      vine: 0x4e9e3f, flower: 0x55a848, generic: 0x4e9e3f,
+      tomato: 0x43a53b, pepper: 0x359231, leafy: 0x55c04d,
+      vine: 0x43a53b, flower: 0x4aa83c, generic: 0x43a53b,
     };
     function plantFoliage(arch, seed) {
       const rng = mulberry32(seed);
-      const n = 2 + ((rng() * 3) | 0); // 2-4 blobs
+      const n = 3 + ((rng() * 3) | 0); // 3-5 blobs: fuller plants
       const blobs = [];
       for (let i = 0; i < n; i++) {
         blobs.push({
-          dx: (rng() - 0.5) * 0.5,
-          dy: 0.35 + rng() * 0.5,
-          dz: (rng() - 0.5) * 0.5,
-          s: 0.32 + rng() * 0.28,
+          dx: (rng() - 0.5) * 0.6,
+          dy: 0.35 + rng() * 0.6,
+          dz: (rng() - 0.5) * 0.6,
+          s: 0.38 + rng() * 0.3,
         });
       }
       const fruits = [];
       if (arch === 'tomato' || arch === 'pepper') {
-        const nf = 2 + ((rng() * 3) | 0);
+        const nf = 3 + ((rng() * 3) | 0);
         for (let i = 0; i < nf; i++) {
           fruits.push({
-            dx: (rng() - 0.5) * 0.6, dy: 0.3 + rng() * 0.45, dz: (rng() - 0.5) * 0.6,
-            s: 0.09 + rng() * 0.05, c: arch === 'tomato' ? 0xd9402e : 0xe08a2e,
+            dx: (rng() - 0.5) * 0.7, dy: 0.3 + rng() * 0.5, dz: (rng() - 0.5) * 0.7,
+            s: 0.11 + rng() * 0.06, c: arch === 'tomato' ? 0xe0301e : 0xf07a1e,
           });
         }
       } else if (arch === 'flower') {
-        const nf = 1 + ((rng() * 2) | 0);
-        const cols = [0xe06ba8, 0xf2d13d, 0xf5f5f5];
+        const nf = 2 + ((rng() * 2) | 0);
+        const cols = [0xe5321e, 0xffc21f, 0xffffff];
         for (let i = 0; i < nf; i++) {
           fruits.push({
             dx: (rng() - 0.5) * 0.5, dy: 0.7 + rng() * 0.35, dz: (rng() - 0.5) * 0.5,
@@ -1805,7 +1851,7 @@
 
     /* ---------------- meadow decor: tall grass + wildflowers, fireflies ---------------- */
     // Pure: set of "gx,gy" cells covered by any container (grass never grows there).
-    const GRASS_SEED = 4242, GRASS_CAP = 240;
+    const GRASS_SEED = 4242, GRASS_CAP = 320;
     function occupiedCellSet(list) {
       const set = new Set();
       (list || []).forEach((c) => {
@@ -1816,17 +1862,21 @@
     }
     // Pure: deterministic scatter of grass/flower tufts on empty cells.
     // Same seed -> same layout, so rebuilds are stable; capped for perf.
+    // Cells adjacent to beds grow thicker — a natural clustered look.
     function grassLayout(ncols, nrows, occupied, seed) {
       const rng = mulberry32(seed == null ? GRASS_SEED : seed);
       const cells = [];
+      const adj = (gx, gy) => occupied.has(`${gx - 1},${gy}`) || occupied.has(`${gx + 1},${gy}`) ||
+        occupied.has(`${gx},${gy - 1}`) || occupied.has(`${gx},${gy + 1}`);
       for (let gx = 0; gx < ncols; gx++) {
         for (let gy = 0; gy < nrows; gy++) {
           if (occupied.has(`${gx},${gy}`)) continue;
           const r = rng();
-          if (r < 0.52 && cells.length < GRASS_CAP) {
+          const p = adj(gx, gy) ? 0.74 : 0.55; // lush near beds
+          if (r < p && cells.length < GRASS_CAP) {
             cells.push({
               gx, gy,
-              variant: r < 0.36 ? 'tuft' : r < 0.42 ? 'flower-red' : r < 0.46 ? 'flower-yellow' : r < 0.49 ? 'flower-white' : 'tuft',
+              variant: r < 0.36 ? 'tuft' : r < 0.44 ? 'flower-red' : r < 0.49 ? 'flower-yellow' : r < 0.53 ? 'flower-white' : 'tuft',
             });
           }
         }
@@ -1899,6 +1949,74 @@
       attr.needsUpdate = true;
     }
 
+    /* ---------------- butterflies: daytime wanderers ---------------- */
+    // Pure: one butterfly's position at time t — a lazy lissajous wander
+    // around its home base, staying over the garden.
+    function butterflyPos(base, phase, t) {
+      return {
+        x: base.x + Math.sin(t * 0.45 + phase) * 2.4,
+        y: base.y + Math.sin(t * 0.9 + phase * 1.3) * 0.5,
+        z: base.z + Math.cos(t * 0.38 + phase) * 2.4,
+      };
+    }
+    // Pure: wing flap angle (radians) at time t — fast flutter.
+    function butterflyWing(t, phase) {
+      return Math.abs(Math.sin(t * 13 + phase)) * 1.15;
+    }
+    const BUTTERFLY_COLORS = [0xf2a13d, 0xf5f5f5, 0xffc21f, 0xe06ba8, 0xff8c42];
+    function buildButterflies(THREE) {
+      // 8 butterflies, day only (fireflies own the night). Two-triangle wings
+      // flap via sin; wander in the walk-mode loop, static in orbit mode.
+      const N = 8, rng = mulberry32(31337);
+      const group = new THREE.Group();
+      const items = [];
+      for (let i = 0; i < N; i++) {
+        const b = new THREE.Group();
+        const wingMat = new THREE.MeshBasicMaterial({
+          color: BUTTERFLY_COLORS[i % BUTTERFLY_COLORS.length],
+          side: THREE.DoubleSide, transparent: true, opacity: 0.95,
+        });
+        const wingGeo = new THREE.PlaneGeometry(0.26, 0.2);
+        wingGeo.translate(0.13, 0, 0); // hinge at the body
+        const wl = new THREE.Mesh(wingGeo, wingMat);
+        const wr = new THREE.Mesh(wingGeo, wingMat);
+        wr.rotation.y = Math.PI;
+        const body = new THREE.Mesh(
+          new THREE.SphereGeometry(0.035, 6, 5),
+          new THREE.MeshBasicMaterial({ color: 0x3a2c1c })
+        );
+        body.scale.set(1, 1, 2.2);
+        b.add(wl, wr, body);
+        const base = {
+          x: (rng() - 0.5) * cols * 0.8,
+          y: 1.1 + rng() * 1.2,
+          z: (rng() - 0.5) * rows * 0.8,
+        };
+        const phase = rng() * Math.PI * 2;
+        b.userData = { base, phase, wl, wr };
+        b.traverse((o) => { o.castShadow = false; o.receiveShadow = false; });
+        group.add(b);
+        items.push(b);
+      }
+      group.userData.items = items;
+      group.visible = dayNight !== 'night';
+      return group;
+    }
+    function updateButterflies(t) {
+      if (!T || !T.butterflies || !T.butterflies.visible) return;
+      T.butterflies.userData.items.forEach((b) => {
+        const { base, phase, wl, wr } = b.userData;
+        const p = butterflyPos(base, phase, t);
+        b.position.set(p.x, p.y, p.z);
+        const flap = butterflyWing(t, phase);
+        wl.rotation.z = flap;
+        wr.rotation.z = -flap;
+        // face the direction of travel (cheap: derivative of the lissajous)
+        const ahead = butterflyPos(base, phase, t + 0.1);
+        b.rotation.y = Math.atan2(ahead.x - p.x, ahead.z - p.z);
+      });
+    }
+
     function buildScene3D() {
       if (!T) return;
       const { THREE, scene, camera, controls, sun } = T;
@@ -1953,6 +2071,9 @@
       T.decor = decor;
       T.fireflies = buildFireflies(THREE);
       scene.add(T.fireflies);
+      if (T.butterflies) { scene.remove(T.butterflies); disposeGroup(T.butterflies); }
+      T.butterflies = buildButterflies(THREE);
+      scene.add(T.butterflies);
 
       T.lamps = []; // world-space lamp head positions, for night lighting
       const fc = fenceCells(containers);
@@ -2034,7 +2155,7 @@
       // these; the dome uniforms + fog color are derived in applyDayNight)
       return night
         ? { top: 0x050914, horizon: 0x101c3f }
-        : { top: 0x3f8cff, horizon: 0xa3d2ff };
+        : { top: 0x3f8cff, horizon: 0x93ccff };
     }
 
     function applyDayNight() {
@@ -2052,12 +2173,13 @@
       }
       T.sky.hemi.intensity = night ? 0.25 : 0.9;
       T.sky.hemi.color.set(night ? 0x33456e : 0xbdd8ff);
-      T.sun.intensity = night ? 0.14 : 0.95; // moonlight at night
+      T.sun.intensity = night ? 0.14 : 1.1; // moonlight at night
       T.sun.color.set(night ? 0x9db4ff : 0xfff1d4);
       T.sky.sunSprite.visible = !night;
       T.sky.moonSprite.visible = night;
       T.sky.stars.visible = night;
       if (T.fireflies) T.fireflies.visible = night;
+      if (T.butterflies) T.butterflies.visible = !night;
       // clouds tint with the sky (they share one material)
       if (T.clouds && T.clouds.length && T.clouds[0].userData.cloudMat) {
         T.clouds[0].userData.cloudMat.color.set(night ? 0x2a3a5f : 0xffffff);
@@ -2217,6 +2339,7 @@
       updateGhost();
       driftClouds(dt); // slow cloud drift, walk mode only (battery-friendly)
       updateFireflies(now / 1000); // firefly drift, walk mode only
+      updateButterflies(now / 1000); // butterfly wander + wing flap, walk mode only
       updateParticles(dt); // break-particle juice, walk mode only
       render3D();
       return true;
@@ -2281,6 +2404,7 @@
       archArcPoint, archRibCount, plantFoliage,
       fenceSides, fenceCells, kindCells, edgingCells, dripCells, nearestLampIds, driftClouds,
       skyColors, grassLayout, occupiedCellSet, fireflyPos, updateFireflies,
+      butterflyPos, butterflyWing, updateButterflies,
       tapeDistance, setTapeMode, clearTape,
       spawnParticles, particleCount, updateParticles,
       get Sound() { return Sound; },
@@ -2292,7 +2416,7 @@
         paintGrass, paintGroundSide, paintSoil, paintWood, paintDarkWood,
         paintFabric, paintTerracotta, paintMetal, paintWireMesh,
         paintBucket, paintStone, paintBarrel, paintCompost, paintHoopPlastic, paintBasin,
-        paintLeaf, paintGrassTuft, paintWildflower,
+        paintLeaf, paintGrassTuft, paintWildflower, paintLightWood,
       },
       get mode() { return walkMode; },
       _get: () => walk,

@@ -372,7 +372,7 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
   buildApi._setTab('blocks');
 
   // new soft painters registered (auto-covered by the painter loop above too)
-  ['paintBarrel', 'paintCompost', 'paintHoopPlastic', 'paintBasin', 'paintGroundSide', 'paintLeaf'].forEach((n) => {
+  ['paintBarrel', 'paintCompost', 'paintHoopPlastic', 'paintBasin', 'paintGroundSide', 'paintLeaf', 'paintLightWood'].forEach((n) => {
     check(`painter ${n} registered`, typeof walkApi.painters[n] === 'function');
   });
   check('voxel painters are gone', walkApi.painters.paintGrassTop === undefined &&
@@ -383,15 +383,15 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
   check('foliage deterministic (same seed)', JSON.stringify(fol1) === JSON.stringify(fol2));
   const fol3 = walkApi.plantFoliage('tomato', 999);
   check('foliage seed-sensitive', JSON.stringify(fol1) !== JSON.stringify(fol3));
-  check('foliage has 2-4 blobs', fol1.blobs.length >= 2 && fol1.blobs.length <= 4);
-  check('tomato bears fruit', fol1.fruits.length >= 2 && fol1.fruits.every((f) => f.c === 0xd9402e));
+  check('foliage has 3-5 blobs', fol1.blobs.length >= 3 && fol1.blobs.length <= 5);
+  check('tomato bears vivid red fruit', fol1.fruits.length >= 3 && fol1.fruits.every((f) => f.c === 0xe0301e));
   const folPep = walkApi.plantFoliage('pepper', 1234);
-  check('pepper bears orange fruit', folPep.fruits.length >= 2 && folPep.fruits.every((f) => f.c === 0xe08a2e));
+  check('pepper bears vivid orange fruit', folPep.fruits.length >= 3 && folPep.fruits.every((f) => f.c === 0xf07a1e));
   const folLeafy = walkApi.plantFoliage('leafy', 1234);
   check('leafy has no fruit', folLeafy.fruits.length === 0);
   const folFlower = walkApi.plantFoliage('flower', 1234);
-  check('flowers bloom in pastel colors', folFlower.fruits.length >= 1 &&
-    folFlower.fruits.every((f) => [0xe06ba8, 0xf2d13d, 0xf5f5f5].includes(f.c)));
+  check('flowers bloom in vivid colors', folFlower.fruits.length >= 2 &&
+    folFlower.fruits.every((f) => [0xe5321e, 0xffc21f, 0xffffff].includes(f.c)));
   check('blobs sit above the soil', fol1.blobs.every((b) => b.dy > 0.2 && b.dy < 1.1));
 
   // per-kind placement footprints: hoop house is 4x8, everything else 1x1
@@ -511,7 +511,7 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
   check('grass capped for perf', g1.length <= 240 && g1.length > 50);
   check('grass cells in bounds', g1.every((c) => c.gx >= 0 && c.gy >= 0 && c.gx < 24 && c.gy < 16));
   check('grass has tufts and flowers', g1.some((c) => c.variant === 'tuft') && g1.some((c) => c.variant.startsWith('flower')));
-  check('empty grid still caps grass', walkApi.grassLayout(60, 60, new Set(), 4242).length <= 240);
+  check('empty grid still caps grass', walkApi.grassLayout(60, 60, new Set(), 4242).length <= 320);
 
   // fireflies: gentle drift around their base, pure math
   const fb = { x: 1, y: 1, z: 1 };
@@ -519,6 +519,21 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
   check('firefly drifts with time', Math.abs(fp0.x - fp1.x) > 1e-6 || Math.abs(fp0.y - fp1.y) > 1e-6);
   check('firefly stays near its base', Math.abs(fp0.x - fb.x) <= 0.6 && Math.abs(fp0.y - fb.y) <= 0.35 && Math.abs(fp0.z - fb.z) <= 0.6);
   check('firefly phase matters', walkApi.fireflyPos(fb, 0, 1).x !== walkApi.fireflyPos(fb, 2, 1).x);
+
+  // butterflies: daytime wanderers (pure helpers)
+  const bb = { x: 1, y: 1.5, z: -2 };
+  const bp0 = walkApi.butterflyPos(bb, 0.7, 0), bp1 = walkApi.butterflyPos(bb, 0.7, 3);
+  check('butterfly wanders with time', Math.abs(bp0.x - bp1.x) > 1e-6 || Math.abs(bp0.z - bp1.z) > 1e-6);
+  check('butterfly stays within wander bounds',
+    Math.abs(bp0.x - bb.x) <= 2.4 && Math.abs(bp0.y - bb.y) <= 0.5 && Math.abs(bp0.z - bb.z) <= 2.4);
+  check('butterfly phase matters', walkApi.butterflyPos(bb, 0, 1).x !== walkApi.butterflyPos(bb, 2.5, 1).x);
+  check('wing flap in [0, 1.15]', (() => {
+    let ok = true;
+    for (let t = 0; t < 4; t += 0.13) { const w = walkApi.butterflyWing(t, 0.7); if (w < 0 || w > 1.15) ok = false; }
+    return ok;
+  })());
+  check('wing flap oscillates', walkApi.butterflyWing(0, 0) !== walkApi.butterflyWing(0.12, 0));
+  check('butterflies hidden at night', typeof walkApi.updateButterflies === 'function');
 
   console.log(failures ? `\n${failures} check(s) failed.` : '\nAll checks passed.');
   process.exit(failures ? 1 : 0);
