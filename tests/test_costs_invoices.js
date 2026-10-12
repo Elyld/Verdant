@@ -125,6 +125,10 @@ global.fetch = async (url, options = {}) => {
   if (url === '/api/invoices/' || url.startsWith('/api/invoices/?')) body = invoices;
   else if (url === '/api/expenses/') body = expenses;
   else if (url === '/api/seed-packets/') body = packets;
+  else if (url === '/api/invoices/packet-links') body = linkedPackets;
+  else if (url === '/api/expenses/packet-links') body = linkedExpensePackets;
+  else if (url === '/api/invoices/packet-suggestions-bulk') body = suggestions;
+  else if (url === '/api/expenses/packet-suggestions-bulk') body = expenseSuggestions;
   else if (url === '/api/books/check') body = {
     level: 'error',
     counts: { error: 1, warn: 0, info: 0 },
@@ -198,14 +202,27 @@ const tick = (ms) => new Promise((r) => setTimeout(r, ms));
   check('expense dropdown populated', named['#inv-expense'].innerHTML.includes('Grow bags (5-pack)'));
 
   // 3. Seed packet links render per invoice row (multi-select).
+  // The 500-checkbox picker is lazy now: initial HTML carries a placeholder
+  // (data-pk-details) and the checkboxes build on first open.
   check('linked packet chip rendered', rows.includes('🌱') && rows.includes('Costoluto Fiorentino'));
   check('detach button carries kind:invoice:packet ids', rows.includes('data-pk-detach="invoice:1:10"'));
   check('suggestion button rendered with packet id', rows.includes('data-pk-attach="invoice:1:11"') && rows.includes('+ Habanero'));
   check('suggestion shows matched item in title', rows.includes('Habanero - SEED / 25 seeds'));
-  check('multi checkbox panel rendered per row', rows.includes('data-pk-check="invoice:1:10"') && rows.includes('data-pk-check="invoice:2:11"'));
-  check('linked packets come pre-checked', rows.includes('data-pk-check="invoice:1:10" checked'));
-  check('unlinked packets unchecked', !rows.includes('data-pk-check="invoice:2:10" checked'));
-  check('checkboxes offer all seed packets', rows.includes("Matt&#39;s Peppers") || rows.includes("Matt's Peppers"));
+  check('checkbox picker is lazy (placeholder, not eager checkboxes)',
+    rows.includes('data-pk-details="invoice:1"') && rows.includes('data-linked="10"') && !rows.includes('data-pk-check="invoice:1:10"'));
+  const toggleFns = docListeners.toggle || [];
+  const fakeList = { innerHTML: '' };
+  const fakeDetails = {
+    open: true,
+    dataset: { built: '', pkDetails: 'invoice:1', linked: '10' },
+    closest: (sel) => (sel === '[data-pk-details]' ? fakeDetails : null),
+    querySelector: () => fakeList,
+  };
+  toggleFns.forEach((fn) => fn({ target: fakeDetails }));
+  check('lazy checkbox panel builds on open', fakeList.innerHTML.includes('data-pk-check="invoice:1:10"') && fakeList.innerHTML.includes('data-pk-check="invoice:1:11"'));
+  check('linked packets come pre-checked', fakeList.innerHTML.includes('data-pk-check="invoice:1:10" checked'));
+  check('unlinked packets unchecked', !fakeList.innerHTML.includes('data-pk-check="invoice:1:11" checked'));
+  check('checkboxes offer all seed packets', fakeList.innerHTML.includes("Matt&#39;s Peppers") || fakeList.innerHTML.includes("Matt's Peppers"));
 
   // 4. One-tap suggestion attach POSTs the right packet.
   const clickFns = named['#invoices-rows']._listeners.click || [];
@@ -280,12 +297,23 @@ const tick = (ms) => new Promise((r) => setTimeout(r, ms));
   check('cancel resets the form title', named['#cost-form-title'].textContent === 'Log a purchase');
   check('cancel makes no API call', fetchCalls.length === callsBefore);
 
-  // 11. Expense rows carry seed-packet chips, suggestions, and the multi picker.
+  // 11. Expense rows carry seed-packet chips, suggestions, and the lazy multi picker.
   const costRowsAfter = named['#costs-rows'].innerHTML;
   check('expense packet chip rendered', costRowsAfter.includes('data-pk-detach="expense:3:11"') && costRowsAfter.includes('Habanero'));
-  check('expense multi checkbox panel rendered', costRowsAfter.includes('data-pk-check="expense:3:10"') && costRowsAfter.includes('data-pk-check="expense:3:11"'));
-  check('expense linked packet pre-checked', costRowsAfter.includes('data-pk-check="expense:3:11" checked'));
+  check('expense picker placeholder carries linked ids',
+    costRowsAfter.includes('data-pk-details="expense:3"') && costRowsAfter.includes('data-linked="11"'));
   check('expense suggestion button rendered', costRowsAfter.includes('data-pk-attach="expense:3:10"') && costRowsAfter.includes('+ Costoluto Fiorentino'));
+  const fakeExpList = { innerHTML: '' };
+  const fakeExpDetails = {
+    open: true,
+    dataset: { built: '', pkDetails: 'expense:3', linked: '11' },
+    closest: (sel) => (sel === '[data-pk-details]' ? fakeExpDetails : null),
+    querySelector: () => fakeExpList,
+  };
+  toggleFns.forEach((fn) => fn({ target: fakeExpDetails }));
+  check('expense lazy checkbox panel builds on open',
+    fakeExpList.innerHTML.includes('data-pk-check="expense:3:10"') && fakeExpList.innerHTML.includes('data-pk-check="expense:3:11"'));
+  check('expense linked packet pre-checked', fakeExpList.innerHTML.includes('data-pk-check="expense:3:11" checked'));
 
   // 12. Expense packet checkbox check/uncheck hits the expense endpoints.
   const costChangeFns = named['#costs-rows']._listeners.change || [];

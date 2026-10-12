@@ -894,6 +894,15 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.59.3** — **⚡ Scale-audit performance fixes.** A simulated commercial
+  grow (2,800 plants, 40,000 logs, 500 seed packets) found the Plants page
+  taking 104s and the Costs page 22s to load. Fixed: a reminders-endpoint
+  N+1 (82.7s → 0.25s, output verified byte-identical), a per-card cover-photo
+  request storm (one bulk `/api/plants/covers` call now), half a million
+  eagerly-rendered packet checkboxes on the Costs page (now built lazily on
+  open), and ~2,200 per-row packet-link requests (bulk endpoints). Plants
+  loads in ~8s, Costs in ~8s. Everything else scaled fine.
+
 - **2.59.2** — **👁️ Honest eyes.** The garden agent's prompt used to tell the
   model "you CAN see" an attached photo even when the configured model is
   text-only — a setup for hallucinated photo descriptions. Verdant now checks

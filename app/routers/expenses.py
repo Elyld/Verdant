@@ -1,5 +1,5 @@
 """API router for garden cost tracking."""
-from typing import List, Optional
+from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlmodel import select
@@ -117,6 +117,66 @@ def delete_expense(
 
 # ------------------------- seed packet links ------------------------- #
 
+# NOTE: static sub-paths must be registered BEFORE "/{expense_id}/packets",
+# or FastAPI will try to parse them as an expense id.
+
+
+@router.get("/packet-links")
+def all_expense_packet_links(session: Session = Depends(get_session)) -> Dict[int, List[dict]]:
+    """Every expense -> linked seed packets in ONE query.
+
+    The Costs page used to fetch /{id}/packets per row (hundreds of
+    requests); this bulk endpoint replaces that storm with a single call.
+    """
+    links = session.exec(select(ExpenseSeedPacket)).all()
+    packet_ids = {link.seed_packet_id for link in links}
+    packets = (
+        {p.id: p for p in session.exec(select(SeedPacket).where(SeedPacket.id.in_(packet_ids))).all()}
+        if packet_ids
+        else {}
+    )
+    out: Dict[int, List[dict]] = {}
+    for link in links:
+        packet = packets.get(link.seed_packet_id)
+        if packet is not None:
+            out.setdefault(link.expense_id, []).append(_packet_dict(packet))
+    return out
+
+
+@router.post("/packet-suggestions-bulk")
+def bulk_expense_packet_suggestions(
+    payload: dict, session: Session = Depends(get_session)
+) -> Dict[int, List[dict]]:
+    """Heuristic packet suggestions for many expenses in ONE call.
+
+    payload: {"texts": {"<expense_id>": "<description + notes>"}}.
+    Same ranking as GET /{id}/packet-suggestions (top 3 per row, already-
+    linked packets excluded); replaces the per-row suggestion storm on the
+    Costs page. The UI only ever shows the first 3, so the server trims.
+    """
+    texts = payload.get("texts") or {}
+    eids = []
+    for key in texts:
+        try:
+            eids.append(int(key))
+        except (TypeError, ValueError):
+            continue
+    linked: Dict[int, set] = {}
+    if eids:
+        for link in session.exec(
+            select(ExpenseSeedPacket).where(ExpenseSeedPacket.expense_id.in_(eids))
+        ).all():
+            linked.setdefault(link.expense_id, set()).add(link.seed_packet_id)
+    packets = session.exec(select(SeedPacket).order_by(SeedPacket.variety_name)).all()
+    return {
+        eid: suggest_packets(
+            texts.get(str(eid)) or "", packets,
+            exclude_ids=frozenset(linked.get(eid, ())),
+        )[:3]
+        for eid in eids
+    }
+
+
 @router.get("/{expense_id}/packets")
 def list_expense_packets(
     expense_id: int,
@@ -126,8 +186,13 @@ def list_expense_packets(
     links = session.exec(
         select(ExpenseSeedPacket).where(ExpenseSeedPacket.expense_id == expense_id)
     ).all()
-    packets = [session.get(SeedPacket, link.seed_packet_id) for link in links]
-    return [_packet_dict(p) for p in packets if p is not None]
+    packet_ids = [link.seed_packet_id for link in links]
+    packets = (
+        {p.id: p for p in session.exec(select(SeedPacket).where(SeedPacket.id.in_(packet_ids))).all()}
+        if packet_ids
+        else {}
+    )
+    return [_packet_dict(packets[pid]) for pid in packet_ids if pid in packets]
 
 
 @router.post("/{expense_id}/packets")

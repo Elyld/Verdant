@@ -1,10 +1,10 @@
 """API router for garden plants."""
 from datetime import date as Date
 from datetime import timedelta
-from typing import List, Optional
+from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
-from sqlmodel import or_
+from sqlmodel import or_, select
 
 from app.database import get_session
 from app.models import Plant, Location, SeedPacket, apply_patch
@@ -90,6 +90,36 @@ def create_plant(
     session.commit()
     session.refresh(plant)
     return plant
+
+
+# NOTE: "/covers" must be registered BEFORE "/{plant_id}", or FastAPI will
+# try to parse "covers" as a plant id.
+
+
+@router.get("/covers")
+def plant_covers(session: Session = Depends(get_session)) -> Dict[int, str]:
+    """Latest timeline photo per plant, in ONE query.
+
+    The Plants page used to fetch /{id}/timeline once per card (thousands
+    of requests at scale) just to find a cover photo; this bulk endpoint
+    replaces that storm with a single call. Semantics match the old
+    per-card logic: the photo that sorts last by (observation date,
+    file path).
+    """
+    from app.models import ObservationImage, ObservationLog
+
+    rows = session.exec(
+        select(ObservationLog.plant_id, ObservationLog.date, ObservationImage.file_path)
+        .join(ObservationImage, ObservationImage.observation_id == ObservationLog.id)
+        .where(ObservationLog.plant_id.is_not(None))
+        .where(ObservationLog.date != "")
+        .order_by(ObservationLog.date.desc(), ObservationImage.file_path.desc())
+    ).all()
+    covers: Dict[int, str] = {}
+    for plant_id, _day, path in rows:
+        if plant_id not in covers:
+            covers[plant_id] = path
+    return covers
 
 
 @router.get("/{plant_id}", response_model=Plant)
@@ -272,47 +302,60 @@ def rain_hold_note(session) -> Optional[str]:
 
 @router.get("/reminders/list", response_model=List[ReminderRead])
 def plant_reminders(session: Session = Depends(get_session)) -> List[ReminderRead]:
-    """Watering/feeding reminders derived from each plant's care cadence."""
+    """Watering/feeding reminders derived from each plant's care cadence.
+
+    Latest-care dates come from four bulk GROUP BY queries. The old code
+    ran three queries PER plant (N+1); at a few thousand plants that took
+    ~80s. Results are identical: max() over ISO YYYY-MM-DD strings orders
+    chronologically, and malformed dates are excluded like before.
+    """
     from app.models import FertilizationLog, ObservationLog, WateringLog
+    from sqlmodel import func
 
     today = Date.today()
     reminders: list[ReminderRead] = []
     plants = session.query(Plant).filter(Plant.status == "Growing").all()
+    plant_ids = [p.id for p in plants]
+    loc_ids = list({p.location_id for p in plants if p.location_id})
+    iso = "____-__-__"  # LIKE pattern: well-formed YYYY-MM-DD only
+
+    def latest_per_id(model, id_col, date_col, ids, extra=()):
+        if not ids:
+            return {}
+        return dict(session.exec(
+            select(id_col, func.max(date_col))
+            .where(id_col.in_(ids), date_col.like(iso), *extra)
+            .group_by(id_col)
+        ).all())
+
+    obs_max = latest_per_id(ObservationLog, ObservationLog.plant_id,
+                            ObservationLog.date, plant_ids,
+                            (ObservationLog.watering_status.is_(True),))
+    wplant_max = latest_per_id(WateringLog, WateringLog.plant_id,
+                               WateringLog.date, plant_ids)
+    wloc_max = latest_per_id(WateringLog, WateringLog.location_id,
+                             WateringLog.date, loc_ids)
+    fed_max = latest_per_id(FertilizationLog, FertilizationLog.plant_id,
+                            FertilizationLog.date, plant_ids)
+
+    def newest(*days: Optional[str]) -> Optional[Date]:
+        parsed = [_parse_day(d) for d in days if d]
+        parsed = [d for d in parsed if d]
+        return max(parsed) if parsed else None
 
     for plant in plants:
         name = plant.variety_name or f"Plant #{plant.id}"
 
-        # Last watered: latest watered observation OR latest watering log at its location.
-        last_watered: Optional[Date] = None
-        obs_dates = [
-            _parse_day(o.date) for o in session.query(ObservationLog).filter(
-                ObservationLog.plant_id == plant.id,
-                ObservationLog.watering_status.is_(True),
-            ).all()
-        ]
-        obs_dates = [d for d in obs_dates if d]
-        if obs_dates:
-            last_watered = max(obs_dates)
-        water_clauses = [WateringLog.plant_id == plant.id]
-        if plant.location_id:
-            water_clauses.append(WateringLog.location_id == plant.location_id)
-        log_dates = [
-            _parse_day(w.date) for w in session.query(WateringLog).filter(
-                or_(*water_clauses)
-            ).all()
-        ]
-        log_dates = [d for d in log_dates if d]
-        if log_dates and (last_watered is None or max(log_dates) > last_watered):
-            last_watered = max(log_dates)
+        # Last watered: latest watered observation OR latest watering log
+        # for the plant itself or its location (same OR the old code used).
+        last_watered = newest(
+            obs_max.get(plant.id),
+            wplant_max.get(plant.id),
+            wloc_max.get(plant.location_id) if plant.location_id else None,
+        )
 
         # Last fed: latest fertilization for the plant.
-        fed_dates = [
-            _parse_day(f.date) for f in session.query(FertilizationLog).filter(
-                FertilizationLog.plant_id == plant.id
-            ).all()
-        ]
-        fed_dates = [d for d in fed_dates if d]
-        last_fed = max(fed_dates) if fed_dates else None
+        last_fed = _parse_day(fed_max.get(plant.id))
 
         for kind, cadence, last in (
             ("water", plant.water_every_days, last_watered),
