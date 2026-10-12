@@ -558,15 +558,28 @@
     });
 
     /* ---------------- 3D view (Three.js, lazy-loaded) ---------------- */
+    /* Minecraft voxel edition: 16x16 pixel textures (NearestFilter), blocky
+       containers, cross-quad pixel plants, blocky clouds, first-person walk. */
     let view = '2d';
-    let T = null; // { THREE, renderer, scene, camera, controls, sun, group, raf }
+    let T = null; // { THREE, renderer, scene, camera, controls, sun, group }
     let threeFailed = false;
+    let walkMode = false;
 
     const view2dBtn = $('#view-2d');
     const view3dBtn = $('#view-3d');
+    const viewWalkBtn = $('#view-walk');
     const wrap3d = $('#planner-3d');
     const hint2d = $('#planner-2d-hint');
     const hint3d = $('#planner-3d-hint');
+    const orbitHintText = 'Drag to orbit · scroll or pinch to zoom · right-drag to pan · click a container to edit it.';
+    const walkHintText = 'Click the garden to grab the mouse · WASD / arrows to walk · Shift to sprint · ESC to release · click a container to edit it.';
+
+    // crosshair shown in walk mode
+    const crosshair = document.createElement('div');
+    crosshair.style.cssText = 'position:absolute;left:50%;top:50%;width:8px;height:8px;margin:-4px 0 0 -4px;' +
+      'border-radius:50%;background:rgba(255,255,255,.92);box-shadow:0 0 0 2px rgba(20,35,55,.5);' +
+      'display:none;pointer-events:none;z-index:5;';
+    wrap3d.appendChild(crosshair);
 
     function loadScript(src) {
       return new Promise((resolve, reject) => {
@@ -586,6 +599,256 @@
       });
     }
 
+    // Seeded PRNG so plant/vine placement is stable across rebuilds.
+    function mulberry32(seed) {
+      let a = seed >>> 0;
+      return function () {
+        a |= 0; a = (a + 0x6D2B79F5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    /* ---------- pixel-art helpers ---------- */
+    function px(ctx, x, y, w, h, c) {
+      ctx.fillStyle = c;
+      ctx.fillRect(x | 0, y | 0, Math.ceil(w), Math.ceil(h));
+    }
+
+    function noiseFill(ctx, S, rng, palette) {
+      for (let y = 0; y < S; y++) {
+        for (let x = 0; x < S; x++) {
+          px(ctx, x, y, 1, 1, palette[(rng() * palette.length) | 0]);
+        }
+      }
+    }
+
+    // 16x16 painters. Each takes (ctx, S, rng). Transparent pixels simply
+    // aren't painted (canvas starts clear).
+    function paintGrassTop(ctx, S, rng) {
+      noiseFill(ctx, S, rng, ['#6fbf5a', '#6fbf5a', '#65b551', '#7acc66', '#5da84b']);
+      // 1px darker seam = the 1-ft grid lines between blocks
+      px(ctx, 0, 0, S, 1, '#4f9440'); px(ctx, 0, S - 1, S, 1, '#4f9440');
+      px(ctx, 0, 0, 1, S, '#4f9440'); px(ctx, S - 1, 0, 1, S, '#4f9440');
+    }
+
+    function paintDirtSide(ctx, S, rng) {
+      noiseFill(ctx, S, rng, ['#8a5f3c', '#7d5535', '#96684a', '#755031']);
+      // green fringe along the top edge, ragged
+      for (let x = 0; x < S; x++) {
+        const d = 2 + ((rng() * 3) | 0);
+        for (let y = 0; y < d; y++) px(ctx, x, y, 1, 1, y === d - 1 && rng() < 0.5 ? '#5da84b' : '#6fbf5a');
+      }
+    }
+
+    function paintDirt(ctx, S, rng) {
+      noiseFill(ctx, S, rng, ['#8a5f3c', '#7d5535', '#96684a', '#755031', '#6e4a2e']);
+    }
+
+    function paintWoodPlanks(ctx, S, rng) {
+      px(ctx, 0, 0, S, S, '#a0824f');
+      for (let y = 0; y < S; y += 4) px(ctx, 0, y, S, 1, '#6e5636'); // plank seams
+      for (let i = 0; i < 26; i++) px(ctx, (rng() * S) | 0, (rng() * S) | 0, 1 + ((rng() * 2) | 0), 1, rng() < 0.5 ? '#8f7040' : '#b08d58');
+      if (rng() < 0.7) { // knot
+        const kx = 2 + ((rng() * (S - 4)) | 0), ky = 2 + ((rng() * (S - 4)) | 0);
+        px(ctx, kx, ky, 2, 2, '#5e482c');
+      }
+    }
+
+    function paintDarkWood(ctx, S, rng) {
+      noiseFill(ctx, S, rng, ['#6e5636', '#654e2f', '#78593a']);
+    }
+
+    function paintSoil(ctx, S, rng) {
+      noiseFill(ctx, S, rng, ['#4a3520', '#42301c', '#54402a', '#3a2a18']);
+      for (let i = 0; i < 5; i++) px(ctx, (rng() * (S - 1)) | 0, (rng() * (S - 1)) | 0, 2, 1, '#6b5a3a'); // tiny stones
+    }
+
+    function paintFabric(ctx, S, rng) {
+      for (let y = 0; y < S; y++) {
+        for (let x = 0; x < S; x++) {
+          px(ctx, x, y, 1, 1, ((x + y) % 2 === 0) ? '#3a3f44' : '#2f3338');
+        }
+      }
+      for (let i = 0; i < 12; i++) px(ctx, (rng() * S) | 0, (rng() * S) | 0, 1, 1, '#4a5058');
+    }
+
+    function paintTerracotta(ctx, S, rng) {
+      px(ctx, 0, 0, S, S, '#c1663e');
+      px(ctx, 0, 0, S, 3, '#a0522d'); // rim band
+      px(ctx, 0, 3, S, 1, '#8f4726');
+      for (let i = 0; i < 18; i++) px(ctx, (rng() * S) | 0, 4 + ((rng() * (S - 4)) | 0), 1, 1, rng() < 0.5 ? '#d4764c' : '#b25a36');
+    }
+
+    function paintLeafBlob(ctx, S, rng) {
+      const greens = ['#3f8f37', '#4e9e3f', '#5cb85c', '#357a2e'];
+      for (let y = 2; y < S - 2; y++) {
+        for (let x = 2; x < S - 2; x++) {
+          const dx = (x - S / 2) / (S / 2), dy = (y - S / 2) / (S / 2);
+          if (dx * dx + dy * dy < 0.75 && rng() < 0.92) px(ctx, x, y, 1, 1, greens[(rng() * greens.length) | 0]);
+        }
+      }
+    }
+
+    // Pixel-sprite maps: one char per pixel, '.' = transparent.
+    const SPR_PALETTE = {
+      s: '#6e4f2e', g: '#3f8f37', G: '#5cb85c', r: '#d9402e', R: '#a82c1f',
+      o: '#e08a2e', y: '#f2d13d', p: '#e06ba8', w: '#fdfdfd',
+    };
+    const SPRITES = {
+      tomato: [
+        '................',
+        '.......gg.......',
+        '......gggg......',
+        '.......gg.......',
+        '.......ss.......',
+        '.....ggssgg.....',
+        '....gggssggg....',
+        '.....gsssgg.....',
+        '....ggssrrgg....',
+        '.....gssRRg.....',
+        '....gggssggg....',
+        '.....gggssg.....',
+        '....ggrrsgg.....',
+        '.....grrRg......',
+        '......ggg.......',
+        '.......s........',
+      ],
+      pepper: [
+        '................',
+        '.....gggg.......',
+        '....gggggg......',
+        '...gggggggg.....',
+        '...gggggggg.....',
+        '....gggggg......',
+        '.....gggg.......',
+        '....gggggg......',
+        '...gggooogg.....',
+        '...gggooogg.....',
+        '....ggoooog.....',
+        '.....gooo.......',
+        '......gg........',
+        '......gg........',
+        '................',
+        '................',
+      ],
+      leafy: [
+        '................',
+        '................',
+        '.....GGGG.......',
+        '....GGGGGG......',
+        '...GGgGGgGG.....',
+        '...GgGGGGgG.....',
+        '....GGGGGG......',
+        '...GGGGGGGG.....',
+        '....gGGGGg......',
+        '.....GGGG.......',
+        '......gg........',
+        '................',
+        '................',
+        '................',
+        '................',
+        '................',
+      ],
+      vine: [
+        '................',
+        'gg..............',
+        '.ggg............',
+        '..gggg..........',
+        '...ggggg........',
+        '....gggygg......',
+        '.....gggyy......',
+        '......ggg.......',
+        '.......ggg......',
+        '........ggg.....',
+        '.........gggy...',
+        '..........ggy...',
+        '...........gg...',
+        '............g...',
+        '................',
+        '................',
+      ],
+      flower: [
+        '................',
+        '......pppp......',
+        '.....pppppp.....',
+        '.....pyyypp.....',
+        '.....pppppp.....',
+        '......pppp......',
+        '.......ss.......',
+        '....g..ss.......',
+        '.....g.ss.......',
+        '......ssg.......',
+        '......ss........',
+        '......ss........',
+        '................',
+        '................',
+        '................',
+        '................',
+      ],
+      generic: [
+        '................',
+        '................',
+        '................',
+        '................',
+        '......gg........',
+        '.....gggg.......',
+        '......gg........',
+        '.......ss.......',
+        '...g...ss.......',
+        '....g..ss..g....',
+        '.....g.ss.g.....',
+        '.......ss.......',
+        '.......ss.......',
+        '................',
+        '................',
+        '................',
+      ],
+    };
+
+    function paintSprite(ctx, name) {
+      const map = SPRITES[name] || SPRITES.generic;
+      for (let y = 0; y < map.length; y++) {
+        const row = map[y];
+        for (let x = 0; x < row.length; x++) {
+          const c = SPR_PALETTE[row[x]];
+          if (c) px(ctx, x, y, 1, 1, c);
+        }
+      }
+    }
+
+    function plantArchetype(species) {
+      const s = (species || '').toLowerCase();
+      if (/tomato/.test(s)) return 'tomato';
+      if (/pepper|chili|chile|paprika/.test(s)) return 'pepper';
+      if (/basil|lettuce|spinach|kale|arugula|chard|herb|mint|cilantro|parsley|dill/.test(s)) return 'leafy';
+      if (/cucumber|cuke|melon|squash|pumpkin|zucchini|bean|pea/.test(s)) return 'vine';
+      if (/flower|marigold|zinnia|sunflower|dahlia|cosmos/.test(s)) return 'flower';
+      return 'generic';
+    }
+
+    function makePixTexture(THREE, size, painter, seed, repeat) {
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = size;
+      const ctx = cv.getContext('2d');
+      painter(ctx, size, mulberry32(seed || 1));
+      const tex = new THREE.CanvasTexture(cv);
+      tex.magFilter = THREE.NearestFilter;
+      tex.minFilter = THREE.NearestMipmapLinearFilter;
+      tex.generateMipmaps = true;
+      tex.encoding = THREE.sRGBEncoding;
+      if (repeat) {
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(repeat[0], repeat[1]);
+      }
+      return tex;
+    }
+
+    function pixMaterial(THREE, tex, opts) {
+      return new THREE.MeshStandardMaterial(Object.assign({ map: tex, roughness: 1, metalness: 0 }, opts || {}));
+    }
+
     async function ensureThree() {
       if (T) return T;
       if (threeFailed) throw new Error('3d unavailable');
@@ -603,33 +866,46 @@
       wrap3d.appendChild(renderer.domElement);
 
       const scene = new THREE.Scene();
-      scene.background = new THREE.Color(0xe9eef2);
-      scene.fog = new THREE.Fog(0xe9eef2, 70, 160);
+      const SKY = 0x77a4ff; // minecraft-ish sky blue
+      scene.background = new THREE.Color(SKY);
+      scene.fog = new THREE.Fog(SKY, 80, 200);
 
-      const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 500);
+      const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 600);
       const controls = new THREE.OrbitControls(camera, renderer.domElement);
       // On-demand rendering (no rAF loop): kinder to phone batteries, and every
       // interaction fires a 'change' event that re-renders the scene.
+      // (Walk mode runs its own loop while the pointer is locked.)
       controls.enableDamping = false;
       controls.maxPolarAngle = Math.PI / 2 - 0.03;
       controls.minDistance = 4;
       controls.maxDistance = 130;
       controls.addEventListener('change', () => render3D());
 
-      scene.add(new THREE.HemisphereLight(0xffffff, 0x9db38f, 0.75));
-      const sun = new THREE.DirectionalLight(0xfff6e6, 0.7);
+      scene.add(new THREE.HemisphereLight(0xbdd8ff, 0x8a9a6a, 0.85));
+      const sun = new THREE.DirectionalLight(0xfff3d6, 0.95);
       sun.castShadow = true;
       sun.shadow.mapSize.set(2048, 2048);
       sun.shadow.camera.near = 1;
-      sun.shadow.camera.far = 120;
+      sun.shadow.camera.far = 140;
       scene.add(sun);
 
-      // click (not drag) a container to edit it
+      // click (not drag) a container to edit it — skipped in walk mode,
+      // which raycasts from the crosshair instead.
       const ray = new THREE.Raycaster();
       const ptr = new THREE.Vector2();
       let downX = 0, downY = 0;
+      const openFromHit = (h) => {
+        let o = h.object;
+        while (o && (o.userData.containerId === undefined || o.userData.containerId === null)) o = o.parent;
+        if (o) {
+          const c = containers.find((x) => x.id === o.userData.containerId);
+          if (c) { openModal(c); return true; }
+        }
+        return false;
+      };
       renderer.domElement.addEventListener('pointerdown', (e) => { downX = e.clientX; downY = e.clientY; });
       renderer.domElement.addEventListener('pointerup', (e) => {
+        if (walkMode) return;
         if (Math.hypot(e.clientX - downX, e.clientY - downY) > 6) return;
         const r = renderer.domElement.getBoundingClientRect();
         if (!r.width) return;
@@ -637,17 +913,20 @@
         ptr.y = -((e.clientY - r.top) / r.height) * 2 + 1;
         ray.setFromCamera(ptr, camera);
         const hits = T.group ? ray.intersectObjects(T.group.children, true) : [];
-        for (const h of hits) {
-          let o = h.object;
-          while (o && (o.userData.containerId === undefined || o.userData.containerId === null)) o = o.parent;
-          if (o) {
-            const c = containers.find((x) => x.id === o.userData.containerId);
-            if (c) { openModal(c); break; }
-          }
-        }
+        for (const h of hits) { if (openFromHit(h)) break; }
+      });
+      // walk-mode click (pointer locked): raycast from screen center
+      renderer.domElement.addEventListener('click', () => {
+        if (walkMode && walk && !walk.locked) { try { walk.plc.lock(); } catch (err) { /* noop */ } }
+      });
+      renderer.domElement.addEventListener('click', () => {
+        if (!(walkMode && walk && walk.locked)) return;
+        ray.setFromCamera(new THREE.Vector2(0, 0), camera);
+        const hits = T.group ? ray.intersectObjects(T.group.children, true) : [];
+        for (const h of hits) { if (openFromHit(h)) break; }
       });
 
-      T = { THREE, renderer, scene, camera, controls, sun, group: null };
+      T = { THREE, renderer, scene, camera, controls, sun, group: null, TEX: null };
       wrap3d._three = T; // handle for tests / debugging
       sizeThree();
       return T;
@@ -675,121 +954,168 @@
       });
     }
 
-    function soilSlab(THREE, parent, w, h, y) {
-      const soil = new THREE.Mesh(
-        new THREE.BoxGeometry(Math.max(0.2, w - 0.24), 0.08, Math.max(0.2, h - 0.24)),
-        new THREE.MeshStandardMaterial({ color: 0x5d4d2d, roughness: 1 })
-      );
-      soil.position.y = y;
-      soil.receiveShadow = true;
-      parent.add(soil);
+    // Build (and cache on T) the shared pixel textures for one scene build.
+    function buildTextures(THREE) {
+      const TEX = {};
+      TEX.grass = makePixTexture(THREE, 16, paintGrassTop, 11, [cols + 8, rows + 8]);
+      TEX.dirtSideX = makePixTexture(THREE, 16, paintDirtSide, 12, [rows + 8, 1]);
+      TEX.dirtSideZ = makePixTexture(THREE, 16, paintDirtSide, 13, [cols + 8, 1]);
+      TEX.dirt = makePixTexture(THREE, 16, paintDirt, 14);
+      TEX.wood = makePixTexture(THREE, 16, paintWoodPlanks, 15);
+      TEX.darkWood = makePixTexture(THREE, 16, paintDarkWood, 16);
+      TEX.soil = makePixTexture(THREE, 16, paintSoil, 17);
+      TEX.fabric = makePixTexture(THREE, 16, paintFabric, 18);
+      TEX.terracotta = makePixTexture(THREE, 16, paintTerracotta, 19);
+      TEX.leafBlob = makePixTexture(THREE, 16, paintLeafBlob, 20);
+      TEX.plants = {};
+      Object.keys(SPRITES).forEach((name) => {
+        TEX.plants[name] = makePixTexture(THREE, 16, (ctx) => paintSprite(ctx, name), 21);
+      });
+      return TEX;
     }
 
-    function buildVessel(THREE, g, w, h, kind) {
-      let bodyH, color;
-      if (kind === 'raised bed') { bodyH = 1.1; color = 0x8b6f4e; }
-      else if (kind === 'planter') { bodyH = 0.8; color = 0xa4884f; }
-      else if (kind === 'pot') { bodyH = 1.0; color = 0xb0654a; }
-      else { bodyH = 1.1; color = 0x33383d; } // grow bag
-      if (kind === 'pot' || kind === 'grow bag') {
-        const r = Math.max(0.3, Math.min(w, h) / 2 * 0.96);
-        const geo = kind === 'pot'
-          ? new THREE.CylinderGeometry(r, r * 0.78, bodyH, 20)
-          : new THREE.CylinderGeometry(r, r * 0.92, bodyH, 20);
-        const body = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color, roughness: 0.9 }));
+    function box(THREE, w, h, d, mat) {
+      return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    }
+
+    function buildVessel(THREE, g, w, h, kind, TEX) {
+      let bodyH;
+      if (kind === 'raised bed') bodyH = 1.1;
+      else if (kind === 'planter') bodyH = 0.8;
+      else if (kind === 'pot') bodyH = 1.0;
+      else bodyH = 1.1; // grow bag
+      const woodMat = pixMaterial(THREE, TEX.wood);
+      const darkWoodMat = pixMaterial(THREE, TEX.darkWood);
+      const soilMat = pixMaterial(THREE, TEX.soil);
+      if (kind === 'pot') {
+        // terracotta block pot
+        const s = Math.max(0.6, Math.min(w, h) * 0.7);
+        const body = box(THREE, s, bodyH, s, pixMaterial(THREE, TEX.terracotta));
         body.position.y = bodyH / 2;
         g.add(body);
-        const soil = new THREE.Mesh(
-          new THREE.CylinderGeometry(r * 0.88, r * 0.88, 0.08, 20),
-          new THREE.MeshStandardMaterial({ color: 0x5d4d2d, roughness: 1 })
-        );
-        soil.position.y = bodyH / 2 - 0.02;
+        const soil = box(THREE, s - 0.18, 0.1, s - 0.18, soilMat);
+        soil.position.y = bodyH - 0.04;
+        soil.receiveShadow = true;
+        g.add(soil);
+      } else if (kind === 'grow bag') {
+        const body = box(THREE, w * 0.94, bodyH, h * 0.94, pixMaterial(THREE, TEX.fabric));
+        body.position.y = bodyH / 2;
+        g.add(body);
+        const soil = box(THREE, w * 0.94 - 0.18, 0.1, h * 0.94 - 0.18, soilMat);
+        soil.position.y = bodyH - 0.04;
         soil.receiveShadow = true;
         g.add(soil);
       } else {
-        const body = new THREE.Mesh(
-          new THREE.BoxGeometry(w * 0.98, bodyH, h * 0.98),
-          new THREE.MeshStandardMaterial({ color, roughness: 0.9 })
-        );
+        // wooden box + rim boards + soil inset
+        const bw = w * 0.98, bd = h * 0.98;
+        const body = box(THREE, bw, bodyH, bd, woodMat);
         body.position.y = bodyH / 2;
         g.add(body);
-        soilSlab(THREE, g, w, h, bodyH / 2 - 0.02);
+        const rimH = 0.12, rimT = 0.16;
+        [[0, 1, bw + 0.1, rimT], [0, -1, bw + 0.1, rimT]].forEach(([x, s, rw, rd]) => {
+          const rim = box(THREE, rw, rimH, rd, darkWoodMat);
+          rim.position.set(x, bodyH - rimH / 2 + 0.02, s * (bd / 2 - rimT / 2 + 0.04));
+          g.add(rim);
+        });
+        [[1, 0], [-1, 0]].forEach(([s]) => {
+          const rim = box(THREE, rimT, rimH, bd + 0.1, darkWoodMat);
+          rim.position.set(s * (bw / 2 - rimT / 2 + 0.04), bodyH - rimH / 2 + 0.02, 0);
+          g.add(rim);
+        });
+        const soil = box(THREE, bw - 0.24, 0.1, bd - 0.24, soilMat);
+        soil.position.y = bodyH - 0.05;
+        soil.receiveShadow = true;
+        g.add(soil);
       }
       g.userData.topY = bodyH;
     }
 
-    function buildPallet(THREE, g, w, h) {
-      const wood = new THREE.MeshStandardMaterial({ color: 0xc0a469, roughness: 0.95 });
-      const woodDark = new THREE.MeshStandardMaterial({ color: 0xa4884f, roughness: 0.95 });
+    function buildPallet(THREE, g, w, h, TEX) {
+      const woodMat = pixMaterial(THREE, TEX.wood);
+      const darkWoodMat = pixMaterial(THREE, TEX.darkWood);
       for (let i = 0; i < 3; i++) {
-        const s = new THREE.Mesh(new THREE.BoxGeometry(w * 0.98, 0.28, 0.3), woodDark);
+        const s = box(THREE, w * 0.98, 0.28, 0.3, darkWoodMat);
         s.position.set(0, 0.14, -h / 2 + 0.35 + i * ((h - 0.7) / 2));
         g.add(s);
       }
       const n = Math.max(3, Math.round(h / 0.7));
       for (let i = 0; i < n; i++) {
-        const slat = new THREE.Mesh(
-          new THREE.BoxGeometry(w * 0.98, 0.12, Math.max(0.28, (h * 0.98 / n) * 0.7)), wood);
+        const slat = box(THREE, w * 0.98, 0.12, Math.max(0.28, (h * 0.98 / n) * 0.7), woodMat);
         slat.position.set(0, 0.34, -h * 0.49 + (i + 0.5) * (h * 0.98 / n));
         g.add(slat);
       }
       g.userData.topY = 0.42;
     }
 
-    function buildArch(THREE, g, w, h, height) {
+    function buildArch(THREE, g, w, h, height, TEX) {
+      // voxel trellis: chunky posts + crossbars + climbing vine blobs
       const span = Math.min(w, h);
       const len = Math.max(w, h);
       const a = Math.max(0.75, span / 2);
       const hh = Math.max(1.5, height || 4);
-      // wire grid bent into a half-ellipse: ribs across the span, runs along the length
-      const nCross = 9;
-      const arcT = [];
-      for (let j = 0; j < nCross; j++) arcT.push((j / (nCross - 1)) * Math.PI);
-      const pts = [];
-      const nRibs = Math.max(4, Math.round(len * 0.75));
-      for (let i = 0; i < nRibs; i++) {
-        const z = -len / 2 + (i / (nRibs - 1)) * len;
-        let prev = null;
-        for (const t of arcT) {
-          const p = [a * Math.cos(t), hh * Math.sin(t), z];
-          if (prev) pts.push(...prev, ...p);
-          prev = p;
-        }
-      }
-      for (const t of arcT) {
-        const x = a * Math.cos(t), y = hh * Math.sin(t);
-        pts.push(x, y, -len / 2, x, y, len / 2);
-      }
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-      const wires = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({
-        color: 0x7d97b9, transparent: true, opacity: 0.9,
-      }));
-      if (w > h) wires.rotation.y = Math.PI / 2; // run along X when the footprint is wider
-      g.add(wires);
-      const footGeo = new THREE.BoxGeometry(0.18, 0.5, 0.18);
-      const footMat = new THREE.MeshStandardMaterial({ color: 0x4f6d94, roughness: 0.8 });
+      const postMat = pixMaterial(THREE, TEX.darkWood);
       const off = a * 0.92, along = len / 2 - 0.35;
       const corners = w > h
         ? [[-along, -off], [-along, off], [along, -off], [along, off]]
         : [[-off, -along], [off, -along], [-off, along], [off, along]];
+      const postGeo = new THREE.BoxGeometry(0.24, hh, 0.24);
       corners.forEach(([fx, fz]) => {
-        const f = new THREE.Mesh(footGeo, footMat);
-        f.position.set(fx, 0.25, fz);
+        const f = new THREE.Mesh(postGeo, postMat);
+        f.position.set(fx, hh / 2, fz);
         g.add(f);
+      });
+      // crossbars across the span at three heights (span runs along X when
+      // w<=h, along Z when w>h)
+      [0.35, 0.65, 0.95].forEach((t) => {
+        const bar = box(THREE, a * 2 + 0.24, 0.16, 0.16, postMat);
+        bar.position.set(0, hh * t, 0);
+        if (w > h) bar.rotation.y = Math.PI / 2;
+        g.add(bar);
+      });
+      // vine leaf blobs climbing the posts (seeded = stable)
+      const rng = mulberry32((w * 131 + h * 17 + ((g.userData.containerId || 0) * 7)) | 0);
+      const leafMat = pixMaterial(THREE, TEX.leafBlob);
+      const blobGeo = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+      corners.forEach(([fx, fz]) => {
+        const n = 3 + ((rng() * 3) | 0);
+        for (let i = 0; i < n; i++) {
+          const b = new THREE.Mesh(blobGeo, leafMat);
+          b.position.set(fx + (rng() - 0.5) * 0.5, 0.4 + rng() * (hh - 0.8), fz + (rng() - 0.5) * 0.5);
+          b.userData.noShadow = true;
+          g.add(b);
+        }
       });
       g.userData.topY = hh;
     }
 
-    function addPlants3D(THREE, g, w, h, kind, c) {
+    function buildPlantVoxel(THREE, g, px, pz, baseY, species, seed, TEX, big) {
+      // Minecraft cross-quad: two intersecting pixel-art planes.
+      const arch = plantArchetype(species);
+      const mat = new THREE.MeshStandardMaterial({
+        map: TEX.plants[arch], alphaTest: 0.5, side: THREE.DoubleSide, roughness: 1, metalness: 0,
+      });
+      const H = big ? 2.0 : 1.3;
+      const geo = new THREE.PlaneGeometry(1, H);
+      const grp = new THREE.Group();
+      const p1 = new THREE.Mesh(geo, mat);
+      const p2 = new THREE.Mesh(geo, mat);
+      p2.rotation.y = Math.PI / 2;
+      p1.userData.noShadow = true;
+      p2.userData.noShadow = true;
+      grp.add(p1, p2);
+      const rng = mulberry32(seed);
+      grp.rotation.y = rng() * Math.PI;
+      const s = 0.9 + rng() * 0.35;
+      grp.scale.set(s, s, s);
+      grp.position.set(px, baseY + (H * s) / 2 - 0.05, pz);
+      g.add(grp);
+    }
+
+    function addPlants3D(THREE, g, w, h, kind, c, TEX) {
       const ps = plantingsFor(c.id).slice(0, 6);
       if (!ps.length) return;
-      const leafA = new THREE.MeshStandardMaterial({ color: 0x688d61, roughness: 1 });
-      const leafB = new THREE.MeshStandardMaterial({ color: 0x82a87b, roughness: 1 });
-      const stemM = new THREE.MeshStandardMaterial({ color: 0x51704c, roughness: 1 });
       const spots = [];
       if (kind === 'arch') {
-        // climbers at the two base edges
         const span = Math.min(w, h), len = Math.max(w, h);
         ps.forEach((p, i) => {
           const t = (i + 0.5) / ps.length - 0.5;
@@ -812,16 +1138,9 @@
         });
       }
       const baseY = kind === 'arch' ? 0 : (g.userData.topY || 1);
-      spots.forEach(([px, pz], i) => {
-        const plant = new THREE.Group();
-        const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.5, 6), stemM);
-        stem.position.y = 0.25;
-        const bush = new THREE.Mesh(new THREE.IcosahedronGeometry(0.3, 0), i % 2 ? leafA : leafB);
-        bush.position.y = 0.62;
-        bush.scale.y = 0.85;
-        plant.add(stem, bush);
-        plant.position.set(px, baseY, pz);
-        g.add(plant);
+      spots.forEach(([spx, spz], i) => {
+        const p = ps[i];
+        buildPlantVoxel(THREE, g, spx, spz, baseY, p && p.species_type, (c.id * 1009 + i * 101) | 0, TEX, kind === 'arch');
       });
     }
 
@@ -838,7 +1157,7 @@
       const r = 15;
       ctx.beginPath();
       ctx.moveTo(r, 2);
-      ctx.lineTo(cv.width - r, 2); ctx.quadraticCurveTo(cv.width - 2, 2, cv.width - 2, r);
+      ctx.lineTo(cv.width - r, 2); ctx.quadraticCurveTo(cv.width - 2, 2, cv.width - r, 2);
       ctx.lineTo(cv.width - 2, 58 - r); ctx.quadraticCurveTo(cv.width - 2, 58, cv.width - r, 58);
       ctx.lineTo(r, 58); ctx.quadraticCurveTo(2, 58, 2, 58 - r);
       ctx.lineTo(2, r); ctx.quadraticCurveTo(2, 2, r, 2);
@@ -860,6 +1179,24 @@
       return sp;
     }
 
+    function buildClouds(THREE, group, rng) {
+      const mat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      for (let i = 0; i < 6; i++) {
+        const cw = 5 + rng() * 7, cd = 3 + rng() * 4;
+        const cloud = new THREE.Group();
+        const n = 2 + ((rng() * 3) | 0);
+        for (let j = 0; j < n; j++) {
+          const puff = box(THREE, cw * (0.5 + rng() * 0.5), 1.4, cd * (0.5 + rng() * 0.5), mat);
+          puff.position.set((rng() - 0.5) * cw, (rng() - 0.5) * 0.6, (rng() - 0.5) * cd);
+          cloud.add(puff);
+        }
+        const ext = Math.max(cols, rows) / 2 + 14;
+        cloud.position.set((rng() - 0.5) * ext * 2.4, 26 + rng() * 10, (rng() - 0.5) * ext * 2.4);
+        cloud.traverse((o) => { o.castShadow = false; o.receiveShadow = false; });
+        group.add(cloud);
+      }
+    }
+
     function buildScene3D() {
       if (!T) return;
       const { THREE, scene, camera, controls, sun } = T;
@@ -869,34 +1206,28 @@
       }
       const group = new THREE.Group();
       T.group = group;
+      const TEX = buildTextures(THREE);
+      T.TEX = TEX;
+      const rng = mulberry32(1234);
 
-      // grass + 1-ft grid over the garden area
+      // the world: one big grass block (dirt sides, grass fringe)
+      const gw = cols + 8, gd = rows + 8;
       const ground = new THREE.Mesh(
-        new THREE.PlaneGeometry(cols + 8, rows + 8),
-        new THREE.MeshStandardMaterial({ color: 0x9db38f, roughness: 1 })
+        new THREE.BoxGeometry(gw, 1, gd),
+        [
+          pixMaterial(THREE, TEX.dirtSideX),
+          pixMaterial(THREE, TEX.dirtSideX),
+          pixMaterial(THREE, TEX.grass),
+          pixMaterial(THREE, TEX.dirt),
+          pixMaterial(THREE, TEX.dirtSideZ),
+          pixMaterial(THREE, TEX.dirtSideZ),
+        ]
       );
-      ground.rotation.x = -Math.PI / 2;
+      ground.position.y = -0.5;
       ground.receiveShadow = true;
       group.add(ground);
 
-      const gc = document.createElement('canvas');
-      gc.width = Math.max(32, cols * 32);
-      gc.height = Math.max(32, rows * 32);
-      const g2 = gc.getContext('2d');
-      g2.fillStyle = '#a9bf99';
-      g2.fillRect(0, 0, gc.width, gc.height);
-      g2.strokeStyle = 'rgba(20,35,55,0.30)';
-      g2.lineWidth = 1;
-      for (let i = 0; i <= cols; i++) { g2.beginPath(); g2.moveTo(i * 32 + 0.5, 0); g2.lineTo(i * 32 + 0.5, gc.height); g2.stroke(); }
-      for (let j = 0; j <= rows; j++) { g2.beginPath(); g2.moveTo(0, j * 32 + 0.5); g2.lineTo(gc.width, j * 32 + 0.5); g2.stroke(); }
-      const gridPlane = new THREE.Mesh(
-        new THREE.PlaneGeometry(cols, rows),
-        new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(gc), roughness: 1 })
-      );
-      gridPlane.rotation.x = -Math.PI / 2;
-      gridPlane.position.y = 0.01;
-      gridPlane.receiveShadow = true;
-      group.add(gridPlane);
+      buildClouds(THREE, group, rng);
 
       containers.forEach((c) => {
         const w = c.grid_w || 1, h = c.grid_h || 1;
@@ -904,14 +1235,14 @@
         g.position.set((c.grid_x || 0) + w / 2 - cols / 2, 0, (c.grid_y || 0) + h / 2 - rows / 2);
         g.userData.containerId = c.id;
         const kind = c.kind || 'grow bag';
-        if (kind === 'arch') buildArch(THREE, g, w, h, c.height_ft || KIND_HEIGHT.arch || 4);
-        else if (kind === 'pallet') buildPallet(THREE, g, w, h);
-        else buildVessel(THREE, g, w, h, kind);
-        addPlants3D(THREE, g, w, h, kind, c);
+        if (kind === 'arch') buildArch(THREE, g, w, h, c.height_ft || KIND_HEIGHT.arch || 4, TEX);
+        else if (kind === 'pallet') buildPallet(THREE, g, w, h, TEX);
+        else buildVessel(THREE, g, w, h, kind, TEX);
+        addPlants3D(THREE, g, w, h, kind, c, TEX);
         const label = makeLabel(c.name);
-        label.position.y = (g.userData.topY || 1) + 1.0;
+        label.position.y = (g.userData.topY || 1) + 1.2;
         g.add(label);
-        g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+        g.traverse((o) => { if (o.isMesh && !o.userData.noShadow) o.castShadow = true; });
         group.add(g);
       });
       scene.add(group);
@@ -922,7 +1253,7 @@
       controls.target.set(0, 0, 0);
       controls.update();
       const ext = maxDim / 2 + 8;
-      sun.position.set(cols * 0.6, 32, rows * 0.45);
+      sun.position.set(cols * 0.6, 34, rows * 0.45);
       Object.assign(sun.shadow.camera, { left: -ext, right: ext, top: ext, bottom: -ext });
       sun.shadow.camera.updateProjectionMatrix();
       sizeThree();
@@ -935,11 +1266,204 @@
       T.renderer.render(T.scene, T.camera);
     }
 
+    /* ---------------- walk mode ---------------- */
+    // First-person: PointerLockControls for look, WASD for move, AABB
+    // collision vs container footprints (arches are walk-under-able).
+    let walk = null; // { plc, keys, locked, loopId, last, x, z, yaw }
+    const EYE = 1.7, WALK_SPEED = 4, SPRINT_SPEED = 8, PLAYER_R = 0.35;
+
+    const raf = (fn) => (typeof requestAnimationFrame === 'function')
+      ? requestAnimationFrame(fn)
+      : setTimeout(() => fn(typeof performance !== 'undefined' ? performance.now() : Date.now()), 16);
+    const caf = (id) => {
+      if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(id);
+      else clearTimeout(id);
+    };
+
+    function isTouchOnly() {
+      try {
+        return 'ontouchstart' in window && !(window.matchMedia && window.matchMedia('(pointer:fine)').matches);
+      } catch (e) { return false; }
+    }
+
+    async function ensureWalk() {
+      if (walk) return walk;
+      await ensureThree();
+      const THREE = T.THREE;
+      if (!THREE.PointerLockControls) {
+        const CDN = 'https://cdn.jsdelivr.net/npm/three@0.147.0';
+        await loadScript(`${CDN}/examples/js/controls/PointerLockControls.js`);
+      }
+      if (!THREE.PointerLockControls) throw new Error('walk unavailable');
+      const plc = new THREE.PointerLockControls(T.camera, T.renderer.domElement);
+      walk = { plc, keys: {}, locked: false, loopId: 0, last: 0, x: 0, z: 0, yaw: 0 };
+      plc.addEventListener('lock', () => { walk.locked = true; startWalkLoop(); });
+      plc.addEventListener('unlock', () => { walk.locked = false; });
+      window.addEventListener('keydown', (e) => {
+        if (!walkMode || !walk) return;
+        walk.keys[e.code] = true;
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code) && e.preventDefault) e.preventDefault();
+      });
+      window.addEventListener('keyup', (e) => { if (walk) walk.keys[e.code] = false; });
+      window.addEventListener('blur', () => { if (walk) walk.keys = {}; });
+      return walk;
+    }
+
+    // Container footprints as AABBs in world coords. Arches are excluded —
+    // walking under them is half the fun.
+    function walkColliders() {
+      const boxes = [];
+      (containers || []).forEach((c) => {
+        if ((c.kind || 'grow bag') === 'arch') return;
+        const w = c.grid_w || 1, h = c.grid_h || 1;
+        const cx = (c.grid_x || 0) + w / 2 - cols / 2;
+        const cz = (c.grid_y || 0) + h / 2 - rows / 2;
+        boxes.push({ minX: cx - (w / 2) * 0.96, maxX: cx + (w / 2) * 0.96, minZ: cz - (h / 2) * 0.96, maxZ: cz + (h / 2) * 0.96 });
+      });
+      return boxes;
+    }
+
+    // Pure: resolve a player circle vs AABBs + world bounds. Used by the loop
+    // and directly by tests.
+    function resolvePlayerCollision(px, pz, boxes, radius) {
+      radius = radius == null ? PLAYER_R : radius;
+      const bx = cols / 2 + 3.5, bz = rows / 2 + 3.5;
+      px = Math.max(-bx, Math.min(bx, px));
+      pz = Math.max(-bz, Math.min(bz, pz));
+      (boxes || []).forEach((b) => {
+        const cx = Math.max(b.minX, Math.min(px, b.maxX));
+        const cz = Math.max(b.minZ, Math.min(pz, b.maxZ));
+        const dx = px - cx, dz = pz - cz;
+        const d2 = dx * dx + dz * dz;
+        if (d2 >= radius * radius) return;
+        if (d2 > 1e-9) {
+          const d = Math.sqrt(d2);
+          px = cx + (dx / d) * radius;
+          pz = cz + (dz / d) * radius;
+        } else {
+          // center inside the box: push out along least-penetration axis
+          const pl = px - b.minX, pr = b.maxX - px, pt = pz - b.minZ, pb = b.maxZ - pz;
+          const m = Math.min(pl, pr, pt, pb);
+          if (m === pl) px = b.minX - radius;
+          else if (m === pr) px = b.maxX + radius;
+          else if (m === pt) pz = b.minZ - radius;
+          else pz = b.maxZ + radius;
+        }
+      });
+      return { x: px, z: pz };
+    }
+
+    function movePlayer(dt) {
+      if (!walk) return;
+      const yaw = walk.yaw || 0;
+      const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+      const rx = Math.cos(yaw), rz = -Math.sin(yaw);
+      const k = walk.keys || {};
+      let mx = 0, mz = 0;
+      if (k.KeyW || k.ArrowUp) mz += 1;
+      if (k.KeyS || k.ArrowDown) mz -= 1;
+      if (k.KeyD || k.ArrowRight) mx += 1;
+      if (k.KeyA || k.ArrowLeft) mx -= 1;
+      if (!mx && !mz) return;
+      const sp = (k.ShiftLeft || k.ShiftRight) ? SPRINT_SPEED : SPRINT_SPEED / 2;
+      const len = Math.hypot(mx, mz);
+      const nx = walk.x + ((fx * mz + rx * mx) / len) * sp * dt;
+      const nz = walk.z + ((fz * mz + rz * mx) / len) * sp * dt;
+      const r = resolvePlayerCollision(nx, nz, walkColliders());
+      walk.x = r.x;
+      walk.z = r.z;
+      if (T && T.camera) T.camera.position.set(walk.x, EYE, walk.z);
+    }
+
+    // One loop iteration. Returns true when the loop should continue.
+    function walkStep(t) {
+      if (!walkMode || !walk || !walk.locked) { if (walk) walk.loopId = 0; return false; }
+      const now = typeof t === 'number' ? t : Date.now();
+      const dt = Math.min(0.05, Math.max(0.001, (now - (walk.last || now - 16)) / 1000));
+      walk.last = now;
+      if (T && T.THREE && T.camera) {
+        const e = new T.THREE.Euler().setFromQuaternion(T.camera.quaternion, 'YXZ');
+        walk.yaw = e.y;
+      }
+      movePlayer(dt);
+      render3D();
+      return true;
+    }
+
+    function startWalkLoop() {
+      if (!walk || walk.loopId) return;
+      walk.last = 0;
+      const frame = (t) => { walk.loopId = 0; if (walkStep(t)) walk.loopId = raf(frame); };
+      walk.loopId = raf(frame);
+    }
+
+    function stopWalkLoop() {
+      if (walk && walk.loopId) { caf(walk.loopId); walk.loopId = 0; }
+    }
+
+    async function enterWalkMode() {
+      if (isTouchOnly()) { toast('Walk mode needs a keyboard + mouse.'); return; }
+      try { await ensureWalk(); }
+      catch (err) {
+        toast('Could not load walk controls — check your connection and try again.', 'error');
+        return;
+      }
+      walkMode = true;
+      // start at the south edge, facing the garden (yaw 0 faces -z)
+      walk.x = 0; walk.z = rows / 2 + 3; walk.yaw = 0; walk.keys = {};
+      T.camera.position.set(walk.x, EYE, walk.z);
+      T.camera.lookAt(0, EYE, 0);
+      T.controls.enabled = false;
+      crosshair.style.display = 'block';
+      hint3d.textContent = walkHintText;
+      paintViewButtons();
+      render3D();
+      toast('Click the garden to grab the mouse, then walk with WASD.');
+    }
+
+    function exitWalkMode() {
+      if (!walkMode) return;
+      walkMode = false;
+      stopWalkLoop();
+      if (walk) {
+        if (walk.plc && walk.plc.isLocked) { try { walk.plc.unlock(); } catch (e) { /* noop */ } }
+        walk.locked = false;
+      }
+      if (T) {
+        T.controls.enabled = true;
+        crosshair.style.display = 'none';
+        hint3d.textContent = orbitHintText;
+        buildScene3D(); // reframes the orbit camera
+      }
+      paintViewButtons();
+    }
+
+    wrap3d._walk = { // handle for tests / debugging
+      resolvePlayerCollision, mulberry32, plantArchetype, walkColliders, makePixTexture,
+      painters: {
+        paintGrassTop, paintDirtSide, paintDirt, paintWoodPlanks, paintDarkWood,
+        paintSoil, paintFabric, paintTerracotta, paintLeafBlob, paintSprite, SPRITES,
+      },
+      get mode() { return walkMode; },
+      _get: () => walk,
+      _set: (w) => { walk = w; },
+      _setMode: (m) => { walkMode = m; },
+      _startLoop: () => startWalkLoop(),
+      _stopLoop: () => stopWalkLoop(),
+      _tick: (t) => walkStep(t),
+      _enter: () => enterWalkMode(),
+      _exit: () => exitWalkMode(),
+    };
+    /* -------------- end walk mode -------------- */
+
     function paintViewButtons() {
       const on = 'bg-sage-200 px-3 py-1 font-semibold text-navy-800';
       const off = 'bg-beige-50 px-3 py-1 text-navy-500 hover:bg-beige-100';
       view2dBtn.className = view === '2d' ? on : off;
-      view3dBtn.className = view === '3d' ? on : off;
+      view3dBtn.className = (view === '3d' && !walkMode) ? on : off;
+      if (viewWalkBtn) {
+        viewWalkBtn.className = (walkMode ? on : off) + (view === '3d' ? '' : ' hidden');
+      }
     }
 
     async function setView(v) {
@@ -955,6 +1479,7 @@
         buildScene3D();
         render3D();
       } else {
+        exitWalkMode();
         view = '2d';
       }
       const is3d = view === '3d';
@@ -968,12 +1493,20 @@
     }
 
     view2dBtn.addEventListener('click', () => setView('2d'));
-    view3dBtn.addEventListener('click', () => setView('3d'));
+    view3dBtn.addEventListener('click', () => { if (walkMode) exitWalkMode(); else setView('3d'); });
+    if (viewWalkBtn) {
+      viewWalkBtn.addEventListener('click', () => {
+        if (view !== '3d') return;
+        if (walkMode) exitWalkMode();
+        else enterWalkMode();
+      });
+    }
     if (typeof window !== 'undefined' && window.addEventListener) {
       window.addEventListener('resize', () => { if (view === '3d') sizeThree(); });
     }
     paintViewButtons();
     /* ---------------- end 3D view ---------------- */
+
 
     load();
   }

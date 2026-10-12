@@ -153,6 +153,83 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
   check('stays in 2D after 3D failure', !named['#planner-canvas'].classList.contains('hidden'));
   check('3D container still hidden after failure', named['#planner-3d'].classList.contains('hidden'));
 
+  // ---- Minecraft voxel edition: pixel painters, seeded PRNG, walk physics ----
+  const walkApi = named['#planner-3d']._walk;
+  check('walk test handle exposed', !!walkApi);
+
+  // mulberry32 determinism
+  const r1 = walkApi.mulberry32(42), r2 = walkApi.mulberry32(42), r3 = walkApi.mulberry32(7);
+  check('mulberry32 deterministic', r1() === r2() && r1() === r2());
+  check('mulberry32 seed-sensitive', r1() !== r3());
+
+  // plant archetype mapping
+  const arch = walkApi.plantArchetype;
+  check('tomato archetype', arch('Tomato') === 'tomato');
+  check('pepper archetype', arch('Pepper') === 'pepper' && arch('Sweet Pepper') === 'pepper');
+  check('leafy archetype', arch('Genovese Basil') === 'leafy' && arch('Lettuce') === 'leafy');
+  check('vine archetype', arch('Cucumber') === 'vine' && arch('Bean') === 'vine');
+  check('flower archetype', arch('Marigold') === 'flower');
+  check('generic fallback', arch('Mystery Plant') === 'generic' && arch('') === 'generic' && arch(null) === 'generic');
+
+  // pixel painters run on a stub ctx
+  const paintCalls = [];
+  const stubCtx = { fillStyle: '', fillRect: (x, y, w, h) => paintCalls.push([x, y, w, h, stubCtx.fillStyle]) };
+  const rng = walkApi.mulberry32(5);
+  Object.entries(walkApi.painters).forEach(([name, fn]) => {
+    if (name === 'SPRITES' || name === 'paintSprite') return;
+    paintCalls.length = 0;
+    fn(stubCtx, 16, rng);
+    check(`painter ${name} paints pixels`, paintCalls.length > 10);
+  });
+  paintCalls.length = 0;
+  walkApi.painters.paintSprite(stubCtx, 'tomato');
+  check('tomato sprite paints pixels', paintCalls.length > 20);
+  check('all 6 sprites defined', ['tomato', 'pepper', 'leafy', 'vine', 'flower', 'generic'].every((k) => Array.isArray(walkApi.painters.SPRITES[k])));
+
+  // makePixTexture sets NearestFilter (crisp pixels) with a stub THREE
+  const THREEStub = {
+    NearestFilter: 1003, NearestMipmapLinearFilter: 1004, LinearFilter: 1005,
+    sRGBEncoding: 3001, RepeatWrapping: 1000,
+    CanvasTexture: function (cv) {
+      this.image = cv;
+      this.repeat = { x: 0, y: 0, set: function (x, y) { this.x = x; this.y = y; } };
+    },
+  };
+  const origCreate = global.document.createElement;
+  global.document.createElement = () => ({ width: 0, height: 0, getContext: () => stubCtx });
+  const tex = walkApi.makePixTexture(THREEStub, 16, walkApi.painters.paintGrassTop, 11, [4, 4]);
+  global.document.createElement = origCreate;
+  check('pixel texture uses NearestFilter', tex.magFilter === 1003);
+  check('pixel texture repeats', tex.wrapS === 1000 && tex.repeat.x === 4 && tex.repeat.y === 4);
+
+  // AABB collision math
+  const box1 = { minX: -1, maxX: 1, minZ: -1, maxZ: 1 };
+  let res = walkApi.resolvePlayerCollision(0, 0, [box1], 0.35);
+  check('center-inside pushes out on -x (tie)', res.x === -1.35 && res.z === 0);
+  res = walkApi.resolvePlayerCollision(0.9, 0, [box1], 0.35);
+  check('edge overlap pushes radially out', Math.abs(res.x - 1.35) < 1e-9 && res.z === 0);
+  res = walkApi.resolvePlayerCollision(5, 5, [box1], 0.35);
+  check('clear of box unchanged', res.x === 5 && res.z === 5);
+  res = walkApi.resolvePlayerCollision(100, -100, [], 0.35);
+  check('world bounds clamp', res.x === 15.5 && res.z === -11.5); // cols 24, rows 16
+  // arch (id 12) excluded from colliders, pallet (id 13) included
+  const colliders = walkApi.walkColliders();
+  check('arch excluded from colliders', colliders.length === 1);
+
+  // walk loop start/stop with stubbed rAF
+  const frames = [];
+  global.requestAnimationFrame = (fn) => { frames.push(fn); return 7; };
+  walkApi._set({ locked: true, loopId: 0, keys: { KeyW: true }, last: 0, x: 0, z: 0, yaw: 0 });
+  walkApi._setMode(true);
+  walkApi._startLoop();
+  check('walk loop starts (rAF scheduled)', frames.length === 1 && walkApi._get().loopId === 7);
+  walkApi._tick(16);
+  check('WASD moves player forward (-z at yaw 0)', walkApi._get().z < 0);
+  walkApi._setMode(false);
+  const kept = walkApi._tick(32);
+  check('walk loop stops when mode exits', kept === false && walkApi._get().loopId === 0);
+  delete global.requestAnimationFrame;
+
   console.log(failures ? `\n${failures} check(s) failed.` : '\nAll checks passed.');
   process.exit(failures ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });
