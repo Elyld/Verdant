@@ -291,7 +291,13 @@ aimed planting or container (breaking a planted container asks first), and
 ghost preview shows exactly where it'll land — or plants the selected seedling
 into the aimed container. **E** edits the aimed container, ESC releases the
 mouse. Every placement and break goes through the real API and edits your real
-garden. Orbiting still works too, and
+garden. Walk mode now stars a little **🧑‍🌾 gardener**: a clay-tinted character
+(CC0 Quaternius model) with a straw hat who walks the garden in **third person**
+— **V** toggles between first-person and over-the-shoulder, **Space** jumps,
+and **F** tends the nearest bed: the Working animation plays, thirsty beds get
+a blue water arc (logged through the real watering API), harvest-ready crops
+pop with a floating "+N" (logged through the real harvest API). Idle/Walk/Run/
+Jump/Working all crossfade via the model's real animation clips. Orbiting still works too, and
 everything renders on demand so it sips battery. A slim **🌤️ weather ribbon** runs under
 the site header on every page — current conditions, tonight's low, tomorrow's
 high, rain chance, and wind gusts. On the planner, **garden alerts** underneath
@@ -314,6 +320,9 @@ curated, extension-service-sourced list.
 ![Walk-mode creative building](docs/screenshots/planner-build.png)
 ![Planner 3D with real crop and fence models](docs/screenshots/planner-3d-models.png)
 ![Planner 3D at night with models](docs/screenshots/planner-3d-models-night.png)
+![Third-person gardener](docs/screenshots/planner-gardener-day.png)
+![Third-person gardener at night](docs/screenshots/planner-gardener-night.png)
+![The gardener tending a bed](docs/screenshots/planner-gardener-working.png)
 
 Empty containers don't sit idle: **🔄 succession ideas** read the season,
 your first-frost date, and the crop guide, then suggest what each free
@@ -949,6 +958,19 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.63.0** — **A gardener walks your 3D garden.** Walk mode grew a
+  third-person character: a warm clay-tinted Quaternius figure (CC0, 8 real
+  animation clips) in a procedural straw hat, ~5.5ft tall, strolling the
+  diorama with an over-the-shoulder follow camera. **V** toggles first-person
+  ↔ third-person (the character hides in first person), **Space** jumps with
+  light custom physics, and **F** tends the nearest bed within range: the
+  Working clip plays, then thirsty beds get a blue water-particle arc (posted
+  to the real watering-log API), harvest-ready crops pop with a floating
+  "+N crop" sprite (posted to the real harvests API), otherwise a friendly
+  "nothing needed here" toast. Idle/Walk/Run crossfade with movement, the
+  character faces its walk direction, and the same smooth accel/damping +
+  wall-slide collision moves it — it can't walk through beds. Day/night
+  lighting tints it like everything else.
 - **2.62.0** — **Real 3D models in the planner + first-person fixes.** The
   diorama now uses 53 curated CC0 models (Kenney Nature Kit, Quaternius):
   wooden picket fences (auto-joining runs, L-corners, gates), stone path

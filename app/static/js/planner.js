@@ -591,7 +591,7 @@
     const hint2d = $('#planner-2d-hint');
     const hint3d = $('#planner-3d-hint');
     const orbitHintText = 'Drag to orbit · scroll or pinch to zoom · right-drag to pan · click a container to edit it.';
-    const walkHintText = 'Click to grab the mouse · WASD walk · Shift sprint · Left-click break · Right-click place · E edit · Q blocks/plants · 1-9/wheel pick · ESC release.';
+    const walkHintText = 'Click to grab the mouse · WASD walk · Space jump · V camera · F tend garden · Shift sprint · Left-click break · Right-click place · E edit · Q blocks/plants · 1-9/wheel pick · ESC release.';
 
     // crosshair shown in walk mode
     const crosshair = document.createElement('div');
@@ -1086,8 +1086,9 @@
       'kenney_crops_dirtRow', 'kenney_crops_dirtDoubleRow', 'kenney_crops_dirtSingle',
       'quaternius_tomato', 'quaternius_carrot', 'quaternius_corn',
       'quaternius_pumpkin', 'quaternius_pepper_green',
+      'quaternius_animated_human', // v2.63.0 gardener character (skinned)
     ];
-    const modelCache = {}; // name -> { obj, size }
+    const modelCache = {}; // name -> { obj, size, anims? }
     let modelsLoading = null;
 
     function preloadModels(THREE) {
@@ -1112,7 +1113,7 @@
                   obj.traverse((o) => {
                     if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.userData.fromModel = true; }
                   });
-                  modelCache[name] = { obj, size };
+                  modelCache[name] = { obj, size, anims: gltf.animations || [] };
                   finish(true);
                 } catch (e) { finish(false); }
               },
@@ -2614,6 +2615,9 @@
         if (!walkMode || !walk) return;
         walk.keys[e.code] = true;
         if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code) && e.preventDefault) e.preventDefault();
+        if (buildTyping()) return;
+        if (e.code === 'KeyV') toggleThirdPerson();
+        else if (e.code === 'KeyF') interactAim();
       });
       window.addEventListener('keyup', (e) => { if (walk) walk.keys[e.code] = false; });
       window.addEventListener('blur', () => { if (walk) walk.keys = {}; });
@@ -2701,7 +2705,20 @@
         // tangential part, head-on impact zeroes out (no lunge on release).
         if (dt > 0) { walk.vx = (r.x - ox) / dt; walk.vz = (r.z - oz) / dt; }
       }
-      if (T && T.camera) T.camera.position.set(walk.x, EYE, walk.z);
+      // v2.63.0: simple jump physics (no dependency). Space to hop.
+      if (walk.y == null) { walk.y = 0; walk.vy = 0; }
+      const grounded = walk.y <= 0;
+      if (k.Space && grounded && !walk.jumpHeld) {
+        walk.vy = 5.4; walk.jumpHeld = true;
+        gardenerAnim('jump');
+      }
+      if (!k.Space) walk.jumpHeld = false;
+      if (!grounded || walk.vy > 0) {
+        walk.vy -= 16 * dt;
+        walk.y += walk.vy * dt;
+        if (walk.y <= 0) { walk.y = 0; walk.vy = 0; }
+      }
+      // NB: camera positioning is owned by updateGardener() (first/third person).
     }
 
     // One loop iteration. Returns true when the loop should continue.
@@ -2715,12 +2732,14 @@
         walk.yaw = e.y;
       }
       movePlayer(dt);
+      updateGardener(dt, now); // v2.63.0: character + first/third-person camera
       updateGhost();
       updateWalkLabel(); // crosshair-target label only (v2.62.0)
       driftClouds(dt); // slow cloud drift, walk mode only (battery-friendly)
       updateFireflies(now / 1000); // firefly drift, walk mode only
       updateButterflies(now / 1000); // butterfly wander + wing flap, walk mode only
       updateParticles(dt); // break-particle juice, walk mode only
+      updateFloaters(dt); // v2.63.0: "+1 Tomato" text, walk mode only
       render3D();
       return true;
     }
@@ -2765,6 +2784,10 @@
       // start at the south edge, facing the garden (yaw 0 faces -z)
       walk.x = 0; walk.z = rows / 2 + 3; walk.yaw = 0; walk.keys = {};
       walk.vx = 0; walk.vz = 0; // no lunge from a previous session's velocity
+      walk.y = 0; walk.vy = 0; // v2.63.0 jump state
+      thirdPerson = true; // v2.63.0: walk in as the gardener
+      ensureGardener(); // async; scene works without it until loaded
+      ensureToday(); // warm the care-due cache for F interact
       T.camera.position.set(walk.x, EYE, walk.z);
       T.camera.lookAt(0, EYE, 0);
       T.controls.enabled = false;
@@ -2782,6 +2805,7 @@
       if (!walkMode) return;
       walkMode = false;
       stopWalkLoop();
+      if (gardener && gardener.obj) gardener.obj.visible = false; // v2.63.0
       if (walk) {
         if (walk.plc && walk.plc.isLocked) { try { walk.plc.unlock(); } catch (e) { /* noop */ } }
         walk.locked = false;
@@ -2805,6 +2829,13 @@
       butterflyPos, butterflyWing, updateButterflies,
       tapeDistance, setTapeMode, clearTape,
       spawnParticles, particleCount, updateParticles,
+      matchGardenerClips, thirdPersonBoom, nearestContainer, // v2.63.0
+      get thirdPerson() { return thirdPerson; },
+      _toggleThirdPerson: () => toggleThirdPerson(),
+      _interact: () => interactAim(),
+      _ensureGardener: () => ensureGardener(),
+      _gardener: () => gardener,
+      _camera: () => (T && T.camera) || null,
       get Sound() { return Sound; },
       get tapeMode() { return tapeMode; },
       get tapePoints() { return tapePoints; },
@@ -2818,7 +2849,7 @@
       },
       get mode() { return walkMode; },
       _get: () => walk,
-      _set: (w) => { walk = w; },
+      _set: (w) => { walk = Object.assign(walk || {}, w); },
       _setT: (t) => { T = t; },
       _setMode: (m) => { walkMode = m; },
       _startLoop: () => startWalkLoop(),
@@ -2827,6 +2858,296 @@
       _enter: () => enterWalkMode(),
       _exit: () => exitWalkMode(),
     };
+    /* ---------------- gardener character (v2.63.0) ---------------- */
+    // Third-person gardener: Quaternius Animated Human (CC0), warm clay tint
+    // + procedural straw hat on the Head bone. AnimationMixer state machine:
+    // Idle <-> Walk/Run crossfade, Jump + Working one-shots. The mannequin is
+    // a single untextured mesh, so painted textures aren't practical — the
+    // tint + hat are the whole costume.
+    let gardener = null; // { obj, mixer, actions, state, currentAction, parked, hatOk, workUntil }
+    let thirdPerson = true;
+    const GARDENER_HEIGHT = 5.5, THIRD_DIST = 11;
+
+    // Pure: pick animation clips by name fragment. Testable.
+    function matchGardenerClips(names) {
+      const lower = (names || []).map((n) => String(n).toLowerCase());
+      const find = (frag) => {
+        const i = lower.findIndex((n) => n.indexOf(frag) !== -1);
+        return i === -1 ? null : names[i];
+      };
+      return {
+        idle: find('idle'),
+        walk: find('|walk') || find('walk'),
+        run: find('|run') || find('run'),
+        jump: find('jump'),
+        working: find('working'),
+      };
+    }
+
+    // Pure: third-person camera position — orbit boom around the player.
+    // The camera sits behind (+facing) and above; mouse-up (pitch+) drops the
+    // camera so the view tilts up. Caller lookAts the player's head.
+    // yaw=0 faces -z; the camera sits at +z behind the player.
+    function thirdPersonBoom(yaw, pitch, px, py, pz, dist) {
+      const d = dist == null ? THIRD_DIST : dist;
+      const p = Math.max(-0.9, Math.min(0.9, pitch));
+      const cp = Math.cos(p);
+      return {
+        x: px + Math.sin(yaw) * cp * d,
+        y: Math.max(1.2, py + 2.2 - Math.sin(p) * d * 0.55),
+        z: pz + Math.cos(yaw) * cp * d,
+      };
+    }
+
+    // Pure: nearest container within maxDist ft of (x, z). Testable.
+    function nearestContainer(list, x, z, maxDist, colsN, rowsN) {
+      let best = null, bd = maxDist;
+      (list || []).forEach((c) => {
+        const w = c.grid_w || 1, h = c.grid_h || 1;
+        const cx = (c.grid_x || 0) + w / 2 - colsN / 2;
+        const cz = (c.grid_y || 0) + h / 2 - rowsN / 2;
+        const d = Math.hypot(cx - x, cz - z);
+        if (d < bd) { bd = d; best = c; }
+      });
+      return best;
+    }
+
+    async function ensureGardener() {
+      if (gardener) return gardener;
+      if (!T || !T.THREE) return null;
+      const THREE = T.THREE;
+      try { await preloadModels(THREE); } catch (e) { /* no gardener then */ }
+      const t = modelCache['quaternius_animated_human'];
+      if (!t || !t.obj) return null;
+      try {
+        const obj = t.obj; // single instance: use the cached object directly
+        obj.scale.setScalar(GARDENER_HEIGHT / (t.size.y || 1));
+        obj.traverse((o) => {
+          if (!o.isMesh) return;
+          o.material = Array.isArray(o.material) ? o.material.map((m) => m.clone()) : o.material.clone();
+          (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => {
+            if (m && m.color) m.color.set(0xc98a5e); // warm clay
+          });
+          o.castShadow = true;
+        });
+        // Straw hat on the Head bone — best effort, skipped silently on failure.
+        // NB: the armature carries a baked ~69x scale, so the hat is
+        // counter-scaled to stay in feet, and positioned in head-local units.
+        let hatOk = false;
+        try {
+          const head = obj.getObjectByName('Head');
+          if (head) {
+            obj.updateMatrixWorld(true);
+            const sVec = new THREE.Vector3();
+            head.getWorldScale(sVec);
+            const s = sVec.x || 1;
+            const headW = new THREE.Vector3();
+            head.getWorldPosition(headW);
+            // Crown = top of the bind-pose mesh (the Quaternius head is big;
+            // the Head bone sits well below the mesh top).
+            const bb = new THREE.Box3().setFromObject(obj);
+            const crownY = bb.max.y + 0.05;
+            const straw = new THREE.MeshStandardMaterial({ color: 0xd9b96a, roughness: 0.9 });
+            const hat = new THREE.Group();
+            const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.78, 0.07, 14), straw);
+            const top = new THREE.Mesh(new THREE.ConeGeometry(0.48, 0.5, 14), straw);
+            top.position.y = 0.28;
+            brim.castShadow = true; top.castShadow = true;
+            hat.add(brim, top);
+            hat.scale.setScalar(1 / s);
+            hat.position.set(0, (crownY - headW.y) / s, 0);
+            head.add(hat);
+            hatOk = true;
+          }
+        } catch (e) { /* decorative */ }
+        const mixer = new THREE.AnimationMixer(obj);
+        const picked = matchGardenerClips((t.anims || []).map((a) => a.name));
+        const actions = {};
+        Object.keys(picked).forEach((k) => {
+          const clip = (t.anims || []).find((a) => a.name === picked[k]);
+          if (clip) actions[k] = mixer.clipAction(clip);
+        });
+        gardener = { obj, mixer, actions, state: 'idle', currentAction: null, parked: null, hatOk, workUntil: 0 };
+        // Face away from the camera on spawn (model faces +Z at rotation 0).
+        try { obj.rotation.y = (walk.yaw || 0) + Math.PI; } catch (e) {}
+        T.scene.add(obj);
+        obj.visible = false;
+        return gardener;
+      } catch (e) { return null; }
+    }
+
+    function gardenerAnim(name) {
+      const g = gardener;
+      if (!g || !g.mixer || !g.actions[name] || g.state === name) return;
+      const next = g.actions[name];
+      const prev = g.currentAction;
+      g.state = name;
+      g.currentAction = next;
+      const once = (name === 'jump' || name === 'working');
+      next.setLoop(once ? T.THREE.LoopOnce : T.THREE.LoopRepeat, once ? 1 : Infinity);
+      next.clampWhenFinished = !!once;
+      next.reset();
+      if (prev && prev !== next) {
+        next.play();
+        try { prev.crossFadeTo(next, 0.22, false); } catch (e) { try { prev.stop(); } catch (e2) {} }
+        if (g.parked && g.parked !== next && g.parked !== prev) { try { g.parked.stop(); } catch (e) {} }
+        g.parked = prev;
+      } else {
+        next.play();
+      }
+    }
+
+    function toggleThirdPerson() {
+      thirdPerson = !thirdPerson;
+      if (gardener && gardener.obj) gardener.obj.visible = thirdPerson && walkMode;
+      toast(thirdPerson ? 'Third-person gardener (V for first-person).' : 'First-person (V for third-person).');
+    }
+
+    // Floating "+1 Tomato" text sprites. Rise + fade in the walk loop.
+    let floaters = [];
+    function spawnFloater(text, x, y, z, color) {
+      if (!T || !T.THREE || typeof document === 'undefined') return;
+      const THREE = T.THREE;
+      try {
+        const c = document.createElement('canvas'); c.width = 256; c.height = 72;
+        const g2 = c.getContext('2d');
+        g2.font = '600 34px system-ui, sans-serif';
+        g2.textAlign = 'center'; g2.textBaseline = 'middle';
+        g2.lineWidth = 6; g2.strokeStyle = 'rgba(20,30,20,0.85)';
+        g2.strokeText(text, 128, 36);
+        g2.fillStyle = color || '#fff';
+        g2.fillText(text, 128, 36);
+        const tex = new THREE.CanvasTexture(c); tex.encoding = THREE.sRGBEncoding;
+        const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+        sp.scale.set(2.2, 0.62, 1);
+        sp.position.set(x, y, z);
+        sp.renderOrder = 20;
+        T.scene.add(sp);
+        floaters.push({ sprite: sp, age: 0, life: 1.6 });
+      } catch (e) { /* decorative */ }
+    }
+    function updateFloaters(dt) {
+      if (!floaters.length || !T) return;
+      const alive = [];
+      for (const f of floaters) {
+        f.age += dt;
+        if (f.age >= f.life) {
+          T.scene.remove(f.sprite);
+          try { f.sprite.material.map.dispose(); f.sprite.material.dispose(); } catch (e) {}
+          continue;
+        }
+        const t = f.age / f.life;
+        f.sprite.position.y += dt * 1.1;
+        f.sprite.material.opacity = 1 - t * t;
+        alive.push(f);
+      }
+      floaters = alive;
+    }
+
+    // /api/today cache (5 min): care-due + harvest forecast for interact.
+    let todayCache = null;
+    async function ensureToday() {
+      const now = Date.now();
+      if (todayCache && now - todayCache.at < 5 * 60 * 1000) return todayCache.data;
+      try {
+        const data = await api.get('/api/today');
+        todayCache = { at: now, data: data || {} };
+      } catch (e) { todayCache = { at: now, data: {} }; }
+      return todayCache.data;
+    }
+
+    // F key: tend the aimed (or nearest) bed — water what's thirsty, harvest
+    // what's ready, via the real API. Plays the Working clip first.
+    async function interactAim() {
+      if (!walkMode || !walk || !walk.locked || buildTyping()) return;
+      let c = null;
+      const a = aimHit();
+      if (a && a.containerId != null) c = (containers || []).find((x) => x.id === a.containerId);
+      if (!c) c = nearestContainer(containers, walk.x, walk.z, 7, cols, rows);
+      if (!c) { toast('Aim at a bed — or stand next to one — and press F.'); return; }
+      const ps = plantingsFor(c.id);
+      if (!ps.length) { toast(`${c.name}: nothing planted here yet.`); return; }
+      const today = await ensureToday();
+      const dueIds = new Set(((today.due) || []).filter((r) => r.kind === 'water' && !r.rain_hold).map((r) => r.plant_id));
+      const readyIds = new Set(((today.harvest_forecast) || []).filter((f) => f.status === 'ready').map((f) => f.plant_id));
+      const thirsty = ps.filter((p) => dueIds.has(p.plant_id));
+      const ready = ps.filter((p) => readyIds.has(p.plant_id));
+      if (!thirsty.length && !ready.length) { toast(`${c.name}: nothing needed here. 🌱`); return; }
+      gardenerAnim('working');
+      if (gardener) gardener.workUntil = (typeof performance !== 'undefined' ? performance.now() : Date.now()) + 1400;
+      try { Sound.thunk(); } catch (e) {}
+      setTimeout(() => { tendContainer(c, thirsty, ready); }, 1450);
+    }
+
+    async function tendContainer(c, thirsty, ready) {
+      const iso = new Date().toISOString().slice(0, 10);
+      const w = c.grid_w || 1, h = c.grid_h || 1;
+      const cx = (c.grid_x || 0) + w / 2 - cols / 2;
+      const cz = (c.grid_y || 0) + h / 2 - rows / 2;
+      const topY = 1.2;
+      if (ready.length) {
+        for (const p of ready) {
+          try {
+            const label = (p && (p.variety_name || p.species_type)) || 'crop';
+            await api.post('/api/harvests/', { plant_id: p.plant_id, date: iso, quantity: 1, unit: 'fruit' });
+            spawnParticles(cx, topY, cz, [0x9bc53d, 0x7a8a5a, 0xe8c547]);
+            spawnFloater(`+1 ${label}`, cx, topY + 1.2, cz, '#ffe08a');
+            try { Sound.thunk(); } catch (e) {}
+          } catch (e) { /* per-plant failure shouldn't block the rest */ }
+        }
+        toast(`🧺 Harvested ${ready.length} from ${c.name}.`);
+        refreshScene3D();
+      } else if (thirsty.length) {
+        for (const p of thirsty) {
+          try {
+            await api.post('/api/watering-logs/', { plant_id: p.plant_id, date: iso, method: 'planner-3d' });
+          } catch (e) { /* per-plant failure shouldn't block the rest */ }
+        }
+        spawnParticles(cx, topY + 0.6, cz, [0x4aa8de, 0x7cc4f2, 0x2b6cb0, 0xbfe6ff]);
+        try { Sound.crunch(); } catch (e) {}
+        toast(`💧 Watered ${thirsty.length} planting${thirsty.length === 1 ? '' : 's'} in ${c.name}.`);
+        todayCache = null; // the bed's no longer thirsty — refetch next time
+      }
+    }
+
+    // Per-frame gardener update: animation state machine + third-person boom.
+    // Falls back to the plain first-person camera when the model failed to load.
+    function updateGardener(dt, now) {
+      const g = gardener;
+      if (!g || !g.obj || !T || !T.camera || !walk) {
+        if (T && T.camera && walk) T.camera.position.set(walk.x, EYE + (walk.y || 0), walk.z);
+        return;
+      }
+      const speed = Math.hypot(walk.vx || 0, walk.vz || 0);
+      const airborne = (walk.y || 0) > 0.02;
+      if (!(g.state === 'working' && now < g.workUntil)) {
+        if (airborne) gardenerAnim('jump');
+        else if (speed > 0.6) gardenerAnim((walk.keys && (walk.keys.ShiftLeft || walk.keys.ShiftRight) && g.actions.run) ? 'run' : 'walk');
+        else gardenerAnim('idle');
+      }
+      try { g.mixer.update(dt); } catch (e) {}
+      if (!thirdPerson) {
+        g.obj.visible = false;
+        T.camera.position.set(walk.x, EYE + (walk.y || 0), walk.z);
+        return;
+      }
+      g.obj.visible = true;
+      g.obj.position.set(walk.x, walk.y || 0, walk.z);
+      if (speed > 0.6) { // face the movement direction (model faces +Z)
+        const target = Math.atan2(walk.vx, walk.vz);
+        let d = target - g.obj.rotation.y;
+        while (d > Math.PI) d -= Math.PI * 2;
+        while (d < -Math.PI) d += Math.PI * 2;
+        g.obj.rotation.y += d * Math.min(1, dt * 10);
+      }
+      const e = new T.THREE.Euler().setFromQuaternion(T.camera.quaternion, 'YXZ');
+      // Third-person orbit: the mouse swings the camera around the player and
+      // the camera looks at the head, so the mouse still aims the view.
+      const boom = thirdPersonBoom(e.y, e.x, walk.x, walk.y || 0, walk.z);
+      T.camera.position.set(boom.x, boom.y, boom.z);
+      T.camera.lookAt(walk.x, (walk.y || 0) + 3.5, walk.z);
+    }
+
     /* -------------- end walk mode -------------- */
 
     /* ---------------- game feel: sounds + break particles ---------------- */
@@ -2880,16 +3201,17 @@
     // rAF loop (build mode is walk-only, so no orbit animation needed).
     let particles = [];
     const PARTICLE_COLORS = [0x8a6b46, 0x6e4f2e, 0x5cb85c, 0x9aa0a6, 0x2b6cb0];
-    function spawnParticles(x, y, z) {
+    function spawnParticles(x, y, z, colors) {
       if (!T || !T.THREE) return;
       const THREE = T.THREE;
+      const palette = colors || PARTICLE_COLORS;
       const rng = mulberry32((Date.now() & 0xffff) | 1);
       for (let i = 0; i < 12; i++) {
         const s = 0.1 + rng() * 0.12;
         const m = new THREE.Mesh(
           new THREE.BoxGeometry(s, s, s),
           new THREE.MeshBasicMaterial({
-            color: PARTICLE_COLORS[(rng() * PARTICLE_COLORS.length) | 0],
+            color: palette[(rng() * palette.length) | 0],
             transparent: true, opacity: 1,
           })
         );
@@ -3112,6 +3434,11 @@
       if (!buildRay) buildRay = new THREE.Raycaster();
       T.camera.updateMatrixWorld(); // aim exactly where the camera is now, not last frame's matrix
       buildRay.setFromCamera(new THREE.Vector2(0, 0), T.camera);
+      // Third person: aim from the gardener's head along the camera's view
+      // direction, so the crosshair aims past the player, not into their back.
+      if (thirdPerson && walk.x != null) {
+        buildRay.ray.origin.set(walk.x, (walk.y || 0) + 1.6, walk.z);
+      }
       const hits = buildRay.intersectObjects(T.group.children, true);
       for (const h of hits) {
         if (h.object.isSprite) continue; // labels float above; aim through them
