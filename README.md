@@ -278,10 +278,13 @@ bag. Drag containers and they snap to the grid (positions save automatically,
 and you can't drop one on top of another). A container holds **many plants**
 now — a bed lists everything in it — and the **🔁 rotation check** flags when
 you put the same plant family where it grew last season. Copy last season's
-layout into the new year and shuffle things around. Flip to the **3D view** to
-walk your plan — orbit around the yard and see the beds, bags, arches, and
-plants in space, which makes the layout click in a way a flat grid never does.
-Click any container in 3D to edit it. A slim **🌤️ weather ribbon** runs under
+layout into the new year and shuffle things around. Flip to the **3D view** and
+the yard renders as a little Minecraft world — pixel-textured grass blocks,
+plank-sided raised beds, terracotta pots, fabric grow bags, and cross-quad
+pixel plants (tomatoes even grow tiny red fruit). Hit **🚶 Walk** to drop to
+eye level and stroll between the beds with WASD + mouse (Shift to sprint);
+click a container while walking to edit it. Orbiting still works too, and
+everything renders on demand so it sips battery. A slim **🌤️ weather ribbon** runs under
 the site header on every page — current conditions, tonight's low, tomorrow's
 high, rain chance, and wind gusts. On the planner, **garden alerts** underneath
 it read your actual data: frost warnings that name your tender containers, heat
@@ -934,6 +937,14 @@ correct, and the container's clock/timezone matches yours — `DIGEST_TIME` is
 server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
+
+- **2.60.0** — **⛏️ The planner goes Minecraft.** The 3D view is now a voxel
+  world: 16×16 pixel textures with crisp NearestFilter rendering, grass-block
+  ground with dirt sides, plank-sided raised beds, terracotta pots, fabric
+  grow bags, a voxel trellis for arches, blocky clouds, and cross-quad pixel
+  plants per species (tomatoes grow tiny red fruit). Plus **🚶 Walk mode**:
+  first-person strolling with WASD + mouse, Shift to sprint, collision with
+  beds (but you can walk under arches), click-to-edit from the crosshair.
 
 - **2.59.4** — **🔑 Scoped API tokens.** Outside programs (like a local
   assistant on the same PC) can now use Verdant's API with a bearer token
