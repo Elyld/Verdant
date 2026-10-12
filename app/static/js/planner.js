@@ -5,7 +5,7 @@
 
   const { $, esc, api, toast } = globalThis.Verdant;
 
-  const KIND_ICON = { 'grow bag': '🛍️', 'raised bed': '🟫', 'pot': '🪴', 'planter': '🗄️', 'arch': '🌉', 'pallet': '🪵' };
+  const KIND_ICON = { 'grow bag': '🛍️', 'raised bed': '🟫', 'pot': '🪴', 'planter': '🗄️', 'arch': '🌉', 'pallet': '🪵', 'lamp': '💡', 'fence': '⛓️', 'bucket': '🪣', 'path': '🪨', 'rain barrel': '🛢️', 'compost bin': '🟤', 'hoop house': '🏠', 'fence gate': '🚪', 'bird bath': '🐦', 'fruit tree': '🌳', 'shed': '🏚️', 'pergola': '🏛️', 'stone edging': '🧱', 'sprinkler': '💦', 'drip line': '💧' };
   const KIND_TONE = {
     'grow bag': 'bg-sage-100 ring-sage-300',
     'raised bed': 'bg-amber-100 ring-amber-300',
@@ -13,9 +13,24 @@
     'planter': 'bg-orange-100 ring-orange-300',
     'arch': 'bg-navy-100 ring-navy-300',
     'pallet': 'bg-beige-200 ring-beige-400',
+    'lamp': 'bg-yellow-100 ring-yellow-300',
+    'fence': 'bg-stone-100 ring-stone-300',
+    'bucket': 'bg-sky-50 ring-sky-200',
+    'path': 'bg-stone-200 ring-stone-400',
+    'rain barrel': 'bg-sky-200 ring-sky-400',
+    'compost bin': 'bg-amber-200 ring-amber-400',
+    'hoop house': 'bg-slate-100 ring-slate-300',
+    'fence gate': 'bg-stone-100 ring-stone-400',
+    'bird bath': 'bg-cyan-100 ring-cyan-300',
+    'fruit tree': 'bg-green-100 ring-green-400',
+    'shed': 'bg-amber-200 ring-amber-500',
+    'pergola': 'bg-orange-100 ring-orange-300',
+    'stone edging': 'bg-stone-200 ring-stone-500',
+    'sprinkler': 'bg-sky-200 ring-sky-500',
+    'drip line': 'bg-slate-200 ring-slate-400',
   };
-  const FOOTPRINTS = { 'grow bag': [2, 2], 'raised bed': [4, 4], 'pot': [1, 1], 'planter': [3, 1], 'arch': [4, 4], 'pallet': [4, 3] };
-  const KIND_HEIGHT = { 'arch': 7 }; // default height in feet, used by the 3D view
+  const FOOTPRINTS = { 'grow bag': [2, 2], 'raised bed': [4, 4], 'pot': [1, 1], 'planter': [3, 1], 'arch': [4, 4], 'pallet': [4, 3], 'lamp': [1, 1], 'fence': [1, 1], 'bucket': [1, 1], 'path': [1, 1], 'rain barrel': [1, 1], 'compost bin': [1, 1], 'hoop house': [4, 8], 'fence gate': [1, 1], 'bird bath': [1, 1], 'fruit tree': [1, 1], 'shed': [4, 6], 'pergola': [2, 4], 'stone edging': [1, 1], 'sprinkler': [1, 1], 'drip line': [1, 1] };
+  const KIND_HEIGHT = { 'arch': 7, 'hoop house': 6 }; // default height in feet, used by the 3D view
 
   function initPlanner() {
     const canvas = $('#planner-canvas');
@@ -568,11 +583,14 @@
     const view2dBtn = $('#view-2d');
     const view3dBtn = $('#view-3d');
     const viewWalkBtn = $('#view-walk');
+    const dayNightBtn = $('#view-daynight');
+    const tapeBtn = $('#view-tape');
+    const soundBtn = $('#view-sound');
     const wrap3d = $('#planner-3d');
     const hint2d = $('#planner-2d-hint');
     const hint3d = $('#planner-3d-hint');
     const orbitHintText = 'Drag to orbit · scroll or pinch to zoom · right-drag to pan · click a container to edit it.';
-    const walkHintText = 'Click the garden to grab the mouse · WASD / arrows to walk · Shift to sprint · ESC to release · click a container to edit it.';
+    const walkHintText = 'Click to grab the mouse · WASD walk · Shift sprint · Left-click break · Right-click place · E edit · Q blocks/plants · 1-9/wheel pick · ESC release.';
 
     // crosshair shown in walk mode
     const crosshair = document.createElement('div');
@@ -610,212 +628,174 @@
       };
     }
 
-    /* ---------- pixel-art helpers ---------- */
+    // sRGB hex -> linear THREE.Color. Needed because the bloom composer chain
+    // renders in linear (r147 applies no output encoding to render targets)
+    // with a GammaCorrection pass at the end; plain hex Colors are authored
+    // as sRGB display values. (Color.convertSRGBToLinear() is a no-op while
+    // ColorManagement.legacyMode is true in r147, hence the manual pow.)
+    function srgbToLinear(THREE, hex) {
+      const c = new THREE.Color(hex);
+      c.r = Math.pow(c.r, 2.2); c.g = Math.pow(c.g, 2.2); c.b = Math.pow(c.b, 2.2);
+      return c;
+    }
+
+    /* ---------- soft miniature painters (64x64, LinearFilter) ---------- */
     function px(ctx, x, y, w, h, c) {
       ctx.fillStyle = c;
       ctx.fillRect(x | 0, y | 0, Math.ceil(w), Math.ceil(h));
     }
 
-    function noiseFill(ctx, S, rng, palette) {
-      for (let y = 0; y < S; y++) {
-        for (let x = 0; x < S; x++) {
-          px(ctx, x, y, 1, 1, palette[(rng() * palette.length) | 0]);
-        }
+    // soft mottled noise: translucent circles over a base coat
+    function softNoise(ctx, S, rng, palette, count, rMin, rMax) {
+      const n = count || Math.round((S * S) / 5);
+      for (let i = 0; i < n; i++) {
+        ctx.fillStyle = palette[(rng() * palette.length) | 0];
+        ctx.globalAlpha = 0.18 + rng() * 0.28;
+        ctx.beginPath();
+        ctx.arc(rng() * S, rng() * S, rMin + rng() * (rMax - rMin), 0, 6.2832);
+        ctx.fill();
       }
+      ctx.globalAlpha = 1;
     }
+    function baseCoat(ctx, S, c) { ctx.fillStyle = c; ctx.fillRect(0, 0, S, S); }
 
-    // 16x16 painters. Each takes (ctx, S, rng). Transparent pixels simply
-    // aren't painted (canvas starts clear).
-    function paintGrassTop(ctx, S, rng) {
-      noiseFill(ctx, S, rng, ['#6fbf5a', '#6fbf5a', '#65b551', '#7acc66', '#5da84b']);
-      // 1px darker seam = the 1-ft grid lines between blocks
-      px(ctx, 0, 0, S, 1, '#4f9440'); px(ctx, 0, S - 1, S, 1, '#4f9440');
-      px(ctx, 0, 0, 1, S, '#4f9440'); px(ctx, S - 1, 0, 1, S, '#4f9440');
+    // 64x64 soft painters. Each takes (ctx, S, rng).
+    function paintGrass(ctx, S, rng) {
+      baseCoat(ctx, S, '#4da53a');
+      softNoise(ctx, S, rng, ['#3f8f31', '#5fbf49', '#4aa839', '#6fd056', '#37902c'], 1100, 1, 4.5);
     }
-
-    function paintDirtSide(ctx, S, rng) {
-      noiseFill(ctx, S, rng, ['#8a5f3c', '#7d5535', '#96684a', '#755031']);
-      // green fringe along the top edge, ragged
-      for (let x = 0; x < S; x++) {
-        const d = 2 + ((rng() * 3) | 0);
-        for (let y = 0; y < d; y++) px(ctx, x, y, 1, 1, y === d - 1 && rng() < 0.5 ? '#5da84b' : '#6fbf5a');
-      }
+    function paintGroundSide(ctx, S, rng) {
+      // soft dark skirt under the platform
+      const g = ctx.createLinearGradient(0, 0, 0, S);
+      g.addColorStop(0, '#3f7a33'); g.addColorStop(1, '#26521f');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
+      softNoise(ctx, S, rng, ['#3c7030', '#548c40'], 260, 1, 5);
     }
-
-    function paintDirt(ctx, S, rng) {
-      noiseFill(ctx, S, rng, ['#8a5f3c', '#7d5535', '#96684a', '#755031', '#6e4a2e']);
-    }
-
-    function paintWoodPlanks(ctx, S, rng) {
-      px(ctx, 0, 0, S, S, '#a0824f');
-      for (let y = 0; y < S; y += 4) px(ctx, 0, y, S, 1, '#6e5636'); // plank seams
-      for (let i = 0; i < 26; i++) px(ctx, (rng() * S) | 0, (rng() * S) | 0, 1 + ((rng() * 2) | 0), 1, rng() < 0.5 ? '#8f7040' : '#b08d58');
-      if (rng() < 0.7) { // knot
-        const kx = 2 + ((rng() * (S - 4)) | 0), ky = 2 + ((rng() * (S - 4)) | 0);
-        px(ctx, kx, ky, 2, 2, '#5e482c');
-      }
-    }
-
-    function paintDarkWood(ctx, S, rng) {
-      noiseFill(ctx, S, rng, ['#6e5636', '#654e2f', '#78593a']);
-    }
-
     function paintSoil(ctx, S, rng) {
-      noiseFill(ctx, S, rng, ['#4a3520', '#42301c', '#54402a', '#3a2a18']);
-      for (let i = 0; i < 5; i++) px(ctx, (rng() * (S - 1)) | 0, (rng() * (S - 1)) | 0, 2, 1, '#6b5a3a'); // tiny stones
+      baseCoat(ctx, S, '#4a3524');
+      softNoise(ctx, S, rng, ['#332413', '#5c4227', '#6b4e2e', '#2b1e10', '#75562f'], 800, 1, 3.5);
     }
-
+    function paintWood(ctx, S, rng) {
+      baseCoat(ctx, S, '#8a5a2b');
+      // long soft grain streaks
+      for (let i = 0; i < 26; i++) {
+        ctx.strokeStyle = rng() < 0.5 ? '#5e3a17' : '#b07a3f';
+        ctx.globalAlpha = 0.42; ctx.lineWidth = 1 + rng() * 2.5;
+        const y = rng() * S;
+        ctx.beginPath(); ctx.moveTo(0, y);
+        ctx.bezierCurveTo(S * 0.3, y + (rng() - 0.5) * 8, S * 0.7, y + (rng() - 0.5) * 8, S, y);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      softNoise(ctx, S, rng, ['#754c1e', '#9c6b35'], 220, 1, 3);
+    }
+    function paintLightWood(ctx, S, rng) {
+      // lighter boards for raised-bed rims so the form reads
+      baseCoat(ctx, S, '#c49a63');
+      for (let i = 0; i < 16; i++) {
+        ctx.strokeStyle = rng() < 0.5 ? '#a87f4c' : '#d9b47e';
+        ctx.globalAlpha = 0.4; ctx.lineWidth = 1 + rng() * 2;
+        const y = rng() * S;
+        ctx.beginPath(); ctx.moveTo(0, y);
+        ctx.bezierCurveTo(S * 0.3, y + (rng() - 0.5) * 8, S * 0.7, y + (rng() - 0.5) * 8, S, y);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      softNoise(ctx, S, rng, ['#b0864f', '#d6ad77'], 200, 1, 3);
+    }
+    function paintDarkWood(ctx, S, rng) {
+      baseCoat(ctx, S, '#5f4626');
+      softNoise(ctx, S, rng, ['#4a3619', '#735631', '#3d2c14'], 550, 1, 3.5);
+    }
     function paintFabric(ctx, S, rng) {
-      for (let y = 0; y < S; y++) {
-        for (let x = 0; x < S; x++) {
-          px(ctx, x, y, 1, 1, ((x + y) % 2 === 0) ? '#3a3f44' : '#2f3338');
-        }
-      }
-      for (let i = 0; i < 12; i++) px(ctx, (rng() * S) | 0, (rng() * S) | 0, 1, 1, '#4a5058');
+      baseCoat(ctx, S, '#35393f');
+      softNoise(ctx, S, rng, ['#2b2e33', '#41464d', '#3d4248'], 600, 1, 2.5);
     }
-
     function paintTerracotta(ctx, S, rng) {
-      px(ctx, 0, 0, S, S, '#c1663e');
-      px(ctx, 0, 0, S, 3, '#a0522d'); // rim band
-      px(ctx, 0, 3, S, 1, '#8f4726');
-      for (let i = 0; i < 18; i++) px(ctx, (rng() * S) | 0, 4 + ((rng() * (S - 4)) | 0), 1, 1, rng() < 0.5 ? '#d4764c' : '#b25a36');
+      baseCoat(ctx, S, '#c96f3f');
+      const g = ctx.createLinearGradient(0, 0, 0, S);
+      g.addColorStop(0, 'rgba(255,255,255,0.10)'); g.addColorStop(1, 'rgba(0,0,0,0.14)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
+      softNoise(ctx, S, rng, ['#a8542c', '#e08450', '#96421f'], 480, 1, 3);
     }
-
-    function paintLeafBlob(ctx, S, rng) {
-      const greens = ['#3f8f37', '#4e9e3f', '#5cb85c', '#357a2e'];
-      for (let y = 2; y < S - 2; y++) {
-        for (let x = 2; x < S - 2; x++) {
-          const dx = (x - S / 2) / (S / 2), dy = (y - S / 2) / (S / 2);
-          if (dx * dx + dy * dy < 0.75 && rng() < 0.92) px(ctx, x, y, 1, 1, greens[(rng() * greens.length) | 0]);
-        }
+    function paintMetal(ctx, S, rng) {
+      baseCoat(ctx, S, '#6f767d');
+      softNoise(ctx, S, rng, ['#5d646b', '#82898f', '#52585f'], 520, 1, 3);
+    }
+    function paintWireMesh(ctx, S, rng) {
+      // transparent canvas; wire grid reads through alphaTest. Lines are bold
+      // enough to read as mesh from the orbit camera, not just up close.
+      ctx.strokeStyle = '#bcc4cd'; ctx.lineWidth = 3;
+      for (let i = 0; i <= S; i += 8) {
+        ctx.beginPath(); ctx.moveTo(i + 0.5, 0); ctx.lineTo(i + 0.5, S); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, i + 0.5); ctx.lineTo(S, i + 0.5); ctx.stroke();
       }
     }
-
-    // Pixel-sprite maps: one char per pixel, '.' = transparent.
-    const SPR_PALETTE = {
-      s: '#6e4f2e', g: '#3f8f37', G: '#5cb85c', r: '#d9402e', R: '#a82c1f',
-      o: '#e08a2e', y: '#f2d13d', p: '#e06ba8', w: '#fdfdfd',
-    };
-    const SPRITES = {
-      tomato: [
-        '................',
-        '.......gg.......',
-        '......gggg......',
-        '.......gg.......',
-        '.......ss.......',
-        '.....ggssgg.....',
-        '....gggssggg....',
-        '.....gsssgg.....',
-        '....ggssrrgg....',
-        '.....gssRRg.....',
-        '....gggssggg....',
-        '.....gggssg.....',
-        '....ggrrsgg.....',
-        '.....grrRg......',
-        '......ggg.......',
-        '.......s........',
-      ],
-      pepper: [
-        '................',
-        '.....gggg.......',
-        '....gggggg......',
-        '...gggggggg.....',
-        '...gggggggg.....',
-        '....gggggg......',
-        '.....gggg.......',
-        '....gggggg......',
-        '...gggooogg.....',
-        '...gggooogg.....',
-        '....ggoooog.....',
-        '.....gooo.......',
-        '......gg........',
-        '......gg........',
-        '................',
-        '................',
-      ],
-      leafy: [
-        '................',
-        '................',
-        '.....GGGG.......',
-        '....GGGGGG......',
-        '...GGgGGgGG.....',
-        '...GgGGGGgG.....',
-        '....GGGGGG......',
-        '...GGGGGGGG.....',
-        '....gGGGGg......',
-        '.....GGGG.......',
-        '......gg........',
-        '................',
-        '................',
-        '................',
-        '................',
-        '................',
-      ],
-      vine: [
-        '................',
-        'gg..............',
-        '.ggg............',
-        '..gggg..........',
-        '...ggggg........',
-        '....gggygg......',
-        '.....gggyy......',
-        '......ggg.......',
-        '.......ggg......',
-        '........ggg.....',
-        '.........gggy...',
-        '..........ggy...',
-        '...........gg...',
-        '............g...',
-        '................',
-        '................',
-      ],
-      flower: [
-        '................',
-        '......pppp......',
-        '.....pppppp.....',
-        '.....pyyypp.....',
-        '.....pppppp.....',
-        '......pppp......',
-        '.......ss.......',
-        '....g..ss.......',
-        '.....g.ss.......',
-        '......ssg.......',
-        '......ss........',
-        '......ss........',
-        '................',
-        '................',
-        '................',
-        '................',
-      ],
-      generic: [
-        '................',
-        '................',
-        '................',
-        '................',
-        '......gg........',
-        '.....gggg.......',
-        '......gg........',
-        '.......ss.......',
-        '...g...ss.......',
-        '....g..ss..g....',
-        '.....g.ss.g.....',
-        '.......ss.......',
-        '.......ss.......',
-        '................',
-        '................',
-        '................',
-      ],
-    };
-
-    function paintSprite(ctx, name) {
-      const map = SPRITES[name] || SPRITES.generic;
-      for (let y = 0; y < map.length; y++) {
-        const row = map[y];
-        for (let x = 0; x < row.length; x++) {
-          const c = SPR_PALETTE[row[x]];
-          if (c) px(ctx, x, y, 1, 1, c);
-        }
+    function paintBucket(ctx, S, rng) {
+      baseCoat(ctx, S, '#e8ecef');
+      const g = ctx.createLinearGradient(0, 0, S, 0);
+      g.addColorStop(0, 'rgba(0,0,0,0.10)'); g.addColorStop(0.25, 'rgba(255,255,255,0.12)');
+      g.addColorStop(0.6, 'rgba(0,0,0,0.04)'); g.addColorStop(1, 'rgba(0,0,0,0.12)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
+      softNoise(ctx, S, rng, ['#dfe5ea', '#f2f5f7'], 200, 1, 3);
+    }
+    function paintStone(ctx, S, rng) {
+      baseCoat(ctx, S, '#8f959b');
+      softNoise(ctx, S, rng, ['#787e85', '#a3a9af', '#6b7177', '#b9bfc5'], 700, 1, 3.5);
+    }
+    function paintBarrel(ctx, S, rng) {
+      baseCoat(ctx, S, '#2f7cd4');
+      const g = ctx.createLinearGradient(0, 0, S, 0);
+      g.addColorStop(0, 'rgba(0,0,0,0.18)'); g.addColorStop(0.3, 'rgba(255,255,255,0.14)');
+      g.addColorStop(1, 'rgba(0,0,0,0.16)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
+      softNoise(ctx, S, rng, ['#2568b8', '#4a94e0', '#1f5aa8'], 320, 1, 3);
+    }
+    function paintCompost(ctx, S, rng) {
+      baseCoat(ctx, S, '#3a2d20');
+      softNoise(ctx, S, rng, ['#2f2417', '#4d3a26', '#443423'], 550, 1, 3.5);
+    }
+    function paintHoopPlastic(ctx, S, rng) {
+      baseCoat(ctx, S, '#eef2f4');
+      softNoise(ctx, S, rng, ['#e2e9ed', '#f7fafb'], 260, 2, 6);
+    }
+    function paintBasin(ctx, S, rng) {
+      baseCoat(ctx, S, '#b9bdc2');
+      softNoise(ctx, S, rng, ['#a9aeb4', '#c6cbd0', '#9fa5ab'], 550, 1, 3.5);
+    }
+    function paintLeaf(ctx, S, rng) {
+      baseCoat(ctx, S, '#43a53b');
+      softNoise(ctx, S, rng, ['#359231', '#55c04d', '#2c7a28', '#63d155', '#277a24'], 750, 1, 4);
+    }
+    function paintGrassTuft(ctx, S, rng) {
+      // soft meadow blades on transparency
+      const greens = ['#43a53b', '#55c04d', '#359231', '#6fd056', '#2c7a28'];
+      ctx.lineCap = 'round';
+      for (let i = 0; i < 22; i++) {
+        ctx.strokeStyle = greens[(rng() * greens.length) | 0];
+        ctx.lineWidth = 2 + rng() * 2;
+        const x = 4 + rng() * (S - 8), h = S * (0.45 + rng() * 0.45);
+        const lean = (rng() - 0.5) * 14;
+        ctx.beginPath(); ctx.moveTo(x, S);
+        ctx.quadraticCurveTo(x + lean * 0.4, S - h * 0.6, x + lean, S - h); ctx.stroke();
       }
+    }
+    function paintWildflower(ctx, S, rng, colorIdx) {
+      const heads = ['#e5321e', '#ffc21f', '#ffffff'];
+      const head = heads[colorIdx == null ? (rng() * 3) | 0 : colorIdx % 3];
+      ctx.strokeStyle = '#3f8f37'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(S / 2, S);
+      ctx.quadraticCurveTo(S / 2 - 4, S * 0.55, S / 2, S * 0.3); ctx.stroke();
+      ctx.fillStyle = '#4e9e3f';
+      ctx.beginPath(); ctx.ellipse(S / 2 - 8, S * 0.62, 7, 3.5, -0.5, 0, 6.2832); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(S / 2 + 8, S * 0.72, 7, 3.5, 0.5, 0, 6.2832); ctx.fill();
+      const hx = S / 2, hy = S * 0.22, hr = S * 0.13;
+      const g = ctx.createRadialGradient(hx - 2, hy - 2, 1, hx, hy, hr);
+      g.addColorStop(0, '#ffffff'); g.addColorStop(0.25, head); g.addColorStop(1, head);
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(hx, hy, hr, 0, 6.2832); ctx.fill();
+      ctx.fillStyle = '#ffdf5e';
+      ctx.beginPath(); ctx.arc(hx, hy, hr * 0.4, 0, 6.2832); ctx.fill();
     }
 
     function plantArchetype(species) {
@@ -834,8 +814,8 @@
       const ctx = cv.getContext('2d');
       painter(ctx, size, mulberry32(seed || 1));
       const tex = new THREE.CanvasTexture(cv);
-      tex.magFilter = THREE.NearestFilter;
-      tex.minFilter = THREE.NearestMipmapLinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      tex.minFilter = THREE.LinearMipmapLinearFilter;
       tex.generateMipmaps = true;
       tex.encoding = THREE.sRGBEncoding;
       if (repeat) {
@@ -846,7 +826,7 @@
     }
 
     function pixMaterial(THREE, tex, opts) {
-      return new THREE.MeshStandardMaterial(Object.assign({ map: tex, roughness: 1, metalness: 0 }, opts || {}));
+      return new THREE.MeshStandardMaterial(Object.assign({ map: tex, roughness: 0.9, metalness: 0 }, opts || {}));
     }
 
     async function ensureThree() {
@@ -857,6 +837,18 @@
       await loadScript(`${CDN}/examples/js/controls/OrbitControls.js`);
       const THREE = globalThis.THREE;
       if (!THREE || !THREE.OrbitControls) throw new Error('3d unavailable');
+      // Bloom post-processing is a nice-to-have: if any pass fails to load,
+      // the plain renderer path keeps working untouched.
+      try {
+        await loadScript(`${CDN}/examples/js/shaders/CopyShader.js`);
+        await loadScript(`${CDN}/examples/js/shaders/LuminosityHighPassShader.js`);
+        await loadScript(`${CDN}/examples/js/shaders/GammaCorrectionShader.js`);
+        await loadScript(`${CDN}/examples/js/postprocessing/EffectComposer.js`);
+        await loadScript(`${CDN}/examples/js/postprocessing/RenderPass.js`);
+        await loadScript(`${CDN}/examples/js/postprocessing/ShaderPass.js`);
+        await loadScript(`${CDN}/examples/js/postprocessing/MaskPass.js`);
+        await loadScript(`${CDN}/examples/js/postprocessing/UnrealBloomPass.js`);
+      } catch (err) { /* bloom unavailable; renderer-only fallback below */ }
 
       const renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setPixelRatio(Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, 2));
@@ -866,9 +858,41 @@
       wrap3d.appendChild(renderer.domElement);
 
       const scene = new THREE.Scene();
-      const SKY = 0x77a4ff; // minecraft-ish sky blue
-      scene.background = new THREE.Color(SKY);
-      scene.fog = new THREE.Fog(SKY, 80, 200);
+      // Gradient sky dome (big inverted sphere, BackSide shader): horizon ->
+      // zenith blend driven by uniforms so the day/night toggle can lerp them.
+      // Fog color tracks the horizon for a seamless ground fade.
+      // NOTE: the composer chain renders in linear (r147 applies no output
+      // encoding to render targets), with a GammaCorrection pass at the end.
+      // Plain THREE.Color hexes are sRGB display values — srgbToLinear (defined
+      // next to mulberry32) converts them; without it the sky washes out.
+      // Palette comes from skyColors() (single source of truth); applyDayNight
+      // re-derives these on toggle.
+      const SKY0 = skyColors(false);
+      const skyDomeMat = new THREE.ShaderMaterial({
+        side: THREE.BackSide, depthWrite: false, fog: false,
+        uniforms: {
+          topColor: { value: srgbToLinear(THREE, SKY0.top) },
+          horizonColor: { value: srgbToLinear(THREE, SKY0.horizon) },
+        },
+        vertexShader: 'varying vec3 vP; void main() { vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader: [
+          'uniform vec3 topColor; uniform vec3 horizonColor; varying vec3 vP;',
+          'void main() {',
+          '  float h = normalize(vP).y;',
+          // ease-out curve: rich zenith color reaches down into the low sky
+          // angles a typical orbit view actually shows (a plain pow() leaves
+          // everything near the pale horizon color).
+          '  float t = 1.0 - pow(1.0 - max(h, 0.0), 3.0);',
+          '  vec3 c = mix(horizonColor, topColor, t);',
+          '  if (h < 0.0) c = mix(horizonColor, horizonColor * 0.45, min(-h * 3.0, 1.0));',
+          '  gl_FragColor = vec4(c, 1.0);',
+          '}',
+        ].join('\n'),
+      });
+      const skyDome = new THREE.Mesh(new THREE.SphereGeometry(420, 24, 16), skyDomeMat);
+      skyDome.userData.noShadow = true;
+      scene.add(skyDome);
+      scene.fog = new THREE.Fog(SKY0.horizon, 80, 200);
 
       const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 600);
       const controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -881,13 +905,58 @@
       controls.maxDistance = 130;
       controls.addEventListener('change', () => render3D());
 
-      scene.add(new THREE.HemisphereLight(0xbdd8ff, 0x8a9a6a, 0.85));
-      const sun = new THREE.DirectionalLight(0xfff3d6, 0.95);
+      scene.add(new THREE.HemisphereLight(0xaed0ff, 0x9aa050, 1.0)); // lively sky/ground bounce
+      const hemi = scene.children[scene.children.length - 1];
+      const sun = new THREE.DirectionalLight(0xffe3ae, 1.1); // warm, stronger key
       sun.castShadow = true;
       sun.shadow.mapSize.set(2048, 2048);
       sun.shadow.camera.near = 1;
       sun.shadow.camera.far = 140;
       scene.add(sun);
+
+      // Prominent blocky sky: square sun + glow, square moon, starfield.
+      // Sprites always face the camera, so the square sun reads correctly
+      // from orbit and first person alike. Day/night toggles visibility.
+      function skySprite(core, glow, corePx, size) {
+        const cv = document.createElement('canvas');
+        cv.width = cv.height = 128;
+        const cx = cv.getContext('2d');
+        const grd = cx.createRadialGradient(64, 64, 8, 64, 64, 64);
+        grd.addColorStop(0, glow);
+        grd.addColorStop(1, 'rgba(0,0,0,0)');
+        cx.fillStyle = grd;
+        cx.fillRect(0, 0, 128, 128);
+        cx.fillStyle = core;
+        cx.beginPath(); cx.arc(64, 64, corePx / 2, 0, 6.2832); cx.fill();
+        const tex = new THREE.CanvasTexture(cv);
+        tex.encoding = THREE.sRGBEncoding;
+        const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false }));
+        sp.scale.set(size, size, 1);
+        return sp;
+      }
+      const sunSprite = skySprite('#ffdf5e', 'rgba(255,220,120,0.4)', 34, 42);
+      sunSprite.position.set(-130, 62, -190);
+      const moonSprite = skySprite('#e8ecf5', 'rgba(200,215,245,0.35)', 26, 55);
+      moonSprite.position.set(140, 60, -190);
+      moonSprite.visible = false;
+      scene.add(sunSprite);
+      scene.add(moonSprite);
+      const starGeo = new THREE.BufferGeometry();
+      const starPos = new Float32Array(360 * 3);
+      {
+        const sr = mulberry32(777);
+        for (let i = 0; i < 360; i++) {
+          const th = sr() * Math.PI * 2, ph = sr() * Math.PI * 0.48;
+          const R = 300;
+          starPos[i * 3] = R * Math.sin(ph) * Math.cos(th);
+          starPos[i * 3 + 1] = R * Math.cos(ph) + 10;
+          starPos[i * 3 + 2] = R * Math.sin(ph) * Math.sin(th);
+        }
+      }
+      starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+      const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, fog: false }));
+      stars.visible = false;
+      scene.add(stars);
 
       // click (not drag) a container to edit it — skipped in walk mode,
       // which raycasts from the crosshair instead.
@@ -913,20 +982,48 @@
         ptr.y = -((e.clientY - r.top) / r.height) * 2 + 1;
         ray.setFromCamera(ptr, camera);
         const hits = T.group ? ray.intersectObjects(T.group.children, true) : [];
+        if (tapeMode) {
+          // measuring tape: first ground hit wins
+          for (const h of hits) {
+            let o = h.object, ground = false;
+            while (o) { if (o.userData && o.userData.isGround) { ground = true; break; } o = o.parent; }
+            if (ground) { tapeClick(h.point.x, h.point.z); break; }
+          }
+          return;
+        }
         for (const h of hits) { if (openFromHit(h)) break; }
       });
-      // walk-mode click (pointer locked): raycast from screen center
+      // walk-mode clicks (pointer locked): raycast from screen center.
+      // Left = break, right = place (build mode). E edits the aimed container.
       renderer.domElement.addEventListener('click', () => {
         if (walkMode && walk && !walk.locked) { try { walk.plc.lock(); } catch (err) { /* noop */ } }
       });
-      renderer.domElement.addEventListener('click', () => {
+      renderer.domElement.addEventListener('mousedown', (e) => {
         if (!(walkMode && walk && walk.locked)) return;
-        ray.setFromCamera(new THREE.Vector2(0, 0), camera);
-        const hits = T.group ? ray.intersectObjects(T.group.children, true) : [];
-        for (const h of hits) { if (openFromHit(h)) break; }
+        if (e.button === 0) breakAim();
+        else if (e.button === 2) placeAim();
       });
 
-      T = { THREE, renderer, scene, camera, controls, sun, group: null, TEX: null };
+      // Bloom composer (half-res internally): sun, lamp heads, fireflies and
+      // bright sky bloom; everything else stays crisp. Falls back to the
+      // plain renderer when any pass is missing.
+      let composer = null;
+      try {
+        if (THREE.EffectComposer && THREE.RenderPass && THREE.UnrealBloomPass && THREE.GammaCorrectionShader) {
+          composer = new THREE.EffectComposer(renderer);
+          composer.setPixelRatio(Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, 2));
+          composer.addPass(new THREE.RenderPass(scene, camera));
+          const bw = wrap3d.clientWidth || 800, bh = Math.max(420, Math.round(bw * rows / cols));
+          composer.addPass(new THREE.UnrealBloomPass(new THREE.Vector2(bw / 2, bh / 2), 0.5, 0.35, 0.95));
+          // r147 has no OutputPass: GammaCorrection restores the sRGB look
+          // the plain renderer gets from outputEncoding.
+          composer.addPass(new THREE.ShaderPass(THREE.GammaCorrectionShader));
+          composer.setSize(bw, bh);
+        }
+      } catch (err) { composer = null; }
+
+      T = { THREE, renderer, scene, camera, controls, sun, composer, group: null, TEX: null,
+        sky: { sunSprite, moonSprite, stars, hemi, dome: skyDome }, clouds: [], lamps: [], lampLights: [] };
       wrap3d._three = T; // handle for tests / debugging
       sizeThree();
       return T;
@@ -937,6 +1034,7 @@
       const w = wrap3d.clientWidth || 800;
       const h = Math.max(420, Math.round(w * rows / cols));
       T.renderer.setSize(w, h);
+      if (T.composer) T.composer.setSize(w, h);
       T.camera.aspect = w / h;
       T.camera.updateProjectionMatrix();
       render3D();
@@ -956,26 +1054,40 @@
 
     // Build (and cache on T) the shared pixel textures for one scene build.
     function buildTextures(THREE) {
+      const S = 64; // soft miniature textures
       const TEX = {};
-      TEX.grass = makePixTexture(THREE, 16, paintGrassTop, 11, [cols + 8, rows + 8]);
-      TEX.dirtSideX = makePixTexture(THREE, 16, paintDirtSide, 12, [rows + 8, 1]);
-      TEX.dirtSideZ = makePixTexture(THREE, 16, paintDirtSide, 13, [cols + 8, 1]);
-      TEX.dirt = makePixTexture(THREE, 16, paintDirt, 14);
-      TEX.wood = makePixTexture(THREE, 16, paintWoodPlanks, 15);
-      TEX.darkWood = makePixTexture(THREE, 16, paintDarkWood, 16);
-      TEX.soil = makePixTexture(THREE, 16, paintSoil, 17);
-      TEX.fabric = makePixTexture(THREE, 16, paintFabric, 18);
-      TEX.terracotta = makePixTexture(THREE, 16, paintTerracotta, 19);
-      TEX.leafBlob = makePixTexture(THREE, 16, paintLeafBlob, 20);
-      TEX.plants = {};
-      Object.keys(SPRITES).forEach((name) => {
-        TEX.plants[name] = makePixTexture(THREE, 16, (ctx) => paintSprite(ctx, name), 21);
-      });
+      TEX.grass = makePixTexture(THREE, S, paintGrass, 11, [cols + 8, rows + 8]);
+      TEX.groundSide = makePixTexture(THREE, S, paintGroundSide, 12);
+      TEX.soil = makePixTexture(THREE, S, paintSoil, 17);
+      TEX.wood = makePixTexture(THREE, S, paintWood, 15);
+      TEX.darkWood = makePixTexture(THREE, S, paintDarkWood, 16);
+      TEX.lightWood = makePixTexture(THREE, S, paintLightWood, 161);
+      TEX.fabric = makePixTexture(THREE, S, paintFabric, 18);
+      TEX.terracotta = makePixTexture(THREE, S, paintTerracotta, 19);
+      TEX.metal = makePixTexture(THREE, S, paintMetal, 22);
+      TEX.wireMesh = makePixTexture(THREE, S, paintWireMesh, 23, [1, 1]); // [1,1] enables RepeatWrapping for UV tiling
+      TEX.bucket = makePixTexture(THREE, S, paintBucket, 24);
+      TEX.stone = makePixTexture(THREE, S, paintStone, 25);
+      TEX.barrel = makePixTexture(THREE, S, paintBarrel, 26);
+      TEX.compost = makePixTexture(THREE, S, paintCompost, 27);
+      TEX.hoopPlastic = makePixTexture(THREE, S, paintHoopPlastic, 28);
+      TEX.basin = makePixTexture(THREE, S, paintBasin, 29);
+      TEX.leaf = makePixTexture(THREE, S, paintLeaf, 30);
+      TEX.grassTuft = makePixTexture(THREE, S, paintGrassTuft, 31);
+      TEX.flowerRed = makePixTexture(THREE, S, (ctx, Sd) => paintWildflower(ctx, Sd, mulberry32(101), 0), 32);
+      TEX.flowerYellow = makePixTexture(THREE, S, (ctx, Sd) => paintWildflower(ctx, Sd, mulberry32(102), 1), 33);
+      TEX.flowerWhite = makePixTexture(THREE, S, (ctx, Sd) => paintWildflower(ctx, Sd, mulberry32(103), 2), 34);
       return TEX;
     }
 
     function box(THREE, w, h, d, mat) {
       return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    }
+    function ball(THREE, r, mat, detail) {
+      return new THREE.Mesh(new THREE.IcosahedronGeometry(r, detail == null ? 1 : detail), mat);
+    }
+    function cyl(THREE, rt, rb, h, mat, seg) {
+      return new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg || 20), mat);
     }
 
     function buildVessel(THREE, g, w, h, kind, TEX) {
@@ -988,37 +1100,46 @@
       const darkWoodMat = pixMaterial(THREE, TEX.darkWood);
       const soilMat = pixMaterial(THREE, TEX.soil);
       if (kind === 'pot') {
-        // terracotta block pot
+        // smooth tapered terracotta pot + rim + soil
         const s = Math.max(0.6, Math.min(w, h) * 0.7);
-        const body = box(THREE, s, bodyH, s, pixMaterial(THREE, TEX.terracotta));
+        const body = cyl(THREE, s * 0.52, s * 0.4, bodyH, pixMaterial(THREE, TEX.terracotta));
         body.position.y = bodyH / 2;
         g.add(body);
-        const soil = box(THREE, s - 0.18, 0.1, s - 0.18, soilMat);
-        soil.position.y = bodyH - 0.04;
+        const rimMat = new THREE.MeshStandardMaterial({ color: 0xd98a5a, roughness: 0.85, metalness: 0 });
+        const rim = cyl(THREE, s * 0.58, s * 0.56, 0.18, rimMat);
+        rim.position.y = bodyH - 0.09;
+        g.add(rim);
+        const soil = cyl(THREE, s * 0.46, s * 0.46, 0.08, soilMat, 16);
+        soil.position.y = bodyH - 0.1;
         soil.receiveShadow = true;
         g.add(soil);
       } else if (kind === 'grow bag') {
+        // soft fabric form with a folded cuff
         const body = box(THREE, w * 0.94, bodyH, h * 0.94, pixMaterial(THREE, TEX.fabric));
         body.position.y = bodyH / 2;
         g.add(body);
-        const soil = box(THREE, w * 0.94 - 0.18, 0.1, h * 0.94 - 0.18, soilMat);
-        soil.position.y = bodyH - 0.04;
+        const cuff = box(THREE, w * 0.94 + 0.06, 0.16, h * 0.94 + 0.06, pixMaterial(THREE, TEX.fabric));
+        cuff.position.y = bodyH - 0.08;
+        g.add(cuff);
+        const soil = box(THREE, w * 0.94 - 0.2, 0.1, h * 0.94 - 0.2, soilMat);
+        soil.position.y = bodyH - 0.12;
         soil.receiveShadow = true;
         g.add(soil);
       } else {
-        // wooden box + rim boards + soil inset
+        // wooden box + rim boards + soil inset, soft grain
         const bw = w * 0.98, bd = h * 0.98;
         const body = box(THREE, bw, bodyH, bd, woodMat);
         body.position.y = bodyH / 2;
         g.add(body);
-        const rimH = 0.12, rimT = 0.16;
+        const rimMat = pixMaterial(THREE, TEX.lightWood); // lighter rim so the form reads
+        const rimH = 0.14, rimT = 0.18;
         [[0, 1, bw + 0.1, rimT], [0, -1, bw + 0.1, rimT]].forEach(([x, s, rw, rd]) => {
-          const rim = box(THREE, rw, rimH, rd, darkWoodMat);
+          const rim = box(THREE, rw, rimH, rd, rimMat);
           rim.position.set(x, bodyH - rimH / 2 + 0.02, s * (bd / 2 - rimT / 2 + 0.04));
           g.add(rim);
         });
         [[1, 0], [-1, 0]].forEach(([s]) => {
-          const rim = box(THREE, rimT, rimH, bd + 0.1, darkWoodMat);
+          const rim = box(THREE, rimT, rimH, bd + 0.1, rimMat);
           rim.position.set(s * (bw / 2 - rimT / 2 + 0.04), bodyH - rimH / 2 + 0.02, 0);
           g.add(rim);
         });
@@ -1047,67 +1168,582 @@
       g.userData.topY = 0.42;
     }
 
-    function buildArch(THREE, g, w, h, height, TEX) {
-      // voxel trellis: chunky posts + crossbars + climbing vine blobs
-      const span = Math.min(w, h);
-      const len = Math.max(w, h);
-      const a = Math.max(0.75, span / 2);
-      const hh = Math.max(1.5, height || 4);
-      const postMat = pixMaterial(THREE, TEX.darkWood);
-      const off = a * 0.92, along = len / 2 - 0.35;
-      const corners = w > h
-        ? [[-along, -off], [-along, off], [along, -off], [along, off]]
-        : [[-off, -along], [off, -along], [-off, along], [off, along]];
-      const postGeo = new THREE.BoxGeometry(0.24, hh, 0.24);
-      corners.forEach(([fx, fz]) => {
-        const f = new THREE.Mesh(postGeo, postMat);
-        f.position.set(fx, hh / 2, fz);
-        g.add(f);
-      });
-      // crossbars across the span at three heights (span runs along X when
-      // w<=h, along Z when w>h)
-      [0.35, 0.65, 0.95].forEach((t) => {
-        const bar = box(THREE, a * 2 + 0.24, 0.16, 0.16, postMat);
-        bar.position.set(0, hh * t, 0);
-        if (w > h) bar.rotation.y = Math.PI / 2;
-        g.add(bar);
-      });
-      // vine leaf blobs climbing the posts (seeded = stable)
-      const rng = mulberry32((w * 131 + h * 17 + ((g.userData.containerId || 0) * 7)) | 0);
-      const leafMat = pixMaterial(THREE, TEX.leafBlob);
-      const blobGeo = new THREE.BoxGeometry(0.3, 0.3, 0.3);
-      corners.forEach(([fx, fz]) => {
-        const n = 3 + ((rng() * 3) | 0);
-        for (let i = 0; i < n; i++) {
-          const b = new THREE.Mesh(blobGeo, leafMat);
-          b.position.set(fx + (rng() - 0.5) * 0.5, 0.4 + rng() * (hh - 0.8), fz + (rng() - 0.5) * 0.5);
-          b.userData.noShadow = true;
-          g.add(b);
-        }
-      });
-      g.userData.topY = hh;
+    // ---- arch geometry (pure helpers; also exposed to tests) ----
+    function archArcPoint(span, height, t) {
+      // t in [0,1] along a half-ellipse from one ground foot to the other
+      const th = Math.PI * t;
+      return { x: (span / 2) * Math.cos(th), y: height * Math.sin(th) };
+    }
+    function archRibCount(len) {
+      return Math.max(5, Math.min(7, Math.round(len * 1.25)));
     }
 
-    function buildPlantVoxel(THREE, g, px, pz, baseY, species, seed, TEX, big) {
-      // Minecraft cross-quad: two intersecting pixel-art planes.
-      const arch = plantArchetype(species);
-      const mat = new THREE.MeshStandardMaterial({
-        map: TEX.plants[arch], alphaTest: 0.5, side: THREE.DoubleSide, roughness: 1, metalness: 0,
+    function buildArch(THREE, g, w, h, height, TEX, opts) {
+      // Soft garden archway: smooth half-ellipse tube ribs + fine wire mesh
+      // (or translucent plastic for the hoop-house variant). Vines are soft
+      // leaf blobs hugging the ribs. Walk-under-able: no collision.
+      opts = opts || {};
+      const span = Math.min(w, h);
+      const len = Math.max(w, h);
+      const H = Math.max(1.5, height || 7);
+      const spanAlongX = w <= h; // rib arcs live in the X-Y plane when the footprint is taller than wide
+      const metalMat = new THREE.MeshStandardMaterial({
+        // flat galvanized gray — no dark map, low metalness (no envmap in the
+        // scene, so high metalness would render near-black)
+        color: 0x9aa3a8, roughness: 0.5, metalness: 0.25,
       });
-      const H = big ? 2.0 : 1.3;
-      const geo = new THREE.PlaneGeometry(1, H);
-      const grp = new THREE.Group();
-      const p1 = new THREE.Mesh(geo, mat);
-      const p2 = new THREE.Mesh(geo, mat);
-      p2.rotation.y = Math.PI / 2;
-      p1.userData.noShadow = true;
-      p2.userData.noShadow = true;
-      grp.add(p1, p2);
+      const leafMat = new THREE.MeshStandardMaterial({ color: 0x43a53b, roughness: 0.9, metalness: 0 });
+      const meshMat = opts.plastic
+        ? new THREE.MeshStandardMaterial({
+            map: TEX.hoopPlastic, transparent: true, opacity: 0.42, side: THREE.DoubleSide,
+            roughness: 0.35, metalness: 0, depthWrite: false,
+          })
+        : new THREE.MeshStandardMaterial({
+            map: TEX.wireMesh, alphaTest: 0.4, side: THREE.DoubleSide,
+            roughness: 0.5, metalness: 0.15,
+          });
+
+      // Ribs: smooth half-ellipse tubes (torus arc scaled to the crown height).
+      const R = span / 2;
+      const nRibs = archRibCount(len);
+      const ribOff = (r) => (nRibs === 1 ? 0 : -len / 2 + (r / (nRibs - 1)) * len);
+      for (let r = 0; r < nRibs; r++) {
+        const off = ribOff(r);
+        const rib = new THREE.Mesh(new THREE.TorusGeometry(R, 0.13, 12, 40, Math.PI), metalMat);
+        rib.scale.y = H / R; // circle -> half-ellipse with crown H
+        if (spanAlongX) rib.position.set(0, 0, off);
+        else { rib.rotation.y = Math.PI / 2; rib.position.set(off, 0, 0); }
+        g.add(rib);
+      }
+
+      // Wire-mesh / plastic skin: one curved ribbon surface spanning the tunnel.
+      const M = 28;
+      const pos = [], uv = [], idx = [];
+      const uRep = Math.max(1, Math.round(len / 0.75));
+      const vRep = Math.max(2, Math.round((Math.PI * (span / 2 + H)) / 2 / 0.75));
+      for (let j = 0; j <= M; j++) {
+        const p = archArcPoint(span, H, j / M);
+        const v = (j / M) * vRep;
+        if (spanAlongX) { pos.push(p.x, p.y, -len / 2, p.x, p.y, len / 2); }
+        else { pos.push(-len / 2, p.y, p.x, len / 2, p.y, p.x); }
+        uv.push(0, v, uRep, v);
+      }
+      for (let j = 0; j < M; j++) {
+        const a = j * 2, b = a + 1, c = a + 2, d = a + 3;
+        idx.push(a, b, c, b, d, c);
+      }
+      const skinGeo = new THREE.BufferGeometry();
+      skinGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      skinGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      skinGeo.setIndex(idx);
+      skinGeo.computeVertexNormals();
+      const skin = new THREE.Mesh(skinGeo, meshMat);
+      skin.userData.noShadow = true; // alpha-tested mesh would cast a solid blob shadow
+      g.add(skin);
+
+      // Soft leaf blobs hugging the ribs (seeded = stable). Skipped for the
+      // plastic hoop-house variant (clean greenhouse look).
+      const rng = mulberry32((w * 131 + h * 17 + ((g.userData.containerId || 0) * 7)) | 0);
+      if (!opts.plastic) {
+        const blobGeo = new THREE.IcosahedronGeometry(0.24, 1);
+        const vineRibs = new Set();
+        while (vineRibs.size < Math.min(3, nRibs)) vineRibs.add((rng() * nRibs) | 0);
+        vineRibs.forEach((r) => {
+          const off = ribOff(r);
+          const n = 3 + ((rng() * 3) | 0);
+          for (let i = 0; i < n; i++) {
+            const t = Math.min(0.95, 0.08 + (0.84 * (i + rng() * 0.6)) / n);
+            const p = archArcPoint(span, H, t);
+            const b = new THREE.Mesh(blobGeo, leafMat);
+            const s = 0.7 + rng() * 0.7;
+            b.scale.set(s, s * 0.8, s);
+            if (spanAlongX) b.position.set(p.x, p.y + 0.12, off);
+            else b.position.set(off, p.y + 0.12, p.x);
+            b.userData.noShadow = true;
+            g.add(b);
+          }
+        });
+      }
+      g.userData.topY = H;
+    }
+
+    // ---- World dressing: lamp posts, chain-link fence, buckets, path slabs ----
+    // Pure: which of the 4 sides of the fence cell (gx,gy) touch another fence
+    // cell. cellSet holds "gx,gy" strings for every cell covered by a fence.
+    function fenceSides(gx, gy, cellSet) {
+      return {
+        n: cellSet.has(`${gx},${gy - 1}`),
+        s: cellSet.has(`${gx},${gy + 1}`),
+        w: cellSet.has(`${gx - 1},${gy}`),
+        e: cellSet.has(`${gx + 1},${gy}`),
+      };
+    }
+    // Pure: set of "gx,gy" cells covered by fence containers. Fence gates
+    // count too, so a gate dropped into a fence run meshes both ways.
+    function fenceCells(list) {
+      return kindCells(list, ['fence', 'fence gate']);
+    }
+    // Pure: generic version — set of "gx,gy" cells covered by containers
+    // whose kind is in the given list.
+    function kindCells(list, kinds) {
+      const set = new Set();
+      (list || []).forEach((c) => {
+        const k = c.kind || '';
+        if (!kinds.includes(k)) return;
+        const w = c.grid_w || 1, h = c.grid_h || 1;
+        for (let dx = 0; dx < w; dx++) for (let dy = 0; dy < h; dy++) set.add(`${(c.grid_x || 0) + dx},${(c.grid_y || 0) + dy}`);
+      });
+      return set;
+    }
+    // Pure: stone edging and drip-line connection sets (fenceSides works on any).
+    function edgingCells(list) { return kindCells(list, ['stone edging']); }
+    function dripCells(list) { return kindCells(list, ['drip line']); }
+    // Pure: ids of the n lamps nearest to (cx,cz). Lamp glow is capped for perf.
+    function nearestLampIds(lamps, cx, cz, n) {
+      return (lamps || [])
+        .map((l, i) => ({ i, d: (l.x - cx) * (l.x - cx) + (l.z - cz) * (l.z - cz) }))
+        .sort((a, b) => a.d - b.d)
+        .slice(0, n)
+        .map((o) => o.i);
+    }
+
+
+    function buildLamp(THREE, g, w, h, TEX) {
+      // Short dark post + warm glowing globe.
+      const post = cyl(THREE, 0.09, 0.11, 1.5, pixMaterial(THREE, TEX.metal));
+      post.position.y = 0.75;
+      g.add(post);
+      const headMat = new THREE.MeshStandardMaterial({
+        color: 0xffc46b, emissive: 0xff9d2e, emissiveIntensity: 0.15,
+        roughness: 0.6, metalness: 0,
+      });
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 12), headMat);
+      head.position.y = 1.72;
+      head.userData.lampHead = true;
+      head.userData.noShadow = true;
+      g.add(head);
+      const cap = cyl(THREE, 0.36, 0.3, 0.12, pixMaterial(THREE, TEX.metal));
+      cap.position.y = 2.05;
+      g.add(cap);
+      g.userData.topY = 2.15;
+      g.userData.lampPos = { x: 0, y: 1.72, z: 0 }; // local; scene build converts to world
+    }
+
+    function buildFence(THREE, g, w, h, TEX, sides) {
+      // Chain-link: round center post + fine mesh planes only on sides
+      // facing another fence segment. Single fence = just a post.
+      sides = sides || {};
+      const post = cyl(THREE, 0.1, 0.12, 1.1, pixMaterial(THREE, TEX.metal));
+      post.position.y = 0.55;
+      g.add(post);
+      const meshMat = new THREE.MeshStandardMaterial({
+        map: TEX.wireMesh, alphaTest: 0.4, side: THREE.DoubleSide,
+        roughness: 0.7, metalness: 0.4, transparent: false,
+      });
+      const mkPanel = (pw, px, pz, rotY) => {
+        const p = new THREE.Mesh(new THREE.PlaneGeometry(pw, 0.9), meshMat);
+        p.position.set(px, 0.6, pz);
+        p.rotation.y = rotY;
+        p.userData.noShadow = true;
+        g.add(p);
+      };
+      // panels span half a cell from the post to each connected neighbor
+      if (sides.n) mkPanel(0.5, 0, -0.25, 0);
+      if (sides.s) mkPanel(0.5, 0, 0.25, 0);
+      if (sides.w) mkPanel(0.5, -0.25, 0, Math.PI / 2);
+      if (sides.e) mkPanel(0.5, 0.25, 0, Math.PI / 2);
+      g.userData.topY = 1.1;
+    }
+
+    function buildBucket(THREE, g, TEX) {
+      // White 5-gal bucket: smooth tapered cylinder + rim + handle arc.
+      const body = cyl(THREE, 0.42, 0.34, 0.85, pixMaterial(THREE, TEX.bucket), 20);
+      body.position.y = 0.425;
+      g.add(body);
+      const rim = cyl(THREE, 0.45, 0.45, 0.1, pixMaterial(THREE, TEX.bucket), 20);
+      rim.position.y = 0.85;
+      g.add(rim);
+      const handle = new THREE.Mesh(
+        new THREE.TorusGeometry(0.4, 0.045, 8, 20, Math.PI),
+        pixMaterial(THREE, TEX.metal)
+      );
+      handle.position.y = 0.9;
+      handle.userData.noShadow = true;
+      g.add(handle);
+      g.userData.topY = 1.35;
+    }
+
+    function buildPath(THREE, g, TEX) {
+      // Flat stone slab for walkways. No collider (walked over).
+      const slab = box(THREE, 0.96, 0.15, 0.96, pixMaterial(THREE, TEX.stone));
+      slab.position.y = 0.075;
+      slab.receiveShadow = true;
+      g.add(slab);
+      g.userData.topY = 0.15;
+    }
+
+    function buildRainBarrel(THREE, g, TEX) {
+      // Blue rain barrel: smooth cylinder body, lid, spigot near base.
+      const body = cyl(THREE, 0.44, 0.4, 1.6, pixMaterial(THREE, TEX.barrel), 20);
+      body.position.y = 0.8;
+      g.add(body);
+      const lid = cyl(THREE, 0.47, 0.47, 0.12, pixMaterial(THREE, TEX.metal), 20);
+      lid.position.y = 1.66;
+      g.add(lid);
+      const spigot = cyl(THREE, 0.08, 0.08, 0.3, pixMaterial(THREE, TEX.metal), 10);
+      spigot.rotation.x = Math.PI / 2;
+      spigot.position.set(0, 0.35, 0.48);
+      g.add(spigot);
+      g.userData.topY = 1.75;
+    }
+
+    function buildCompostBin(THREE, g, TEX) {
+      // Dark compost cube with a slightly ajar lid.
+      const mat = pixMaterial(THREE, TEX.compost);
+      const body = box(THREE, 0.95, 0.95, 0.95, mat);
+      body.position.y = 0.475;
+      g.add(body);
+      const lid = box(THREE, 1.0, 0.12, 1.0, pixMaterial(THREE, TEX.darkWood));
+      lid.position.y = 1.0;
+      lid.rotation.z = 0.06; // slightly ajar, like it's in use
+      g.add(lid);
+      g.userData.topY = 1.1;
+    }
+
+    function buildHoopHouse(THREE, g, w, h, height, TEX) {
+      // Bigger cousin of the garden arch: smooth tube ribs + translucent
+      // plastic skin. Solid in v1 (no walking inside — see walkColliders).
+      buildArch(THREE, g, w, h, height || KIND_HEIGHT['hoop house'] || 6, TEX, { plastic: true });
+      // end-wall footings so it reads as a structure, not a tunnel
+      const metalMat = pixMaterial(THREE, TEX.metal);
+      const span = Math.min(w, h), len = Math.max(w, h);
+      const H = Math.max(1.5, height || KIND_HEIGHT['hoop house'] || 6);
+      const p0 = archArcPoint(span, H, 0), p1 = archArcPoint(span, H, 1);
+      [[-len / 2], [len / 2]].forEach(([off]) => {
+        const foot1 = cyl(THREE, 0.09, 0.11, 1.2, metalMat);
+        const foot2 = cyl(THREE, 0.09, 0.11, 1.2, metalMat);
+        if (w <= h) { foot1.position.set(p0.x, 0.6, off); foot2.position.set(p1.x, 0.6, off); }
+        else { foot1.position.set(off, 0.6, p0.x); foot2.position.set(off, 0.6, p1.x); }
+        g.add(foot1, foot2);
+      });
+    }
+
+    function buildFenceGate(THREE, g, w, h, TEX, sides) {
+      // 1x1 chain-link gate: round frame posts + fine mesh panel + handle.
+      // Auto-connects visually to adjacent fence segments via fenceSides.
+      sides = sides || {};
+      const metalMat = pixMaterial(THREE, TEX.metal);
+      const meshMat = new THREE.MeshStandardMaterial({
+        map: TEX.wireMesh, alphaTest: 0.4, side: THREE.DoubleSide,
+        roughness: 0.7, metalness: 0.4,
+      });
+      const post1 = cyl(THREE, 0.09, 0.11, 1.15, metalMat);
+      post1.position.set(-0.42, 0.575, 0);
+      const post2 = cyl(THREE, 0.09, 0.11, 1.15, metalMat);
+      post2.position.set(0.42, 0.575, 0);
+      g.add(post1, post2);
+      const panel = new THREE.Mesh(new THREE.PlaneGeometry(0.72, 0.85), meshMat);
+      panel.position.set(0, 0.6, 0);
+      panel.userData.noShadow = true;
+      g.add(panel);
+      const handle = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), pixMaterial(THREE, TEX.darkWood));
+      handle.position.set(0.28, 0.62, 0.08);
+      g.add(handle);
+      // connect to neighboring fence runs on the gate's long axis sides
+      const fc = sides;
+      const mkPanel = (pw, px, pz, rotY) => {
+        const p = new THREE.Mesh(new THREE.PlaneGeometry(pw, 0.85), meshMat);
+        p.position.set(px, 0.6, pz);
+        p.rotation.y = rotY;
+        p.userData.noShadow = true;
+        g.add(p);
+      };
+      if (fc.n) mkPanel(0.5, 0, -0.25, 0);
+      if (fc.s) mkPanel(0.5, 0, 0.25, 0);
+      if (fc.w) mkPanel(0.5, -0.25, 0, Math.PI / 2);
+      if (fc.e) mkPanel(0.5, 0.25, 0, Math.PI / 2);
+      g.userData.topY = 1.15;
+    }
+
+    function buildBirdBath(THREE, g, TEX) {
+      // Stone pedestal + wide shallow basin + water disc.
+      const stoneMat = pixMaterial(THREE, TEX.basin);
+      const base = cyl(THREE, 0.28, 0.34, 0.18, stoneMat, 16);
+      base.position.y = 0.09;
+      const stem = cyl(THREE, 0.14, 0.18, 0.7, stoneMat, 14);
+      stem.position.y = 0.53;
+      const basin = cyl(THREE, 0.55, 0.4, 0.25, stoneMat, 18);
+      basin.position.y = 1.0;
+      g.add(base, stem, basin);
+      const water = cyl(THREE, 0.46, 0.46, 0.04,
+        new THREE.MeshStandardMaterial({ color: 0x4fa3d8, transparent: true, opacity: 0.75, roughness: 0.15, metalness: 0 }), 18);
+      water.position.y = 1.1;
+      water.userData.noShadow = true;
+      g.add(water);
+      g.userData.topY = 1.15;
+    }
+
+    function buildFruitTree(THREE, g, TEX) {
+      // Apple tree: round trunk + soft canopy blobs + little apples.
+      const barkMat = pixMaterial(THREE, TEX.darkWood);
+      const trunk = cyl(THREE, 0.16, 0.22, 1.7, barkMat, 12);
+      trunk.position.y = 0.85;
+      g.add(trunk);
+      const branch = cyl(THREE, 0.09, 0.12, 1.1, barkMat, 10);
+      branch.rotation.z = Math.PI / 2 - 0.25;
+      branch.position.set(0.3, 1.6, 0);
+      g.add(branch);
+      const leafMat = new THREE.MeshStandardMaterial({ color: 0x43a53b, roughness: 0.9, metalness: 0 });
+      const blobGeo = new THREE.IcosahedronGeometry(1, 1);
+      const rng = mulberry32(((g.userData.containerId || 1) * 31 + 7) | 0);
+      const blobs = [
+        [0, 2.6, 0, 1.5], [-0.85, 2.2, 0.3, 1.0], [0.85, 2.25, -0.25, 1.0],
+        [0.15, 3.2, -0.3, 1.05], [-0.3, 2.9, 0.55, 0.9], [0.5, 2.0, 0.65, 0.8],
+        [-0.55, 2.35, -0.6, 0.85],
+      ];
+      blobs.forEach(([x, y, z, s]) => {
+        const b = new THREE.Mesh(blobGeo, leafMat);
+        b.scale.set(s, s * 0.85, s);
+        b.position.set(x, y, z);
+        b.rotation.y = rng() * Math.PI;
+        g.add(b);
+      });
+      const appleMat = new THREE.MeshStandardMaterial({ color: 0xe0301e, roughness: 0.45, metalness: 0 });
+      for (let i = 0; i < 9; i++) {
+        const a = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 8), appleMat);
+        const th = rng() * Math.PI * 2, rr = 0.8 + rng() * 0.6;
+        a.scale.setScalar(0.14 + rng() * 0.05);
+        a.position.set(Math.cos(th) * rr, 2.1 + rng() * 1.2, Math.sin(th) * rr);
+        a.userData.noShadow = true;
+        g.add(a);
+      }
+      g.userData.topY = 3.8;
+    }
+
+    function buildShed(THREE, g, w, h, TEX) {
+      // Small garden shed: plank walls, STEEP contrasting gable roof with
+      // overhanging eaves, trimmed door, framed window. Must read as a shed
+      // from the orbit angle, not a brown box.
+      const woodMat = pixMaterial(THREE, TEX.wood);
+      const darkMat = pixMaterial(THREE, TEX.darkWood);
+      const trimMat = pixMaterial(THREE, TEX.lightWood);
+      const walls = box(THREE, w - 0.15, 2.2, h - 0.15, woodMat);
+      walls.position.y = 1.1;
+      g.add(walls);
+      // gable roof: steep pitch, dark contrasting slabs, generous eaves
+      const L = Math.max(w, h), S = Math.min(w, h), apexH = 1.6;
+      const roof = new THREE.Group();
+      const slopeLen = Math.hypot(S / 2 + 0.35, apexH);
+      const ang = Math.atan2(apexH, S / 2 + 0.35);
+      const roofMat = new THREE.MeshStandardMaterial({ color: 0x4a3220, roughness: 0.95, metalness: 0 });
+      [-1, 1].forEach((s) => {
+        const slab = box(THREE, slopeLen + 0.15, 0.16, L + 0.5, roofMat);
+        slab.position.set((s * S) / 4, 2.2 + apexH / 2, 0);
+        slab.rotation.z = -s * ang;
+        roof.add(slab);
+      });
+      const tri = new THREE.Shape();
+      tri.moveTo(-S / 2, 0); tri.lineTo(S / 2, 0); tri.lineTo(0, apexH); tri.closePath();
+      const gableGeo = new THREE.ShapeGeometry(tri);
+      [-1, 1].forEach((s) => {
+        const gable = new THREE.Mesh(gableGeo, new THREE.MeshStandardMaterial({
+          map: TEX.wood, roughness: 0.9, metalness: 0, side: THREE.DoubleSide,
+        }));
+        gable.position.set(0, 2.2, s * (L / 2 - 0.08));
+        roof.add(gable);
+      });
+      if (w < h) roof.rotation.y = Math.PI / 2;
+      g.add(roof);
+      // door with light trim frame
+      const dz = h / 2;
+      const door = box(THREE, 0.95, 1.75, 0.12, darkMat);
+      door.position.set(-0.8, 0.88, dz - 0.02);
+      g.add(door);
+      [[-0.8 - 0.55, 0], [-0.8 + 0.55, 0]].forEach(([tx]) => {
+        const jamb = box(THREE, 0.14, 1.9, 0.14, trimMat);
+        jamb.position.set(tx, 0.95, dz + 0.02);
+        g.add(jamb);
+      });
+      const lintel = box(THREE, 1.24, 0.14, 0.14, trimMat);
+      lintel.position.set(-0.8, 1.88, dz + 0.02);
+      g.add(lintel);
+      const knob = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), pixMaterial(THREE, TEX.metal));
+      knob.position.set(-0.48, 0.95, dz + 0.05);
+      g.add(knob);
+      // window with frame + cross mullions on the front wall
+      const wx = 1.1, wy = 1.35;
+      const frame = box(THREE, 0.9, 0.8, 0.1, trimMat);
+      frame.position.set(wx, wy, dz - 0.02);
+      g.add(frame);
+      const pane = box(THREE, 0.72, 0.62, 0.12, new THREE.MeshStandardMaterial({ color: 0x9fc8e8, roughness: 0.25, metalness: 0.1 }));
+      pane.position.set(wx, wy, dz - 0.01);
+      g.add(pane);
+      const mullV = box(THREE, 0.06, 0.62, 0.13, trimMat);
+      mullV.position.set(wx, wy, dz);
+      g.add(mullV);
+      const mullH = box(THREE, 0.72, 0.06, 0.13, trimMat);
+      mullH.position.set(wx, wy, dz);
+      g.add(mullH);
+      g.userData.topY = 3.9;
+    }
+
+    function buildPergola(THREE, g, w, h, TEX) {
+      // Walk-under pergola: four round posts + beam + slat roof. No collider.
+      const woodMat = pixMaterial(THREE, TEX.wood);
+      const px = w / 2 - 0.18, pz = h / 2 - 0.18;
+      [[-px, -pz], [px, -pz], [-px, pz], [px, pz]].forEach(([x, z]) => {
+        const post = cyl(THREE, 0.13, 0.15, 2.5, woodMat, 12);
+        post.position.set(x, 1.25, z);
+        g.add(post);
+      });
+      [-px, px].forEach((x) => { // long beams along the h axis
+        const beam = box(THREE, 0.24, 0.3, h, woodMat);
+        beam.position.set(x, 2.62, 0);
+        g.add(beam);
+      });
+      for (let i = 0; i < 6; i++) { // cross slats
+        const slat = box(THREE, w, 0.14, 0.34, woodMat);
+        slat.position.set(0, 2.85, -h / 2 + 0.3 + (i * (h - 0.6)) / 5);
+        g.add(slat);
+      }
+      g.userData.topY = 3.0;
+    }
+
+    function buildEdging(THREE, g, w, h, TEX, sides) {
+      // Low stone border wall: rounded post + low walls on sides facing
+      // neighboring edging cells (fence-connect pattern).
+      sides = sides || {};
+      const stoneMat = pixMaterial(THREE, TEX.stone);
+      const post = cyl(THREE, 0.16, 0.18, 0.52, stoneMat, 12);
+      post.position.y = 0.26;
+      g.add(post);
+      const mkWall = (ww, wd, x, z) => {
+        const m = box(THREE, ww, 0.4, wd, stoneMat);
+        m.position.set(x, 0.2, z);
+        g.add(m);
+      };
+      if (sides.n) mkWall(1.0, 0.3, 0, -0.35);
+      if (sides.s) mkWall(1.0, 0.3, 0, 0.35);
+      if (sides.w) mkWall(0.3, 1.0, -0.35, 0);
+      if (sides.e) mkWall(0.3, 1.0, 0.35, 0);
+      g.userData.topY = 0.55;
+    }
+
+    function buildSprinkler(THREE, g, TEX) {
+      // Lawn sprinkler: dark post + head + smooth translucent water arc.
+      const metalMat = pixMaterial(THREE, TEX.metal);
+      const post = cyl(THREE, 0.08, 0.1, 0.55, metalMat, 10);
+      post.position.y = 0.275;
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), metalMat);
+      head.position.y = 0.62;
+      g.add(post, head);
+      const arc = new THREE.Mesh(
+        new THREE.TorusGeometry(1.25, 0.09, 8, 24, Math.PI),
+        new THREE.MeshStandardMaterial({ color: 0x77ccff, transparent: true, opacity: 0.5, roughness: 0.2, metalness: 0 })
+      );
+      arc.position.y = 0.68;
+      arc.userData.noShadow = true;
+      g.add(arc);
+      g.userData.topY = 1.95;
+    }
+
+    function buildDripLine(THREE, g, w, h, TEX, sides) {
+      // Thin black irrigation tube: center hub + tubes toward neighboring
+      // drip cells (same connect pattern as fences), lying on the ground.
+      sides = sides || {};
+      const tubeMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1c, roughness: 0.9, metalness: 0 });
+      const hub = cyl(THREE, 0.18, 0.18, 0.16, tubeMat, 12);
+      hub.position.y = 0.08;
+      g.add(hub);
+      const mkTube = (len, x, z, rotY) => {
+        const t = cyl(THREE, 0.07, 0.07, len, tubeMat, 8);
+        t.rotation.z = Math.PI / 2;
+        const holder = new THREE.Group();
+        holder.add(t);
+        holder.rotation.y = rotY;
+        holder.position.set(x, 0.065, z);
+        g.add(holder);
+      };
+      if (sides.n) mkTube(0.55, 0, -0.28, Math.PI / 2);
+      if (sides.s) mkTube(0.55, 0, 0.28, Math.PI / 2);
+      if (sides.w) mkTube(0.55, -0.28, 0, 0);
+      if (sides.e) mkTube(0.55, 0.28, 0, 0);
+      g.userData.topY = 0.2;
+    }
+
+    // Pure: soft foliage cluster for a plant archetype + seed. Deterministic
+    // so rebuilds are stable. Returns {blobs:[{dx,dy,dz,s}], fruits:[...]}.
+    const PLANT_GREENS = {
+      tomato: 0x43a53b, pepper: 0x359231, leafy: 0x55c04d,
+      vine: 0x43a53b, flower: 0x4aa83c, generic: 0x43a53b,
+    };
+    function plantFoliage(arch, seed) {
       const rng = mulberry32(seed);
+      const n = 3 + ((rng() * 3) | 0); // 3-5 blobs: fuller plants
+      const blobs = [];
+      for (let i = 0; i < n; i++) {
+        blobs.push({
+          dx: (rng() - 0.5) * 0.6,
+          dy: 0.35 + rng() * 0.6,
+          dz: (rng() - 0.5) * 0.6,
+          s: 0.38 + rng() * 0.3,
+        });
+      }
+      const fruits = [];
+      if (arch === 'tomato' || arch === 'pepper') {
+        const nf = 3 + ((rng() * 3) | 0);
+        for (let i = 0; i < nf; i++) {
+          fruits.push({
+            dx: (rng() - 0.5) * 0.7, dy: 0.3 + rng() * 0.5, dz: (rng() - 0.5) * 0.7,
+            s: 0.11 + rng() * 0.06, c: arch === 'tomato' ? 0xe0301e : 0xf07a1e,
+          });
+        }
+      } else if (arch === 'flower') {
+        const nf = 2 + ((rng() * 2) | 0);
+        const cols = [0xe5321e, 0xffc21f, 0xffffff];
+        for (let i = 0; i < nf; i++) {
+          fruits.push({
+            dx: (rng() - 0.5) * 0.5, dy: 0.7 + rng() * 0.35, dz: (rng() - 0.5) * 0.5,
+            s: 0.1 + rng() * 0.05, c: cols[(rng() * cols.length) | 0],
+          });
+        }
+      }
+      return { blobs, fruits };
+    }
+
+    function buildPlantSoft(THREE, g, px, pz, baseY, species, seed, big, plantingId) {
+      // Soft miniature plant: a small cluster of smooth-shaded foliage blobs,
+      // with fruit spheres for fruiting archetypes. Seeded = stable layout.
+      const arch = plantArchetype(species);
+      const grp = new THREE.Group();
+      const cluster = plantFoliage(arch, seed);
+      const leafMat = new THREE.MeshStandardMaterial({
+        color: PLANT_GREENS[arch] || 0x4e9e3f, roughness: 0.9, metalness: 0,
+      });
+      const blobGeo = new THREE.IcosahedronGeometry(1, 1);
+      cluster.blobs.forEach((b) => {
+        const m = new THREE.Mesh(blobGeo, leafMat);
+        m.scale.set(b.s, b.s * 0.85, b.s);
+        m.position.set(b.dx, b.dy, b.dz);
+        m.userData.noShadow = true;
+        grp.add(m);
+      });
+      const fruitGeo = new THREE.IcosahedronGeometry(1, 1);
+      cluster.fruits.forEach((f) => {
+        const m = new THREE.Mesh(fruitGeo, new THREE.MeshStandardMaterial({
+          color: f.c, roughness: 0.55, metalness: 0,
+        }));
+        m.scale.setScalar(f.s);
+        m.position.set(f.dx, f.dy, f.dz);
+        m.userData.noShadow = true;
+        grp.add(m);
+      });
+      if (plantingId != null) grp.userData.plantingId = plantingId; // build-mode breaking
+      const rng = mulberry32(seed ^ 0x9e37);
       grp.rotation.y = rng() * Math.PI;
-      const s = 0.9 + rng() * 0.35;
+      const s = (big ? 1.5 : 1) * (0.9 + rng() * 0.3);
       grp.scale.set(s, s, s);
-      grp.position.set(px, baseY + (H * s) / 2 - 0.05, pz);
+      grp.position.set(px, baseY - 0.05, pz);
       g.add(grp);
     }
 
@@ -1137,10 +1773,10 @@
           ]);
         });
       }
-      const baseY = kind === 'arch' ? 0 : (g.userData.topY || 1);
+      const baseY = (kind === 'arch' || kind === 'hoop house') ? 0 : (g.userData.topY || 1);
       spots.forEach(([spx, spz], i) => {
         const p = ps[i];
-        buildPlantVoxel(THREE, g, spx, spz, baseY, p && p.species_type, (c.id * 1009 + i * 101) | 0, TEX, kind === 'arch');
+        buildPlantSoft(THREE, g, spx, spz, baseY, p && p.species_type, (c.id * 1009 + i * 101) | 0, kind === 'arch', p && p.id);
       });
     }
 
@@ -1180,21 +1816,208 @@
     }
 
     function buildClouds(THREE, group, rng) {
-      const mat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-      for (let i = 0; i < 6; i++) {
-        const cw = 5 + rng() * 7, cd = 3 + rng() * 4;
+      // Soft miniature clouds: merged sphere clusters. They drift in
+      // walk mode (see driftClouds); in orbit mode they stay static so the
+      // on-demand renderer can sleep.
+      T.clouds = [];
+      const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.92 });
+      for (let i = 0; i < 9; i++) {
+        const cw = 9 + rng() * 9, cd = 6 + rng() * 6;
         const cloud = new THREE.Group();
-        const n = 2 + ((rng() * 3) | 0);
+        const n = 4 + ((rng() * 3) | 0);
         for (let j = 0; j < n; j++) {
-          const puff = box(THREE, cw * (0.5 + rng() * 0.5), 1.4, cd * (0.5 + rng() * 0.5), mat);
-          puff.position.set((rng() - 0.5) * cw, (rng() - 0.5) * 0.6, (rng() - 0.5) * cd);
+          const r = 2.2 + rng() * 2.4;
+          const puff = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), mat);
+          puff.scale.y = 0.55;
+          puff.position.set((rng() - 0.5) * cw, (rng() - 0.5) * 1.2, (rng() - 0.5) * cd);
           cloud.add(puff);
         }
         const ext = Math.max(cols, rows) / 2 + 14;
-        cloud.position.set((rng() - 0.5) * ext * 2.4, 26 + rng() * 10, (rng() - 0.5) * ext * 2.4);
+        cloud.position.set((rng() - 0.5) * ext * 2.6, 20 + rng() * 10, (rng() - 0.5) * ext * 2.6);
         cloud.traverse((o) => { o.castShadow = false; o.receiveShadow = false; });
+        cloud.userData.drift = 0.5 + rng() * 0.5;
+        cloud.userData.cloudMat = mat;
         group.add(cloud);
+        T.clouds.push(cloud);
       }
+    }
+
+    // Called from the walk-mode loop only. Wraps clouds around the sky.
+    function driftClouds(dt) {
+      if (!T || !T.clouds) return;
+      const ext = Math.max(cols, rows) / 2 + 14;
+      T.clouds.forEach((c) => {
+        c.position.x += (c.userData.drift || 0.6) * dt;
+        if (c.position.x > ext * 1.6) c.position.x = -ext * 1.6;
+      });
+    }
+
+    /* ---------------- meadow decor: tall grass + wildflowers, fireflies ---------------- */
+    // Pure: set of "gx,gy" cells covered by any container (grass never grows there).
+    const GRASS_SEED = 4242, GRASS_CAP = 320;
+    function occupiedCellSet(list) {
+      const set = new Set();
+      (list || []).forEach((c) => {
+        const w = c.grid_w || 1, h = c.grid_h || 1;
+        for (let dx = 0; dx < w; dx++) for (let dy = 0; dy < h; dy++) set.add(`${(c.grid_x || 0) + dx},${(c.grid_y || 0) + dy}`);
+      });
+      return set;
+    }
+    // Pure: deterministic scatter of grass/flower tufts on empty cells.
+    // Same seed -> same layout, so rebuilds are stable; capped for perf.
+    // Cells adjacent to beds grow thicker — a natural clustered look.
+    function grassLayout(ncols, nrows, occupied, seed) {
+      const rng = mulberry32(seed == null ? GRASS_SEED : seed);
+      const cells = [];
+      const adj = (gx, gy) => occupied.has(`${gx - 1},${gy}`) || occupied.has(`${gx + 1},${gy}`) ||
+        occupied.has(`${gx},${gy - 1}`) || occupied.has(`${gx},${gy + 1}`);
+      for (let gx = 0; gx < ncols; gx++) {
+        for (let gy = 0; gy < nrows; gy++) {
+          if (occupied.has(`${gx},${gy}`)) continue;
+          const r = rng();
+          const p = adj(gx, gy) ? 0.74 : 0.55; // lush near beds
+          if (r < p && cells.length < GRASS_CAP) {
+            cells.push({
+              gx, gy,
+              variant: r < 0.36 ? 'tuft' : r < 0.44 ? 'flower-red' : r < 0.49 ? 'flower-yellow' : r < 0.53 ? 'flower-white' : 'tuft',
+            });
+          }
+        }
+      }
+      return cells;
+    }
+
+    function buildGrass3D(THREE, decor, TEX) {
+      // Cross-quad tufts, Minecraft tall-grass style. Decor layer: no shadows,
+      // no collision, excluded from raycast targets (lives outside T.group).
+      const jrng = mulberry32(GRASS_SEED + 1);
+      const texFor = { tuft: TEX.grassTuft, 'flower-red': TEX.flowerRed, 'flower-yellow': TEX.flowerYellow, 'flower-white': TEX.flowerWhite };
+      grassLayout(cols, rows, occupiedCellSet(containers), GRASS_SEED).forEach(({ gx, gy, variant }) => {
+        const mat = new THREE.MeshBasicMaterial({ map: texFor[variant], alphaTest: 0.5, side: THREE.DoubleSide });
+        const tuft = new THREE.Group();
+        for (let k = 0; k < 2; k++) {
+          const p = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.55), mat);
+          p.rotation.y = (k * Math.PI) / 2 + jrng() * 0.6;
+          p.position.y = 0.27;
+          tuft.add(p);
+        }
+        tuft.position.set(gx + 0.5 - cols / 2 + (jrng() - 0.5) * 0.5, 0, gy + 0.5 - rows / 2 + (jrng() - 0.5) * 0.5);
+        tuft.traverse((o) => { o.castShadow = false; o.receiveShadow = false; });
+        decor.add(tuft);
+      });
+    }
+
+    // Pure: one firefly's position at time t (gentle sin drift around its base).
+    function fireflyPos(base, phase, t) {
+      return {
+        x: base.x + Math.sin(t * 0.7 + phase) * 0.6,
+        y: base.y + Math.sin(t * 1.1 + phase * 1.7) * 0.35,
+        z: base.z + Math.cos(t * 0.5 + phase) * 0.6,
+      };
+    }
+
+    function buildFireflies(THREE) {
+      // ~40 glowing points, night only. Animated in the walk-mode loop;
+      // static in orbit mode so the on-demand renderer can sleep.
+      const N = 40, rng = mulberry32(7777);
+      const pos = new Float32Array(N * 3), base = [], phases = new Float32Array(N);
+      for (let i = 0; i < N; i++) {
+        const b = {
+          x: (rng() - 0.5) * (cols + 4),
+          y: 0.6 + rng() * 1.6,
+          z: (rng() - 0.5) * (rows + 4),
+        };
+        base.push(b); phases[i] = rng() * Math.PI * 2;
+        pos[i * 3] = b.x; pos[i * 3 + 1] = b.y; pos[i * 3 + 2] = b.z;
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      const mat = new THREE.PointsMaterial({
+        color: 0xeaff8a, size: 0.3, transparent: true, opacity: 0.95,
+        blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+      });
+      const pts = new THREE.Points(geo, mat);
+      pts.userData.base = base; pts.userData.phases = phases;
+      pts.visible = dayNight === 'night';
+      return pts;
+    }
+
+    function updateFireflies(t) {
+      if (!T || !T.fireflies || !T.fireflies.visible) return;
+      const ud = T.fireflies.userData, attr = T.fireflies.geometry.attributes.position;
+      for (let i = 0; i < ud.base.length; i++) {
+        const p = fireflyPos(ud.base[i], ud.phases[i], t);
+        attr.setXYZ(i, p.x, p.y, p.z);
+      }
+      attr.needsUpdate = true;
+    }
+
+    /* ---------------- butterflies: daytime wanderers ---------------- */
+    // Pure: one butterfly's position at time t — a lazy lissajous wander
+    // around its home base, staying over the garden.
+    function butterflyPos(base, phase, t) {
+      return {
+        x: base.x + Math.sin(t * 0.45 + phase) * 2.4,
+        y: base.y + Math.sin(t * 0.9 + phase * 1.3) * 0.5,
+        z: base.z + Math.cos(t * 0.38 + phase) * 2.4,
+      };
+    }
+    // Pure: wing flap angle (radians) at time t — fast flutter.
+    function butterflyWing(t, phase) {
+      return Math.abs(Math.sin(t * 13 + phase)) * 1.15;
+    }
+    const BUTTERFLY_COLORS = [0xf2a13d, 0xf5f5f5, 0xffc21f, 0xe06ba8, 0xff8c42];
+    function buildButterflies(THREE) {
+      // 8 butterflies, day only (fireflies own the night). Two-triangle wings
+      // flap via sin; wander in the walk-mode loop, static in orbit mode.
+      const N = 8, rng = mulberry32(31337);
+      const group = new THREE.Group();
+      const items = [];
+      for (let i = 0; i < N; i++) {
+        const b = new THREE.Group();
+        const wingMat = new THREE.MeshBasicMaterial({
+          color: BUTTERFLY_COLORS[i % BUTTERFLY_COLORS.length],
+          side: THREE.DoubleSide, transparent: true, opacity: 0.95,
+        });
+        const wingGeo = new THREE.PlaneGeometry(0.26, 0.2);
+        wingGeo.translate(0.13, 0, 0); // hinge at the body
+        const wl = new THREE.Mesh(wingGeo, wingMat);
+        const wr = new THREE.Mesh(wingGeo, wingMat);
+        wr.rotation.y = Math.PI;
+        const body = new THREE.Mesh(
+          new THREE.SphereGeometry(0.035, 6, 5),
+          new THREE.MeshBasicMaterial({ color: 0x3a2c1c })
+        );
+        body.scale.set(1, 1, 2.2);
+        b.add(wl, wr, body);
+        const base = {
+          x: (rng() - 0.5) * cols * 0.8,
+          y: 1.1 + rng() * 1.2,
+          z: (rng() - 0.5) * rows * 0.8,
+        };
+        const phase = rng() * Math.PI * 2;
+        b.userData = { base, phase, wl, wr };
+        b.traverse((o) => { o.castShadow = false; o.receiveShadow = false; });
+        group.add(b);
+        items.push(b);
+      }
+      group.userData.items = items;
+      group.visible = dayNight !== 'night';
+      return group;
+    }
+    function updateButterflies(t) {
+      if (!T || !T.butterflies || !T.butterflies.visible) return;
+      T.butterflies.userData.items.forEach((b) => {
+        const { base, phase, wl, wr } = b.userData;
+        const p = butterflyPos(base, phase, t);
+        b.position.set(p.x, p.y, p.z);
+        const flap = butterflyWing(t, phase);
+        wl.rotation.z = flap;
+        wr.rotation.z = -flap;
+        // face the direction of travel (cheap: derivative of the lissajous)
+        const ahead = butterflyPos(base, phase, t + 0.1);
+        b.rotation.y = Math.atan2(ahead.x - p.x, ahead.z - p.z);
+      });
     }
 
     function buildScene3D() {
@@ -1210,24 +2033,54 @@
       T.TEX = TEX;
       const rng = mulberry32(1234);
 
-      // the world: one big grass block (dirt sides, grass fringe)
+      // the world: a smooth miniature base — soft grass top, dark skirt,
+      // with the 1-ft planning grid as subtle thin lines (not block seams).
       const gw = cols + 8, gd = rows + 8;
+      const sideMat = pixMaterial(THREE, TEX.groundSide);
       const ground = new THREE.Mesh(
         new THREE.BoxGeometry(gw, 1, gd),
-        [
-          pixMaterial(THREE, TEX.dirtSideX),
-          pixMaterial(THREE, TEX.dirtSideX),
-          pixMaterial(THREE, TEX.grass),
-          pixMaterial(THREE, TEX.dirt),
-          pixMaterial(THREE, TEX.dirtSideZ),
-          pixMaterial(THREE, TEX.dirtSideZ),
-        ]
+        [sideMat, sideMat, pixMaterial(THREE, TEX.grass), sideMat, sideMat, sideMat]
       );
       ground.position.y = -0.5;
       ground.receiveShadow = true;
+      ground.userData.isGround = true; // build-mode placement targets this
+      const gridPts = [];
+      for (let gx = 0; gx <= cols; gx++) {
+        const x = gx - cols / 2;
+        gridPts.push(new THREE.Vector3(x, 0.52, -rows / 2), new THREE.Vector3(x, 0.52, rows / 2));
+      }
+      for (let gz = 0; gz <= rows; gz++) {
+        const z = gz - rows / 2;
+        gridPts.push(new THREE.Vector3(-cols / 2, 0.52, z), new THREE.Vector3(cols / 2, 0.52, z));
+      }
+      const gridLines = new THREE.LineSegments(
+        new THREE.BufferGeometry().setFromPoints(gridPts),
+        new THREE.LineBasicMaterial({ color: 0x3f7a32, transparent: true, opacity: 0.35 })
+      );
+      gridLines.raycast = () => {}; // never a raycast target; ground beneath handles it
+      ground.add(gridLines);
+      T.gridLines = gridLines;
       group.add(ground);
 
       buildClouds(THREE, group, rng);
+
+      // Meadow decor + fireflies live outside T.group: no raycast targets,
+      // no collision, no placement blocking.
+      if (T.decor) { scene.remove(T.decor); disposeGroup(T.decor); }
+      if (T.fireflies) { scene.remove(T.fireflies); T.fireflies.geometry.dispose(); T.fireflies.material.dispose(); }
+      const decor = new THREE.Group();
+      buildGrass3D(THREE, decor, TEX);
+      scene.add(decor);
+      T.decor = decor;
+      T.fireflies = buildFireflies(THREE);
+      scene.add(T.fireflies);
+      if (T.butterflies) { scene.remove(T.butterflies); disposeGroup(T.butterflies); }
+      T.butterflies = buildButterflies(THREE);
+      scene.add(T.butterflies);
+
+      T.lamps = []; // world-space lamp head positions, for night lighting
+      const fc = fenceCells(containers);
+      const ec = edgingCells(containers), dc = dripCells(containers);
 
       containers.forEach((c) => {
         const w = c.grid_w || 1, h = c.grid_h || 1;
@@ -1237,6 +2090,25 @@
         const kind = c.kind || 'grow bag';
         if (kind === 'arch') buildArch(THREE, g, w, h, c.height_ft || KIND_HEIGHT.arch || 4, TEX);
         else if (kind === 'pallet') buildPallet(THREE, g, w, h, TEX);
+        else if (kind === 'lamp') {
+          buildLamp(THREE, g, w, h, TEX);
+          const lp = g.userData.lampPos || { x: 0, y: 1.72, z: 0 };
+          T.lamps.push({ x: g.position.x + lp.x, y: lp.y, z: g.position.z + lp.z });
+        }
+        else if (kind === 'fence') buildFence(THREE, g, w, h, TEX, fenceSides(c.grid_x || 0, c.grid_y || 0, fc));
+        else if (kind === 'fence gate') buildFenceGate(THREE, g, w, h, TEX, fenceSides(c.grid_x || 0, c.grid_y || 0, fc));
+        else if (kind === 'bucket') buildBucket(THREE, g, TEX);
+        else if (kind === 'path') buildPath(THREE, g, TEX);
+        else if (kind === 'rain barrel') buildRainBarrel(THREE, g, TEX);
+        else if (kind === 'compost bin') buildCompostBin(THREE, g, TEX);
+        else if (kind === 'hoop house') buildHoopHouse(THREE, g, w, h, c.height_ft || KIND_HEIGHT['hoop house'] || 6, TEX);
+        else if (kind === 'bird bath') buildBirdBath(THREE, g, TEX);
+        else if (kind === 'fruit tree') buildFruitTree(THREE, g, TEX);
+        else if (kind === 'shed') buildShed(THREE, g, w, h, TEX);
+        else if (kind === 'pergola') buildPergola(THREE, g, w, h, TEX);
+        else if (kind === 'stone edging') buildEdging(THREE, g, w, h, TEX, fenceSides(c.grid_x || 0, c.grid_y || 0, ec));
+        else if (kind === 'sprinkler') buildSprinkler(THREE, g, TEX);
+        else if (kind === 'drip line') buildDripLine(THREE, g, w, h, TEX, fenceSides(c.grid_x || 0, c.grid_y || 0, dc));
         else buildVessel(THREE, g, w, h, kind, TEX);
         addPlants3D(THREE, g, w, h, kind, c, TEX);
         const label = makeLabel(c.name);
@@ -1256,14 +2128,93 @@
       sun.position.set(cols * 0.6, 34, rows * 0.45);
       Object.assign(sun.shadow.camera, { left: -ext, right: ext, top: ext, bottom: -ext });
       sun.shadow.camera.updateProjectionMatrix();
+      applyDayNight(); // re-apply sky/lamp state after the rebuild
       sizeThree();
     }
 
     function render3D() {
       // Note: OrbitControls dispatches 'change' from inside update(), so this
       // must only render — calling update() here would recurse forever.
+      // Bloom composer is a single render() call, so on-demand rendering
+      // keeps working; plain renderer is the fallback when bloom is missing.
       if (!T || view !== '3d') return;
-      T.renderer.render(T.scene, T.camera);
+      if (T.composer) T.composer.render();
+      else T.renderer.render(T.scene, T.camera);
+    }
+
+    /* ---------------- day / night ---------------- */
+    let dayNight = 'day'; // 'day' | 'night'
+    const MAX_LAMP_LIGHTS = 8; // real PointLights; extra lamps just glow
+
+    function clearLampLights() {
+      if (!T) return;
+      (T.lampLights || []).forEach((l) => { T.scene.remove(l); if (l.dispose) l.dispose(); });
+      T.lampLights = [];
+    }
+
+    // Pure: gradient-sky palette per time of day (also the fog color).
+    function skyColors(night) {
+      // single source of truth for the sky/fog palette (day/night toggle lerps
+      // these; the dome uniforms + fog color are derived in applyDayNight)
+      return night
+        ? { top: 0x050914, horizon: 0x101c3f }
+        : { top: 0x3f8cff, horizon: 0x93ccff };
+    }
+
+    function applyDayNight() {
+      if (!T || !T.sky) return;
+      const THREE = T.THREE, night = dayNight === 'night';
+      const pal = skyColors(night);
+      if (T.sky.dome) {
+        T.sky.dome.material.uniforms.topColor.value.copy(srgbToLinear(THREE, pal.top));
+        T.sky.dome.material.uniforms.horizonColor.value.copy(srgbToLinear(THREE, pal.horizon));
+      }
+      if (T.scene.fog) T.scene.fog.color.copy(srgbToLinear(THREE, pal.horizon));
+      if (T.gridLines) {
+        // grid lines fade out entirely at night — they glowed against dark grass
+        T.gridLines.material.opacity = night ? 0 : 0.35;
+        T.gridLines.material.color.set(night ? 0x2a5522 : 0x3f7a32);
+      }
+      T.sky.hemi.intensity = night ? 0.25 : 0.9;
+      T.sky.hemi.color.set(night ? 0x33456e : 0xbdd8ff);
+      T.sun.intensity = night ? 0.14 : 1.1; // moonlight at night
+      T.sun.color.set(night ? 0x9db4ff : 0xfff1d4);
+      T.sky.sunSprite.visible = !night;
+      T.sky.moonSprite.visible = night;
+      T.sky.stars.visible = night;
+      if (T.fireflies) T.fireflies.visible = night;
+      if (T.butterflies) T.butterflies.visible = !night;
+      // clouds tint with the sky (they share one material)
+      if (T.clouds && T.clouds.length && T.clouds[0].userData.cloudMat) {
+        T.clouds[0].userData.cloudMat.color.set(night ? 0x2a3a5f : 0xffffff);
+      }
+      // lamp heads always glow a little; at night they blaze
+      if (T.group) {
+        T.group.traverse((o) => {
+          if (o.userData && o.userData.lampHead && o.material) {
+            o.material.emissiveIntensity = night ? 1.3 : 0.15;
+          }
+        });
+      }
+      // real warm point lights, capped: nearest lamps to the camera win
+      clearLampLights();
+      if (night && T.lamps && T.lamps.length && T.camera) {
+        const ids = nearestLampIds(T.lamps, T.camera.position.x, T.camera.position.z, MAX_LAMP_LIGHTS);
+        ids.forEach((i) => {
+          const p = T.lamps[i];
+          const pl = new THREE.PointLight(0xffb45e, 1.4, 14, 2);
+          pl.position.set(p.x, p.y + 0.3, p.z);
+          T.scene.add(pl);
+          T.lampLights.push(pl);
+        });
+      }
+    }
+
+    function toggleDayNight() {
+      dayNight = dayNight === 'day' ? 'night' : 'day';
+      applyDayNight();
+      paintViewButtons();
+      render3D();
     }
 
     /* ---------------- walk mode ---------------- */
@@ -1314,7 +2265,10 @@
     function walkColliders() {
       const boxes = [];
       (containers || []).forEach((c) => {
-        if ((c.kind || 'grow bag') === 'arch') return;
+        const kind = c.kind || 'grow bag';
+        if (kind === 'arch') return; // walk under
+        if (kind === 'pergola') return; // walk under
+        if (kind === 'path') return; // flat slab: walked over, not into
         const w = c.grid_w || 1, h = c.grid_h || 1;
         const cx = (c.grid_x || 0) + w / 2 - cols / 2;
         const cz = (c.grid_y || 0) + h / 2 - rows / 2;
@@ -1386,6 +2340,11 @@
         walk.yaw = e.y;
       }
       movePlayer(dt);
+      updateGhost();
+      driftClouds(dt); // slow cloud drift, walk mode only (battery-friendly)
+      updateFireflies(now / 1000); // firefly drift, walk mode only
+      updateButterflies(now / 1000); // butterfly wander + wing flap, walk mode only
+      updateParticles(dt); // break-particle juice, walk mode only
       render3D();
       return true;
     }
@@ -1403,6 +2362,7 @@
 
     async function enterWalkMode() {
       if (isTouchOnly()) { toast('Walk mode needs a keyboard + mouse.'); return; }
+      setTapeMode(false); // tape is orbit-only
       try { await ensureWalk(); }
       catch (err) {
         toast('Could not load walk controls — check your connection and try again.', 'error');
@@ -1416,6 +2376,9 @@
       T.controls.enabled = false;
       crosshair.style.display = 'block';
       hint3d.textContent = walkHintText;
+      hotbar.style.display = 'block';
+      paintHotbar();
+      bindBuildInputs();
       paintViewButtons();
       render3D();
       toast('Click the garden to grab the mouse, then walk with WASD.');
@@ -1432,6 +2395,8 @@
       if (T) {
         T.controls.enabled = true;
         crosshair.style.display = 'none';
+        hotbar.style.display = 'none';
+        clearGhost();
         hint3d.textContent = orbitHintText;
         buildScene3D(); // reframes the orbit camera
       }
@@ -1440,13 +2405,27 @@
 
     wrap3d._walk = { // handle for tests / debugging
       resolvePlayerCollision, mulberry32, plantArchetype, walkColliders, makePixTexture,
+      archArcPoint, archRibCount, plantFoliage,
+      fenceSides, fenceCells, kindCells, edgingCells, dripCells, nearestLampIds, driftClouds,
+      skyColors, grassLayout, occupiedCellSet, fireflyPos, updateFireflies,
+      butterflyPos, butterflyWing, updateButterflies,
+      tapeDistance, setTapeMode, clearTape,
+      spawnParticles, particleCount, updateParticles,
+      get Sound() { return Sound; },
+      get tapeMode() { return tapeMode; },
+      get tapePoints() { return tapePoints; },
+      get dayNight() { return dayNight; },
+      _toggleDayNight: () => toggleDayNight(),
       painters: {
-        paintGrassTop, paintDirtSide, paintDirt, paintWoodPlanks, paintDarkWood,
-        paintSoil, paintFabric, paintTerracotta, paintLeafBlob, paintSprite, SPRITES,
+        paintGrass, paintGroundSide, paintSoil, paintWood, paintDarkWood,
+        paintFabric, paintTerracotta, paintMetal, paintWireMesh,
+        paintBucket, paintStone, paintBarrel, paintCompost, paintHoopPlastic, paintBasin,
+        paintLeaf, paintGrassTuft, paintWildflower, paintLightWood,
       },
       get mode() { return walkMode; },
       _get: () => walk,
       _set: (w) => { walk = w; },
+      _setT: (t) => { T = t; },
       _setMode: (m) => { walkMode = m; },
       _startLoop: () => startWalkLoop(),
       _stopLoop: () => stopWalkLoop(),
@@ -1456,6 +2435,510 @@
     };
     /* -------------- end walk mode -------------- */
 
+    /* ---------------- game feel: sounds + break particles ---------------- */
+    // Tiny WebAudio synth, zero assets. Default ON; 🔊 button toggles.
+    const Sound = {
+      enabled: true, _ctx: null,
+      ac() {
+        if (!this._ctx) {
+          try {
+            const AC = (typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext)) || null;
+            if (AC) this._ctx = new AC();
+          } catch (e) { this._ctx = null; }
+        }
+        return this._ctx;
+      },
+      thunk() { // place: short low sine thump
+        const c = this.ac();
+        if (!c || !this.enabled) return;
+        try {
+          const o = c.createOscillator(), g = c.createGain();
+          o.type = 'sine';
+          o.frequency.setValueAtTime(150, c.currentTime);
+          o.frequency.exponentialRampToValueAtTime(60, c.currentTime + 0.12);
+          g.gain.setValueAtTime(0.25, c.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.15);
+          o.connect(g); g.connect(c.destination);
+          o.start(); o.stop(c.currentTime + 0.16);
+        } catch (e) { /* audio is decorative */ }
+      },
+      crunch() { // break: filtered noise burst
+        const c = this.ac();
+        if (!c || !this.enabled) return;
+        try {
+          const len = Math.floor(c.sampleRate * 0.2);
+          const buf = c.createBuffer(1, len, c.sampleRate);
+          const d = buf.getChannelData(0);
+          for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+          const src = c.createBufferSource(); src.buffer = buf;
+          const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 900;
+          const g = c.createGain();
+          g.gain.setValueAtTime(0.3, c.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.2);
+          src.connect(f); f.connect(g); g.connect(c.destination);
+          src.start();
+        } catch (e) { /* audio is decorative */ }
+      },
+    };
+
+    // Break particles: ~12 small voxel cubes burst from the broken
+    // container's center, gravity + fade over ~0.6s. Runs in the walk-mode
+    // rAF loop (build mode is walk-only, so no orbit animation needed).
+    let particles = [];
+    const PARTICLE_COLORS = [0x8a6b46, 0x6e4f2e, 0x5cb85c, 0x9aa0a6, 0x2b6cb0];
+    function spawnParticles(x, y, z) {
+      if (!T || !T.THREE) return;
+      const THREE = T.THREE;
+      const rng = mulberry32((Date.now() & 0xffff) | 1);
+      for (let i = 0; i < 12; i++) {
+        const s = 0.1 + rng() * 0.12;
+        const m = new THREE.Mesh(
+          new THREE.BoxGeometry(s, s, s),
+          new THREE.MeshBasicMaterial({
+            color: PARTICLE_COLORS[(rng() * PARTICLE_COLORS.length) | 0],
+            transparent: true, opacity: 1,
+          })
+        );
+        m.position.set(x + (rng() - 0.5) * 0.5, y + rng() * 0.4, z + (rng() - 0.5) * 0.5);
+        T.scene.add(m);
+        particles.push({
+          mesh: m,
+          vx: (rng() - 0.5) * 3.2, vy: 2.2 + rng() * 2.6, vz: (rng() - 0.5) * 3.2,
+          life: 0.55 + rng() * 0.15, age: 0,
+        });
+      }
+    }
+    function updateParticles(dt) {
+      if (!particles.length || !T) return;
+      const alive = [];
+      for (const p of particles) {
+        p.age += dt;
+        if (p.age >= p.life) {
+          T.scene.remove(p.mesh);
+          p.mesh.geometry.dispose();
+          p.mesh.material.dispose();
+          continue;
+        }
+        p.vy -= 7.5 * dt; // gravity
+        p.mesh.position.x += p.vx * dt;
+        p.mesh.position.y += p.vy * dt;
+        p.mesh.position.z += p.vz * dt;
+        if (p.mesh.position.y < 0.05) { p.mesh.position.y = 0.05; p.vy *= -0.35; p.vx *= 0.7; p.vz *= 0.7; }
+        p.mesh.material.opacity = 1 - p.age / p.life;
+        p.mesh.rotation.x += dt * 4; p.mesh.rotation.y += dt * 3;
+        alive.push(p);
+      }
+      particles = alive;
+    }
+    function particleCount() { return particles.length; }
+
+    /* ---------------- measuring tape (orbit mode) ---------------- */
+    // 📏 toolbar button toggles tape mode; click two ground points in orbit
+    // mode, get a line + "12.5 ft" label (1 unit = 1 ft). ESC clears.
+    let tapeMode = false;
+    let tapePoints = []; // [{x, z}] world coords, max 2
+    let tapeGroup = null;
+    function tapeDistance(a, b) { // pure; feet
+      return Math.hypot(a.x - b.x, a.z - b.z);
+    }
+    function clearTape() {
+      tapePoints = [];
+      if (tapeGroup && T) { T.scene.remove(tapeGroup); disposeGroup(tapeGroup); }
+      tapeGroup = null;
+      render3D();
+    }
+    function drawTape() {
+      if (!T || tapePoints.length < 2) return;
+      const THREE = T.THREE;
+      if (tapeGroup) { T.scene.remove(tapeGroup); disposeGroup(tapeGroup); }
+      tapeGroup = new THREE.Group();
+      const [a, b] = tapePoints;
+      const geo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(a.x, 0.15, a.z), new THREE.Vector3(b.x, 0.15, b.z),
+      ]);
+      tapeGroup.add(new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xffffff })));
+      const dot = (p) => {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8),
+          new THREE.MeshBasicMaterial({ color: 0xffd23e }));
+        m.position.set(p.x, 0.15, p.z);
+        tapeGroup.add(m);
+      };
+      dot(a); dot(b);
+      const d = tapeDistance(a, b);
+      const label = makeLabel(`${d.toFixed(1)} ft`);
+      label.position.set((a.x + b.x) / 2, 1.4, (a.z + b.z) / 2);
+      tapeGroup.add(label);
+      T.scene.add(tapeGroup);
+      render3D();
+    }
+    function tapeClick(wx, wz) {
+      tapePoints.push({ x: wx, z: wz });
+      if (tapePoints.length > 2) tapePoints = [{ x: wx, z: wz }]; // third click starts a new tape
+      if (tapePoints.length === 2) drawTape();
+      else render3D();
+    }
+    function setTapeMode(on) {
+      tapeMode = !!on;
+      if (!tapeMode) clearTape();
+      paintViewButtons();
+      hint3d.textContent = tapeMode
+        ? '📏 Tape: click two points on the ground to measure · ESC clears.'
+        : (walkMode ? walkHintText : orbitHintText);
+      render3D();
+    }
+
+    /* ---------------- build mode (Minecraft creative) ---------------- */
+    // Hotbar + place/break while walking. Every mutation goes through the
+    // real API and the 3D scene is rebuilt after each change. Creative
+    // rules: infinite inventory, and the ground itself is never breakable.
+
+    const HOTBAR = {
+      blocks: [
+        { key: 'raised bed', emoji: '🟫', label: 'Bed' },
+        { key: 'grow bag', emoji: '⬛', label: 'Bag' },
+        { key: 'pot', emoji: '🟧', label: 'Pot' },
+        { key: 'planter', emoji: '🟨', label: 'Planter' },
+        { key: 'pallet', emoji: '🟤', label: 'Pallet' },
+        { key: 'arch', emoji: '⛩️', label: 'Arch' },
+        { key: 'cold frame', emoji: '🪟', label: 'ColdFr' },
+        { key: 'lamp', emoji: '💡', label: 'Lamp' },
+        { key: 'fence', emoji: '⛓️', label: 'Fence' },
+        { key: 'bucket', emoji: '🪣', label: 'Bucket' },
+        { key: 'path', emoji: '🪨', label: 'Path' },
+        { key: 'rain barrel', emoji: '🛢️', label: 'Barrel' },
+        { key: 'compost bin', emoji: '🟤', label: 'Compost' },
+        { key: 'hoop house', emoji: '🏠', label: 'HoopHs' },
+        { key: 'fence gate', emoji: '🚪', label: 'Gate' },
+        { key: 'bird bath', emoji: '🐦', label: 'Bath' },
+        { key: 'fruit tree', emoji: '🌳', label: 'Tree' },
+        { key: 'shed', emoji: '🏚️', label: 'Shed' },
+        { key: 'pergola', emoji: '🏛️', label: 'Pergola' },
+        { key: 'stone edging', emoji: '🧱', label: 'Edging' },
+        { key: 'sprinkler', emoji: '💦', label: 'Sprinklr' },
+        { key: 'drip line', emoji: '💧', label: 'Drip' },
+      ],
+      plants: [
+        { key: 'tomato', emoji: '🍅', label: 'Tomato', species: 'Tomato' },
+        { key: 'pepper', emoji: '🫑', label: 'Pepper', species: 'Pepper' },
+        { key: 'basil', emoji: '🌿', label: 'Basil', species: 'Basil' },
+        { key: 'lettuce', emoji: '🥬', label: 'Lettuce', species: 'Lettuce' },
+        { key: 'carrot', emoji: '🥕', label: 'Carrot', species: 'Carrot' },
+        { key: 'flower', emoji: '🌸', label: 'Flower', species: 'Flower' },
+      ],
+    };
+    let buildTab = 'blocks';
+    let buildIndex = 0;
+    let ghost = null; // translucent placement preview (scene-level, not in T.group)
+    let buildInputsBound = false;
+    let buildRay = null;
+
+    // ---- pure helpers (also exposed to tests via wrap3d._build) ----
+    // Per-kind build-mode placement footprints. Everything defaults to 1x1;
+    // the hoop house is 4x8, the shed 4x6, the pergola 2x4.
+    const PLACE_FOOTPRINTS = { 'hoop house': [4, 8], 'shed': [4, 6], 'pergola': [2, 4] };
+    function placeFootprint(key) { return PLACE_FOOTPRINTS[key] || [1, 1]; }
+    function cellFromWorld(wx, wz, ncols, nrows) {
+      // inverse of the container placement: wx = gx + w/2 - cols/2
+      return { gx: Math.floor(wx + ncols / 2), gy: Math.floor(wz + nrows / 2) };
+    }
+    function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
+      return ax < bx + bw && bx < ax + aw && ay < by + bh && by < ay + ah;
+    }
+    function cellFree(gx, gy, w, h, list, ncols, nrows, ignoreId) {
+      if (gx < 0 || gy < 0 || gx + w > ncols || gy + h > nrows) return false;
+      return !(list || []).some((c) => c.id !== ignoreId && rectsOverlap(
+        gx, gy, w, h, c.grid_x || 0, c.grid_y || 0, c.grid_w || 1, c.grid_h || 1));
+    }
+    function buildSlots() { return buildTab === 'blocks' ? HOTBAR.blocks : HOTBAR.plants; }
+    function buildSelected() { const s = buildSlots(); return s[buildIndex] || s[0]; }
+    function buildSelect(i) {
+      const n = buildSlots().length;
+      buildIndex = ((i % n) + n) % n;
+      paintHotbar();
+    }
+    function buildCycle(d) { buildSelect(buildIndex + d); }
+    function buildToggleTab() {
+      buildTab = buildTab === 'blocks' ? 'plants' : 'blocks';
+      buildIndex = 0;
+      paintHotbar();
+    }
+    function nextContainerName(kind) {
+      const base = String(kind || 'grow bag').replace(/\b\w/g, (c) => c.toUpperCase());
+      const names = new Set((containers || []).map((c) => (c.name || '').toLowerCase()));
+      let n = 1;
+      while (names.has(`${base} ${n}`.toLowerCase())) n++;
+      return `${base} ${n}`;
+    }
+    function needsBreakConfirm(c) { return plantingsFor(c.id).length > 0; }
+
+    // ---- hotbar DOM (Minecraft-style, keyboard/wheel driven) ----
+    const hotbar = document.createElement('div');
+    hotbar.style.cssText = 'position:absolute;left:50%;bottom:12px;transform:translateX(-50%);' +
+      'display:none;z-index:6;pointer-events:none;text-align:center;';
+    const hotbarTab = document.createElement('div');
+    const hotbarSlots = document.createElement('div');
+    hotbar.appendChild(hotbarTab);
+    hotbar.appendChild(hotbarSlots);
+    wrap3d.appendChild(hotbar);
+
+    function paintHotbar() {
+      hotbarTab.textContent = (buildTab === 'blocks' ? '▣ BLOCKS' : '❀ PLANTS') + ' · Q switch · 1-9/wheel pick';
+      hotbarTab.style.cssText = 'color:#fff;font-size:11px;font-weight:700;letter-spacing:1px;' +
+        'text-shadow:0 1px 2px #000;margin-bottom:4px;';
+      const slotHtml = (s, i) => {
+        const on = i === buildIndex;
+        return '<div style="display:inline-block;width:54px;margin:0 2px;padding:4px 2px;' +
+          'background:rgba(18,18,18,.75);border:2px solid ' + (on ? '#fff' : '#5a5a5a') + ';' +
+          (on ? 'box-shadow:0 0 0 2px #fff;' : '') + 'border-radius:3px;vertical-align:top;">' +
+          '<div style="font-size:22px;line-height:1.25">' + s.emoji + '</div>' +
+          '<div style="font-size:9px;color:#ddd;white-space:nowrap;overflow:hidden">' + s.label + '</div>' +
+          '<div style="font-size:9px;color:#9f9;font-weight:700">∞</div></div>';
+      };
+      // rows of 8 while the tab is long (BLOCKS has 22: 8/8/6); PLANTS stays one row
+      const slots = buildSlots();
+      let html = '';
+      for (let r = 0; r * 8 < slots.length; r++) {
+        html += '<div style="margin-bottom:4px;">' +
+          slots.slice(r * 8, r * 8 + 8).map((s, j) => slotHtml(s, r * 8 + j)).join('') +
+          '</div>';
+      }
+      hotbarSlots.innerHTML = html;
+    }
+    paintHotbar();
+
+    function unlockPointer() {
+      if (walk && walk.plc && walk.plc.isLocked) { try { walk.plc.unlock(); } catch (e) { /* noop */ } }
+      if (walk) walk.locked = false;
+    }
+
+    // Raycast from the crosshair; walks up to find planting / container / ground.
+    function aimHit() {
+      if (!T || !T.group) return null;
+      const THREE = T.THREE;
+      if (!buildRay) buildRay = new THREE.Raycaster();
+      T.camera.updateMatrixWorld(); // aim exactly where the camera is now, not last frame's matrix
+      buildRay.setFromCamera(new THREE.Vector2(0, 0), T.camera);
+      const hits = buildRay.intersectObjects(T.group.children, true);
+      for (const h of hits) {
+        if (h.object.isSprite) continue; // labels float above; aim through them
+        let o = h.object, plantingId = null, containerId = null, isGround = false;
+        while (o) {
+          const ud = o.userData || {};
+          if (plantingId === null && ud.plantingId != null) plantingId = ud.plantingId;
+          if (containerId === null && ud.containerId != null) containerId = ud.containerId;
+          if (ud.isGround) isGround = true;
+          o = o.parent;
+        }
+        return { plantingId, containerId, isGround, point: h.point };
+      }
+      return null;
+    }
+
+    // Rebuild the 3D scene without yanking the walk camera out of first person.
+    function refreshScene3D() {
+      if (!T) return;
+      let pos = null, quat = null;
+      if (walkMode) {
+        pos = T.camera.position.clone();
+        quat = T.camera.quaternion.clone();
+      }
+      buildScene3D();
+      if (walkMode && pos) {
+        T.camera.position.copy(pos);
+        T.camera.quaternion.copy(quat);
+        render3D();
+      }
+    }
+
+    async function breakAim() {
+      const a = aimHit();
+      if (!a) return;
+      // voxel-cube burst at the break point (before the scene rebuilds)
+      const burstAt = (x, y, z) => { spawnParticles(x, y, z); Sound.crunch(); };
+      const containerCenter = (c) => {
+        if (T && T.group) {
+          const grp = T.group.children.find((o) => o.userData && o.userData.containerId === c.id);
+          if (grp) return { x: grp.position.x, y: (grp.userData.topY || 1) / 2 + 0.3, z: grp.position.z };
+        }
+        const w = c.grid_w || 1, h = c.grid_h || 1;
+        return { x: (c.grid_x || 0) + w / 2 - cols / 2, y: 0.8, z: (c.grid_y || 0) + h / 2 - rows / 2 };
+      };
+      if (a.plantingId != null) {
+        try {
+          await api.del(`/api/containers/plantings/${a.plantingId}`);
+          plantings = plantings.filter((p) => p.id !== a.plantingId);
+          if (a.point) burstAt(a.point.x, a.point.y, a.point.z);
+          toast('Planting removed.');
+          refreshScene3D();
+        } catch (err) { toast(err.message || 'Could not remove planting.', 'error'); }
+        return;
+      }
+      if (a.containerId == null) return;
+      const c = containers.find((x) => x.id === a.containerId);
+      if (!c) return;
+      const n = plantingsFor(c.id).length;
+      if (n > 0) {
+        unlockPointer(); // confirm() needs a free mouse
+        if (!confirm(`Break ${c.name}? Its ${n} planting${n === 1 ? '' : 's'} go${n === 1 ? 'es' : ''} too.`)) return;
+      }
+      const boom = containerCenter(c);
+      try {
+        await api.del(`/api/containers/${c.id}`);
+        containers = containers.filter((x) => x.id !== c.id);
+        plantings = plantings.filter((p) => p.container_id !== c.id);
+        burstAt(boom.x, boom.y, boom.z);
+        toast(`${c.name} broken.`);
+        refreshScene3D();
+      } catch (err) { toast(err.message || 'Could not break that.', 'error'); }
+    }
+
+    async function placeAim() {
+      const a = aimHit();
+      if (!a) return;
+      const sel = buildSelected();
+      if (buildTab === 'blocks') {
+        if (!a.isGround) { toast('Aim at the ground to place blocks.', 'error'); return; }
+        const [pw, ph] = placeFootprint(sel.key);
+        const { gx, gy } = cellFromWorld(a.point.x, a.point.z, cols, rows);
+        if (!cellFree(gx, gy, pw, ph, containers, cols, rows, null)) { toast('No room there.', 'error'); return; }
+        const name = nextContainerName(sel.key);
+        let created = null;
+        try {
+          // create() auto-picks the first free spot; then move it to the aimed cell.
+          created = await api.post('/api/containers/', {
+            name, kind: sel.key, grid_w: pw, grid_h: ph, season_year: year,
+          });
+          const moved = await api.patch(`/api/containers/${created.id}`, { grid_x: gx, grid_y: gy });
+          containers.push(moved);
+          Sound.thunk();
+          toast(`${name} placed.`);
+          refreshScene3D();
+        } catch (err) {
+          if (created && created.id) { try { await api.del(`/api/containers/${created.id}`); } catch (e) { /* noop */ } }
+          toast(err.message || 'Could not place that.', 'error');
+        }
+      } else {
+        if (a.containerId == null) { toast('Aim at a container to plant.', 'error'); return; }
+        const c = containers.find((x) => x.id === a.containerId);
+        if (!c) return;
+        try {
+          const plant = await api.post('/api/plants/', { variety_name: sel.label, species_type: sel.species });
+          const np = await api.post('/api/containers/plantings', { container_id: c.id, plant_id: plant.id });
+          plantings.push(np);
+          toast(`${sel.label} planted in ${c.name}.`);
+          refreshScene3D();
+        } catch (err) { toast(err.message || 'Could not plant that.', 'error'); }
+      }
+    }
+
+    function editAim() {
+      const a = aimHit();
+      const c = a && a.containerId != null ? containers.find((x) => x.id === a.containerId) : null;
+      if (!c) return;
+      unlockPointer();
+      openModal(c);
+    }
+
+    function disposeGhostMeshes(gr) {
+      // NB: shared TEX maps are NOT disposed here — buildScene3D owns them.
+      gr.traverse((o) => {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => m.dispose());
+      });
+    }
+
+    function clearGhost() {
+      if (ghost && T) { T.scene.remove(ghost); disposeGhostMeshes(ghost); }
+      ghost = null;
+    }
+
+    // Translucent green/red preview of the selected block at the aimed cell.
+    // Runs every walk-loop frame; rebuilds only when cell/validity/selection changes.
+    function updateGhost() {
+      if (!T) return;
+      const show = walkMode && walk && walk.locked && buildTab === 'blocks';
+      const a = show ? aimHit() : null;
+      const sel = buildSelected();
+      const [pw, ph] = placeFootprint(sel.key);
+      let cell = null, ok = false;
+      if (a && a.isGround) {
+        cell = cellFromWorld(a.point.x, a.point.z, cols, rows);
+        ok = cellFree(cell.gx, cell.gy, pw, ph, containers, cols, rows, null);
+      }
+      const key = show && cell ? `${sel.key}@${cell.gx},${cell.gy}:${ok ? 'g' : 'r'}` : '';
+      if (!key) { clearGhost(); return; }
+      if (ghost && ghost.userData.key === key) return;
+      clearGhost();
+      const THREE = T.THREE;
+      ghost = new THREE.Group();
+      if (sel.key === 'arch') buildArch(THREE, ghost, 1, 1, 4, T.TEX);
+      else if (sel.key === 'pallet') buildPallet(THREE, ghost, 1, 1, T.TEX);
+      else if (sel.key === 'lamp') buildLamp(THREE, ghost, 1, 1, T.TEX);
+      else if (sel.key === 'fence') buildFence(THREE, ghost, 1, 1, T.TEX, fenceSides(cell.gx, cell.gy, fenceCells(containers)));
+      else if (sel.key === 'fence gate') buildFenceGate(THREE, ghost, 1, 1, T.TEX, fenceSides(cell.gx, cell.gy, fenceCells(containers)));
+      else if (sel.key === 'bucket') buildBucket(THREE, ghost, T.TEX);
+      else if (sel.key === 'path') buildPath(THREE, ghost, T.TEX);
+      else if (sel.key === 'rain barrel') buildRainBarrel(THREE, ghost, T.TEX);
+      else if (sel.key === 'compost bin') buildCompostBin(THREE, ghost, T.TEX);
+      else if (sel.key === 'hoop house') buildHoopHouse(THREE, ghost, pw, ph, 6, T.TEX);
+      else if (sel.key === 'bird bath') buildBirdBath(THREE, ghost, T.TEX);
+      else if (sel.key === 'fruit tree') buildFruitTree(THREE, ghost, T.TEX);
+      else if (sel.key === 'shed') buildShed(THREE, ghost, pw, ph, T.TEX);
+      else if (sel.key === 'pergola') buildPergola(THREE, ghost, pw, ph, T.TEX);
+      else if (sel.key === 'stone edging') buildEdging(THREE, ghost, 1, 1, T.TEX, fenceSides(cell.gx, cell.gy, edgingCells(containers)));
+      else if (sel.key === 'sprinkler') buildSprinkler(THREE, ghost, T.TEX);
+      else if (sel.key === 'drip line') buildDripLine(THREE, ghost, 1, 1, T.TEX, fenceSides(cell.gx, cell.gy, dripCells(containers)));
+      else buildVessel(THREE, ghost, 1, 1, sel.key, T.TEX);
+      const tint = new THREE.Color(ok ? 0x00cc44 : 0xcc2222);
+      ghost.traverse((o) => {
+        if (o.isMesh) {
+          o.material.transparent = true;
+          o.material.opacity = 0.6;
+          o.material.emissive = tint;
+          o.material.emissiveIntensity = 0.6;
+          o.castShadow = false;
+        }
+      });
+      ghost.position.set(cell.gx + pw / 2 - cols / 2, 0.03, cell.gy + ph / 2 - rows / 2);
+      ghost.userData.key = key;
+      T.scene.add(ghost);
+    }
+
+    function buildTyping() {
+      const a = document.activeElement;
+      return !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+    }
+
+    function bindBuildInputs() {
+      if (buildInputsBound || !T) return;
+      buildInputsBound = true;
+      const el = T.renderer.domElement;
+      el.addEventListener('contextmenu', (e) => { if (walkMode) e.preventDefault(); });
+      el.addEventListener('wheel', (e) => {
+        if (!walkMode) return;
+        e.preventDefault();
+        buildCycle(e.deltaY > 0 ? 1 : -1);
+      }, { passive: false });
+      window.addEventListener('keydown', (e) => {
+        if (!walkMode || buildTyping()) return;
+        if (e.code === 'KeyQ') buildToggleTab();
+        else if (e.code === 'KeyE') editAim();
+        else if (/^Digit[1-9]$/.test(e.code)) buildSelect(Number(e.code.slice(5)) - 1);
+      });
+    }
+
+    wrap3d._build = { // handle for tests / debugging
+      cellFromWorld, rectsOverlap, cellFree, needsBreakConfirm, placeFootprint,
+      buildSlots, buildSelected, buildSelect, buildCycle, buildToggleTab,
+      nextContainerName, updateGhost, aimHit, breakAim, placeAim, editAim,
+      get tab() { return buildTab; },
+      get index() { return buildIndex; },
+      _setTab: (t) => { buildTab = t; buildIndex = 0; paintHotbar(); },
+      _hotbar: () => hotbar,
+      _ghost: () => ghost,
+    };
+    /* -------------- end build mode -------------- */
+
     function paintViewButtons() {
       const on = 'bg-sage-200 px-3 py-1 font-semibold text-navy-800';
       const off = 'bg-beige-50 px-3 py-1 text-navy-500 hover:bg-beige-100';
@@ -1463,6 +2946,17 @@
       view3dBtn.className = (view === '3d' && !walkMode) ? on : off;
       if (viewWalkBtn) {
         viewWalkBtn.className = (walkMode ? on : off) + (view === '3d' ? '' : ' hidden');
+      }
+      if (dayNightBtn) {
+        dayNightBtn.className = (view === '3d' ? '' : ' hidden') + ' ' + (dayNight === 'night' ? on : off);
+        dayNightBtn.textContent = dayNight === 'night' ? '🌙 Night' : '☀️ Day';
+      }
+      if (tapeBtn) {
+        tapeBtn.className = (view === '3d' ? '' : ' hidden') + ' ' + (tapeMode ? on : off);
+      }
+      if (soundBtn) {
+        soundBtn.className = (view === '3d' ? '' : ' hidden') + ' ' + off;
+        soundBtn.textContent = Sound.enabled ? '🔊' : '🔇';
       }
     }
 
@@ -1480,6 +2974,7 @@
         render3D();
       } else {
         exitWalkMode();
+        setTapeMode(false);
         view = '2d';
       }
       const is3d = view === '3d';
@@ -1501,8 +2996,27 @@
         else enterWalkMode();
       });
     }
+    if (dayNightBtn) {
+      dayNightBtn.addEventListener('click', () => { if (view === '3d') toggleDayNight(); });
+    }
+    if (tapeBtn) {
+      tapeBtn.addEventListener('click', () => {
+        if (view !== '3d' || walkMode) return; // orbit mode only
+        setTapeMode(!tapeMode);
+      });
+    }
+    if (soundBtn) {
+      soundBtn.addEventListener('click', () => {
+        Sound.enabled = !Sound.enabled;
+        paintViewButtons();
+        if (Sound.enabled) Sound.thunk(); // little confirmation blip
+      });
+    }
     if (typeof window !== 'undefined' && window.addEventListener) {
       window.addEventListener('resize', () => { if (view === '3d') sizeThree(); });
+      window.addEventListener('keydown', (e) => {
+        if (e.code === 'Escape' && tapeMode && !walkMode) setTapeMode(false);
+      });
     }
     paintViewButtons();
     /* ---------------- end 3D view ---------------- */
