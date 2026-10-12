@@ -5,13 +5,14 @@ from datetime import date as Date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from app.api_tokens import require_domain
 from sqlmodel import Session, select
 
 from app.database import get_session
 from app.models import FertilizationLog, apply_patch
 from app.schemas import FertilizationCreate, FertilizationRead, FertilizationUpdate
 
-router = APIRouter(prefix="/api/fertilizations", tags=["fertilizations"])
+router = APIRouter(prefix="/api/fertilizations", tags=["fertilizations"], dependencies=[Depends(require_domain("fertilizations"))])
 
 
 def _get_or_404(session: Session, log_id: int) -> FertilizationLog:

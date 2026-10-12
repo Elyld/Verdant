@@ -3,6 +3,7 @@ import re
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from app.api_tokens import require_domain
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -10,7 +11,7 @@ from app.database import get_session
 from app.models import AlbumImage, SeedPacket, SeedSource, apply_patch
 from app.storage import copy_stored, delete_stored, save_upload
 
-router = APIRouter(prefix="/api/seed-packets", tags=["seed-packets"])
+router = APIRouter(prefix="/api/seed-packets", tags=["seed-packets"], dependencies=[Depends(require_domain("seed_packets"))])
 
 
 def _normalize_url(url: str) -> str:

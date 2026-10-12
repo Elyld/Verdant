@@ -3,6 +3,7 @@ import base64
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile, status
+from app.api_tokens import require_domain
 from sqlalchemy.orm import Session
 from sqlmodel import select
 
@@ -20,7 +21,7 @@ from app.schemas import InvoiceCreate, InvoiceRead
 from app.seed_extract import candidates_from_invoice
 from app.storage import delete_stored, save_pdf_upload
 
-router = APIRouter(prefix="/api/invoices", tags=["invoices"])
+router = APIRouter(prefix="/api/invoices", tags=["invoices"], dependencies=[Depends(require_domain("invoices"))])
 
 INVOICE_SOURCES = ("manual", "csv", "gmail")
 

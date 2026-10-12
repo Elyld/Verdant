@@ -268,6 +268,42 @@
       </p>
     </div>
 
+    <div class="card space-y-4">
+      <h3 class="font-display text-lg font-semibold text-navy-800">🔑 API tokens</h3>
+      <p class="text-sm text-navy-600">
+        Tokens let outside programs — like a local assistant on your own PC —
+        use Verdant's API with a key instead of poking the database directly.
+        This page needs no token; a token is only checked when a request
+        carries one. The secret is shown <strong>once</strong> when you create
+        it — copy it then, it can't be shown again.
+      </p>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <label class="block">
+          <span class="lbl">Token name</span>
+          <input id="tok-name" type="text" class="inp" placeholder="Hermes" maxlength="80" autocomplete="off" />
+        </label>
+      </div>
+      <div>
+        <span class="lbl">Scopes</span>
+        <div id="tok-scopes" class="mt-1 grid gap-1 sm:grid-cols-2"></div>
+      </div>
+      <div class="flex items-center gap-3">
+        <button type="button" id="tok-create" class="btn-ghost text-sm">Create token</button>
+        <span id="tok-create-status" class="text-sm text-navy-400"></span>
+      </div>
+      <div id="tok-secret-wrap" class="hidden rounded-xl bg-beige-100 px-4 py-3 ring-1 ring-beige-300">
+        <p class="text-sm font-medium text-navy-800">Copy this secret now — it won't be shown again:</p>
+        <div class="mt-2 flex gap-2">
+          <input id="tok-secret" type="text" readonly class="inp font-mono text-xs" autocomplete="off" />
+          <button type="button" id="tok-copy" class="btn-ghost shrink-0 text-sm">Copy</button>
+        </div>
+      </div>
+      <div>
+        <span class="lbl">Existing tokens</span>
+        <div id="tok-list" class="mt-2 space-y-2"></div>
+      </div>
+    </div>
+
     <div class="flex items-center gap-3">
       <button type="submit" class="btn-primary">Save settings</button>
       <span id="settings-status" class="text-sm text-navy-400"></span>

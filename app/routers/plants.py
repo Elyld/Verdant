@@ -3,6 +3,7 @@ from datetime import date as Date
 from datetime import timedelta
 from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from app.api_tokens import require_domain
 from sqlalchemy.orm import Session
 from sqlmodel import or_, select
 
@@ -16,7 +17,7 @@ from app.schemas import (
     TimelapsePhoto,
 )
 
-router = APIRouter(prefix="/api/plants", tags=["plants"])
+router = APIRouter(prefix="/api/plants", tags=["plants"], dependencies=[Depends(require_domain("plants"))])
 
 
 def _get_or_404(session: Session, plant_id: int) -> Plant:

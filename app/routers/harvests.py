@@ -1,6 +1,7 @@
 """API router for harvest tracking and yield data."""
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from app.api_tokens import require_domain
 from sqlalchemy.orm import Session
 
 from app.database import get_session
@@ -8,7 +9,7 @@ from app.models import Harvest, Plant, apply_patch
 from app.schemas import HarvestCreate
 from app import units as units_mod
 
-router = APIRouter(prefix="/api/harvests", tags=["harvests"])
+router = APIRouter(prefix="/api/harvests", tags=["harvests"], dependencies=[Depends(require_domain("harvests"))])
 
 
 def _get_or_404(session: Session, harvest_id: int) -> Harvest:
