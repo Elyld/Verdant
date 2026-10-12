@@ -28,6 +28,10 @@ class PlantingRead(SQLModel):
     variety_name: str = ""
     species_type: str = ""
     family_genus: Optional[str] = None
+    # Growth-stage data for the planner's 3D crop models (v2.62.0). Sourced
+    # from the linked plant; absent when the plant has no dates recorded.
+    date_planted: Optional[str] = None  # ISO YYYY-MM-DD
+    days_to_maturity: Optional[int] = None
 
 
 class RotationWarning(SQLModel):
@@ -169,12 +173,15 @@ def ensure_backfilled(session: Session, year: Optional[int] = None) -> None:
 
 def _planting_read(p: Planting) -> PlantingRead:
     plant = p.plant
+    dp = plant.date_planted if plant else None
     return PlantingRead(
         id=p.id, container_id=p.container_id, plant_id=p.plant_id,
         season_year=p.season_year, slot=p.slot or 0, notes=p.notes or "",
         variety_name=(plant.variety_name if plant else ""),
         species_type=(plant.species_type if plant else ""),
         family_genus=(plant.family_genus if plant else None),
+        date_planted=(dp.isoformat() if dp else None),
+        days_to_maturity=(plant.days_to_maturity if plant else None),
     )
 
 
