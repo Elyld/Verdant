@@ -894,6 +894,13 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.59.1** — **🔍 Simulation-audit fixes.** Three bugs found by the 3-year
+  gardening simulation: the garden agent's chat was sending your message to
+  the model twice on every turn (silently doubling token use); harvest CSV
+  imports without a "Log ID" column silently dropped the plant assignments
+  you picked; and the new 12-month calendar rendered its heat legend twelve
+  times instead of once.
+
 - **2.59.0** — **✂️ Crop packet photos, 📅 a real calendar, one Season to rule them all.**
   The Seeds catalog gains a crop tool: open a packet, hit **✂️ Crop** on the
   front or back photo, drag the area you want, and it replaces the packet's
