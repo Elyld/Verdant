@@ -894,6 +894,13 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.59.2** — **👁️ Honest eyes.** The garden agent's prompt used to tell the
+  model "you CAN see" an attached photo even when the configured model is
+  text-only — a setup for hallucinated photo descriptions. Verdant now checks
+  what the model actually supports (Ollama's `/api/show` capabilities, or
+  OpenRouter's input modalities) and, when it can't see, the prompt says so
+  plainly and asks you to describe the photo instead.
+
 - **2.59.1** — **🔍 Simulation-audit fixes.** Three bugs found by the 3-year
   gardening simulation: the garden agent's chat was sending your message to
   the model twice on every turn (silently doubling token use); harvest CSV
