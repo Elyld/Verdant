@@ -261,14 +261,14 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
   check('cellFree ignoreId still blocked by others', buildApi.cellFree(9, 3, 1, 1, clist, 24, 16, 12) === false);
 
   // hotbar tabs / selection
-  check('hotbar starts on blocks tab', buildApi.tab === 'blocks' && buildApi.buildSlots().length === 16);
+  check('hotbar starts on blocks tab', buildApi.tab === 'blocks' && buildApi.buildSlots().length === 22);
   buildApi.buildSelect(2);
   check('buildSelect sets index', buildApi.index === 2 && buildApi.buildSelected().key === 'pot');
   buildApi.buildCycle(1);
   check('buildCycle forward', buildApi.index === 3);
   buildApi.buildCycle(-1);
   check('buildCycle backward', buildApi.index === 2);
-  buildApi.buildSelect(15);
+  buildApi.buildSelect(21);
   buildApi.buildCycle(1);
   check('buildCycle wraps around', buildApi.index === 0);
   buildApi.buildToggleTab();
@@ -361,18 +361,23 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
 
   // hotbar grew: 16 blocks across two rows of 8, new kinds present
   const blockKeys = buildApi.buildSlots().map((s) => s.key);
-  check('BLOCKS hotbar has 16 slots', blockKeys.length === 16);
+  check('BLOCKS hotbar has 22 slots', blockKeys.length === 22);
   check('dressing kinds in hotbar', ['lamp', 'fence', 'bucket', 'path'].every((k) => blockKeys.includes(k)));
   check('new asset kinds in hotbar', ['rain barrel', 'compost bin', 'hoop house', 'fence gate', 'bird bath'].every((k) => blockKeys.includes(k)));
+  check('graphics-batch kinds in hotbar', ['fruit tree', 'shed', 'pergola', 'stone edging', 'sprinkler', 'drip line'].every((k) => blockKeys.includes(k)));
   buildApi._setTab('blocks');
   buildApi.buildSelect(10);
   check('slot 11 selectable (wheel cycles all)', buildApi.buildSelected().key === 'path');
   buildApi.buildSelect(15);
   check('slot 16 selectable', buildApi.buildSelected().key === 'bird bath');
   buildApi.buildSelect(16);
+  check('slot 17 is the fruit tree', buildApi.buildSelected().key === 'fruit tree');
+  buildApi.buildSelect(21);
+  check('slot 22 is the drip line', buildApi.buildSelected().key === 'drip line');
+  buildApi.buildSelect(22);
   check('selection wraps past the end', buildApi.buildSelected().key === 'raised bed');
   const hbHtml = buildApi._hotbar()._children[1].innerHTML;
-  check('hotbar wraps to two rows of 8', (hbHtml.match(/margin-bottom:4px/g) || []).length === 2);
+  check('hotbar wraps to three rows (8/8/6)', (hbHtml.match(/margin-bottom:4px/g) || []).length === 3);
   buildApi._setTab('plants');
   const plantHtml = buildApi._hotbar()._children[1].innerHTML;
   check('PLANTS tab stays one row', (plantHtml.match(/margin-bottom:4px/g) || []).length === 1);
@@ -448,6 +453,66 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
   walkApi._setT(null);
   walkApi.spawnParticles(0, 1, 0);
   check('no particles without a 3D context', walkApi.particleCount() === 0);
+
+  // ---- graphics batch: sky, grass, fireflies, new-kind connections ----
+  // new pixel painters registered (auto-covered by the painter loop above too)
+  ['paintAppleLeaves', 'paintGrassTuft', 'paintWildflower'].forEach((n) => {
+    check(`painter ${n} registered`, typeof walkApi.painters[n] === 'function');
+  });
+
+  // stone edging + drip line auto-connect (fenceSides pattern, own cell sets)
+  const edgeRun = walkApi.edgingCells([
+    { kind: 'stone edging', grid_x: 1, grid_y: 1, grid_w: 1, grid_h: 1 },
+    { kind: 'stone edging', grid_x: 2, grid_y: 1, grid_w: 1, grid_h: 1 },
+    { kind: 'stone edging', grid_x: 3, grid_y: 1, grid_w: 1, grid_h: 1 },
+  ]);
+  const edgeMid = walkApi.fenceSides(2, 1, edgeRun);
+  check('edging run middle connects east+west', edgeMid.e === true && edgeMid.w === true && edgeMid.n === false && edgeMid.s === false);
+  check('lone edging has no connections', Object.values(walkApi.fenceSides(9, 9, edgeRun)).every((v) => v === false));
+  check('non-edging kinds ignored by edgingCells', walkApi.edgingCells([{ kind: 'fence', grid_x: 1, grid_y: 1 }]).size === 0);
+  const dripRun = walkApi.dripCells([
+    { kind: 'drip line', grid_x: 5, grid_y: 5, grid_w: 1, grid_h: 1 },
+    { kind: 'drip line', grid_x: 5, grid_y: 6, grid_w: 1, grid_h: 1 },
+  ]);
+  const dripTop = walkApi.fenceSides(5, 5, dripRun);
+  check('drip run connects north+south', dripTop.s === true && dripTop.n === false);
+  check('edging and drip sets stay separate', walkApi.dripCells([{ kind: 'stone edging', grid_x: 1, grid_y: 1 }]).size === 0);
+
+  // per-kind placement footprints for the new structures
+  check('shed footprint 4x6', JSON.stringify(buildApi.placeFootprint('shed')) === '[4,6]');
+  check('pergola footprint 2x4', JSON.stringify(buildApi.placeFootprint('pergola')) === '[2,4]');
+  check('shed 4x6 fits on empty grid', buildApi.cellFree(0, 0, 4, 6, [], 24, 16, null) === true);
+  check('shed 4x6 blocked out of bounds', buildApi.cellFree(21, 0, 4, 6, [], 24, 16, null) === false);
+
+  // gradient sky palette flips with the day/night toggle
+  const dayPal = walkApi.skyColors(false), nightPal = walkApi.skyColors(true);
+  check('sky palette differs day vs night', dayPal.top !== nightPal.top && dayPal.horizon !== nightPal.horizon);
+  check('night sky is dark', nightPal.top < 0x111111 && nightPal.horizon < 0x223355);
+  check('day sky is bright blue', dayPal.top > 0x222222 && dayPal.horizon > 0x888888);
+
+  // grass scatter: deterministic, never on occupied cells, capped, in bounds
+  const occ = walkApi.occupiedCellSet([
+    { id: 1, grid_x: 0, grid_y: 0, grid_w: 2, grid_h: 2 },
+    { id: 2, grid_x: 5, grid_y: 5, grid_w: 1, grid_h: 1 },
+  ]);
+  check('occupiedCellSet covers rects', occ.has('0,0') && occ.has('1,1') && occ.has('5,5') && !occ.has('2,2'));
+  const g1 = walkApi.grassLayout(24, 16, occ, 4242);
+  const g2 = walkApi.grassLayout(24, 16, occ, 4242);
+  check('grass layout deterministic (same seed)', JSON.stringify(g1) === JSON.stringify(g2));
+  const g3 = walkApi.grassLayout(24, 16, occ, 999);
+  check('grass layout seed-sensitive', JSON.stringify(g1) !== JSON.stringify(g3));
+  check('grass never on occupied cells', g1.every((c) => !occ.has(`${c.gx},${c.gy}`)));
+  check('grass capped for perf', g1.length <= 240 && g1.length > 50);
+  check('grass cells in bounds', g1.every((c) => c.gx >= 0 && c.gy >= 0 && c.gx < 24 && c.gy < 16));
+  check('grass has tufts and flowers', g1.some((c) => c.variant === 'tuft') && g1.some((c) => c.variant.startsWith('flower')));
+  check('empty grid still caps grass', walkApi.grassLayout(60, 60, new Set(), 4242).length <= 240);
+
+  // fireflies: gentle drift around their base, pure math
+  const fb = { x: 1, y: 1, z: 1 };
+  const fp0 = walkApi.fireflyPos(fb, 0.5, 0), fp1 = walkApi.fireflyPos(fb, 0.5, 2);
+  check('firefly drifts with time', Math.abs(fp0.x - fp1.x) > 1e-6 || Math.abs(fp0.y - fp1.y) > 1e-6);
+  check('firefly stays near its base', Math.abs(fp0.x - fb.x) <= 0.6 && Math.abs(fp0.y - fb.y) <= 0.35 && Math.abs(fp0.z - fb.z) <= 0.6);
+  check('firefly phase matters', walkApi.fireflyPos(fb, 0, 1).x !== walkApi.fireflyPos(fb, 2, 1).x);
 
   console.log(failures ? `\n${failures} check(s) failed.` : '\nAll checks passed.');
   process.exit(failures ? 1 : 0);

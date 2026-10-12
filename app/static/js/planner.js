@@ -5,7 +5,7 @@
 
   const { $, esc, api, toast } = globalThis.Verdant;
 
-  const KIND_ICON = { 'grow bag': '🛍️', 'raised bed': '🟫', 'pot': '🪴', 'planter': '🗄️', 'arch': '🌉', 'pallet': '🪵', 'lamp': '💡', 'fence': '⛓️', 'bucket': '🪣', 'path': '🪨', 'rain barrel': '🛢️', 'compost bin': '🟤', 'hoop house': '🏠', 'fence gate': '🚪', 'bird bath': '🐦' };
+  const KIND_ICON = { 'grow bag': '🛍️', 'raised bed': '🟫', 'pot': '🪴', 'planter': '🗄️', 'arch': '🌉', 'pallet': '🪵', 'lamp': '💡', 'fence': '⛓️', 'bucket': '🪣', 'path': '🪨', 'rain barrel': '🛢️', 'compost bin': '🟤', 'hoop house': '🏠', 'fence gate': '🚪', 'bird bath': '🐦', 'fruit tree': '🌳', 'shed': '🏚️', 'pergola': '🏛️', 'stone edging': '🧱', 'sprinkler': '💦', 'drip line': '💧' };
   const KIND_TONE = {
     'grow bag': 'bg-sage-100 ring-sage-300',
     'raised bed': 'bg-amber-100 ring-amber-300',
@@ -22,8 +22,14 @@
     'hoop house': 'bg-slate-100 ring-slate-300',
     'fence gate': 'bg-stone-100 ring-stone-400',
     'bird bath': 'bg-cyan-100 ring-cyan-300',
+    'fruit tree': 'bg-green-100 ring-green-400',
+    'shed': 'bg-amber-200 ring-amber-500',
+    'pergola': 'bg-orange-100 ring-orange-300',
+    'stone edging': 'bg-stone-200 ring-stone-500',
+    'sprinkler': 'bg-sky-200 ring-sky-500',
+    'drip line': 'bg-slate-200 ring-slate-400',
   };
-  const FOOTPRINTS = { 'grow bag': [2, 2], 'raised bed': [4, 4], 'pot': [1, 1], 'planter': [3, 1], 'arch': [4, 4], 'pallet': [4, 3], 'lamp': [1, 1], 'fence': [1, 1], 'bucket': [1, 1], 'path': [1, 1], 'rain barrel': [1, 1], 'compost bin': [1, 1], 'hoop house': [4, 8], 'fence gate': [1, 1], 'bird bath': [1, 1] };
+  const FOOTPRINTS = { 'grow bag': [2, 2], 'raised bed': [4, 4], 'pot': [1, 1], 'planter': [3, 1], 'arch': [4, 4], 'pallet': [4, 3], 'lamp': [1, 1], 'fence': [1, 1], 'bucket': [1, 1], 'path': [1, 1], 'rain barrel': [1, 1], 'compost bin': [1, 1], 'hoop house': [4, 8], 'fence gate': [1, 1], 'bird bath': [1, 1], 'fruit tree': [1, 1], 'shed': [4, 6], 'pergola': [2, 4], 'stone edging': [1, 1], 'sprinkler': [1, 1], 'drip line': [1, 1] };
   const KIND_HEIGHT = { 'arch': 7, 'hoop house': 6 }; // default height in feet, used by the 3D view
 
   function initPlanner() {
@@ -622,6 +628,17 @@
       };
     }
 
+    // sRGB hex -> linear THREE.Color. Needed because the bloom composer chain
+    // renders in linear (r147 applies no output encoding to render targets)
+    // with a GammaCorrection pass at the end; plain hex Colors are authored
+    // as sRGB display values. (Color.convertSRGBToLinear() is a no-op while
+    // ColorManagement.legacyMode is true in r147, hence the manual pow.)
+    function srgbToLinear(THREE, hex) {
+      const c = new THREE.Color(hex);
+      c.r = Math.pow(c.r, 2.2); c.g = Math.pow(c.g, 2.2); c.b = Math.pow(c.b, 2.2);
+      return c;
+    }
+
     /* ---------- pixel-art helpers ---------- */
     function px(ctx, x, y, w, h, c) {
       ctx.fillStyle = c;
@@ -756,6 +773,47 @@
       // weathered stone basin: pale gray with mossy flecks
       noiseFill(ctx, S, rng, ['#b9bdc2', '#aeb3b9', '#c4c9ce', '#9fa5ab']);
       for (let i = 0; i < 12; i++) px(ctx, (rng() * S) | 0, (rng() * S) | 0, 1, 1, '#7a8a5a'); // moss
+    }
+
+    function paintAppleLeaves(ctx, S, rng) {
+      // leaf canopy with red apple pixels tucked in
+      const greens = ['#3f8f37', '#4e9e3f', '#5cb85c', '#357a2e'];
+      for (let y = 1; y < S - 1; y++) {
+        for (let x = 1; x < S - 1; x++) {
+          const dx = (x - S / 2) / (S / 2), dy = (y - S / 2) / (S / 2);
+          if (dx * dx + dy * dy < 0.8 && rng() < 0.94) px(ctx, x, y, 1, 1, greens[(rng() * greens.length) | 0]);
+        }
+      }
+      for (let i = 0; i < 4; i++) { // apples: 2x2 red clusters
+        const ax = 2 + ((rng() * (S - 5)) | 0), ay = 2 + ((rng() * (S - 5)) | 0);
+        px(ctx, ax, ay, 2, 2, '#d63c2f');
+        px(ctx, ax, ay, 1, 1, '#f06655'); // highlight
+      }
+    }
+
+    function paintGrassTuft(ctx, S, rng) {
+      // meadow grass blades: vertical green strokes on transparency
+      const greens = ['#4e9e3f', '#5cb85c', '#3f8f37', '#6fbf5a'];
+      for (let i = 0; i < 26; i++) {
+        const x = (rng() * S) | 0, h = 5 + ((rng() * (S - 6)) | 0);
+        px(ctx, x, S - h, 1, h, greens[(rng() * greens.length) | 0]);
+        if (rng() < 0.5) px(ctx, x + (rng() < 0.5 ? -1 : 1), S - h + 1, 1, 2, greens[(rng() * greens.length) | 0]);
+      }
+    }
+
+    function paintWildflower(ctx, S, rng, colorIdx) {
+      // stem + leaves + one flower head; colorIdx picks the palette (rng when omitted)
+      const heads = ['#e0483e', '#f2c531', '#f5f5f5']; // red, yellow, white
+      const head = heads[colorIdx == null ? (rng() * 3) | 0 : colorIdx % 3];
+      px(ctx, 7, 4, 2, 12, '#3f8f37'); // stem
+      px(ctx, 4, 9, 3, 2, '#4e9e3f'); // leaves
+      px(ctx, 9, 11, 3, 2, '#4e9e3f');
+      for (let y = 0; y < 5; y++) for (let x = 0; x < 5; x++) { // head blob
+        const dx = x - 2, dy = y - 2;
+        if (dx * dx + dy * dy <= 5) px(ctx, 5 + x, 0 + y, 1, 1, head);
+      }
+      px(ctx, 6, 1, 3, 3, '#ffdf5e'); // center
+      for (let i = 0; i < 8; i++) px(ctx, (rng() * S) | 0, 10 + ((rng() * 6) | 0), 1, 1, '#357a2e'); // grass flecks
     }
 
     // Pixel-sprite maps: one char per pixel, '.' = transparent.
@@ -924,6 +982,18 @@
       await loadScript(`${CDN}/examples/js/controls/OrbitControls.js`);
       const THREE = globalThis.THREE;
       if (!THREE || !THREE.OrbitControls) throw new Error('3d unavailable');
+      // Bloom post-processing is a nice-to-have: if any pass fails to load,
+      // the plain renderer path keeps working untouched.
+      try {
+        await loadScript(`${CDN}/examples/js/shaders/CopyShader.js`);
+        await loadScript(`${CDN}/examples/js/shaders/LuminosityHighPassShader.js`);
+        await loadScript(`${CDN}/examples/js/shaders/GammaCorrectionShader.js`);
+        await loadScript(`${CDN}/examples/js/postprocessing/EffectComposer.js`);
+        await loadScript(`${CDN}/examples/js/postprocessing/RenderPass.js`);
+        await loadScript(`${CDN}/examples/js/postprocessing/ShaderPass.js`);
+        await loadScript(`${CDN}/examples/js/postprocessing/MaskPass.js`);
+        await loadScript(`${CDN}/examples/js/postprocessing/UnrealBloomPass.js`);
+      } catch (err) { /* bloom unavailable; renderer-only fallback below */ }
 
       const renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setPixelRatio(Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, 2));
@@ -933,9 +1003,41 @@
       wrap3d.appendChild(renderer.domElement);
 
       const scene = new THREE.Scene();
-      const SKY = 0x77a4ff; // minecraft-ish sky blue
-      scene.background = new THREE.Color(SKY);
-      scene.fog = new THREE.Fog(SKY, 80, 200);
+      // Gradient sky dome (big inverted sphere, BackSide shader): horizon ->
+      // zenith blend driven by uniforms so the day/night toggle can lerp them.
+      // Fog color tracks the horizon for a seamless ground fade.
+      // NOTE: the composer chain renders in linear (r147 applies no output
+      // encoding to render targets), with a GammaCorrection pass at the end.
+      // Plain THREE.Color hexes are sRGB display values — srgbToLinear (defined
+      // next to mulberry32) converts them; without it the sky washes out.
+      // Palette comes from skyColors() (single source of truth); applyDayNight
+      // re-derives these on toggle.
+      const SKY0 = skyColors(false);
+      const skyDomeMat = new THREE.ShaderMaterial({
+        side: THREE.BackSide, depthWrite: false, fog: false,
+        uniforms: {
+          topColor: { value: srgbToLinear(THREE, SKY0.top) },
+          horizonColor: { value: srgbToLinear(THREE, SKY0.horizon) },
+        },
+        vertexShader: 'varying vec3 vP; void main() { vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader: [
+          'uniform vec3 topColor; uniform vec3 horizonColor; varying vec3 vP;',
+          'void main() {',
+          '  float h = normalize(vP).y;',
+          // ease-out curve: rich zenith color reaches down into the low sky
+          // angles a typical orbit view actually shows (a plain pow() leaves
+          // everything near the pale horizon color).
+          '  float t = 1.0 - pow(1.0 - max(h, 0.0), 3.0);',
+          '  vec3 c = mix(horizonColor, topColor, t);',
+          '  if (h < 0.0) c = mix(horizonColor, horizonColor * 0.45, min(-h * 3.0, 1.0));',
+          '  gl_FragColor = vec4(c, 1.0);',
+          '}',
+        ].join('\n'),
+      });
+      const skyDome = new THREE.Mesh(new THREE.SphereGeometry(420, 24, 16), skyDomeMat);
+      skyDome.userData.noShadow = true;
+      scene.add(skyDome);
+      scene.fog = new THREE.Fog(SKY0.horizon, 80, 200);
 
       const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 600);
       const controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -948,9 +1050,9 @@
       controls.maxDistance = 130;
       controls.addEventListener('change', () => render3D());
 
-      scene.add(new THREE.HemisphereLight(0xbdd8ff, 0x8a9a6a, 0.85));
+      scene.add(new THREE.HemisphereLight(0xbdd8ff, 0x8a9a6a, 0.9));
       const hemi = scene.children[scene.children.length - 1];
-      const sun = new THREE.DirectionalLight(0xfff3d6, 0.95);
+      const sun = new THREE.DirectionalLight(0xfff1d4, 0.95); // slightly warmer
       sun.castShadow = true;
       sun.shadow.mapSize.set(2048, 2048);
       sun.shadow.camera.near = 1;
@@ -960,7 +1062,7 @@
       // Prominent blocky sky: square sun + glow, square moon, starfield.
       // Sprites always face the camera, so the square sun reads correctly
       // from orbit and first person alike. Day/night toggles visibility.
-      function skySprite(core, glow, corePx) {
+      function skySprite(core, glow, corePx, size) {
         const cv = document.createElement('canvas');
         cv.width = cv.height = 128;
         const cx = cv.getContext('2d');
@@ -975,12 +1077,12 @@
         const tex = new THREE.CanvasTexture(cv);
         tex.encoding = THREE.sRGBEncoding;
         const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false }));
-        sp.scale.set(70, 70, 1);
+        sp.scale.set(size, size, 1);
         return sp;
       }
-      const sunSprite = skySprite('#ffdf5e', 'rgba(255,220,120,0.55)', 34);
+      const sunSprite = skySprite('#ffdf5e', 'rgba(255,220,120,0.4)', 34, 42);
       sunSprite.position.set(-130, 62, -190);
-      const moonSprite = skySprite('#e8ecf5', 'rgba(200,215,245,0.35)', 26);
+      const moonSprite = skySprite('#e8ecf5', 'rgba(200,215,245,0.35)', 26, 55);
       moonSprite.position.set(140, 60, -190);
       moonSprite.visible = false;
       scene.add(sunSprite);
@@ -1048,8 +1150,26 @@
         else if (e.button === 2) placeAim();
       });
 
-      T = { THREE, renderer, scene, camera, controls, sun, group: null, TEX: null,
-        sky: { sunSprite, moonSprite, stars, hemi }, clouds: [], lamps: [], lampLights: [] };
+      // Bloom composer (half-res internally): sun, lamp heads, fireflies and
+      // bright sky bloom; everything else stays crisp. Falls back to the
+      // plain renderer when any pass is missing.
+      let composer = null;
+      try {
+        if (THREE.EffectComposer && THREE.RenderPass && THREE.UnrealBloomPass && THREE.GammaCorrectionShader) {
+          composer = new THREE.EffectComposer(renderer);
+          composer.setPixelRatio(Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, 2));
+          composer.addPass(new THREE.RenderPass(scene, camera));
+          const bw = wrap3d.clientWidth || 800, bh = Math.max(420, Math.round(bw * rows / cols));
+          composer.addPass(new THREE.UnrealBloomPass(new THREE.Vector2(bw / 2, bh / 2), 0.5, 0.35, 0.95));
+          // r147 has no OutputPass: GammaCorrection restores the sRGB look
+          // the plain renderer gets from outputEncoding.
+          composer.addPass(new THREE.ShaderPass(THREE.GammaCorrectionShader));
+          composer.setSize(bw, bh);
+        }
+      } catch (err) { composer = null; }
+
+      T = { THREE, renderer, scene, camera, controls, sun, composer, group: null, TEX: null,
+        sky: { sunSprite, moonSprite, stars, hemi, dome: skyDome }, clouds: [], lamps: [], lampLights: [] };
       wrap3d._three = T; // handle for tests / debugging
       sizeThree();
       return T;
@@ -1060,6 +1180,7 @@
       const w = wrap3d.clientWidth || 800;
       const h = Math.max(420, Math.round(w * rows / cols));
       T.renderer.setSize(w, h);
+      if (T.composer) T.composer.setSize(w, h);
       T.camera.aspect = w / h;
       T.camera.updateProjectionMatrix();
       render3D();
@@ -1098,6 +1219,11 @@
       TEX.compost = makePixTexture(THREE, 16, paintCompost, 27);
       TEX.hoopPlastic = makePixTexture(THREE, 16, paintHoopPlastic, 28);
       TEX.basin = makePixTexture(THREE, 16, paintBasin, 29);
+      TEX.appleLeaves = makePixTexture(THREE, 16, paintAppleLeaves, 30);
+      TEX.grassTuft = makePixTexture(THREE, 16, paintGrassTuft, 31);
+      TEX.flowerRed = makePixTexture(THREE, 16, (ctx, S) => paintWildflower(ctx, S, mulberry32(101), 0), 32);
+      TEX.flowerYellow = makePixTexture(THREE, 16, (ctx, S) => paintWildflower(ctx, S, mulberry32(102), 1), 33);
+      TEX.flowerWhite = makePixTexture(THREE, 16, (ctx, S) => paintWildflower(ctx, S, mulberry32(103), 2), 34);
       TEX.plants = {};
       Object.keys(SPRITES).forEach((name) => {
         TEX.plants[name] = makePixTexture(THREE, 16, (ctx) => paintSprite(ctx, name), 21);
@@ -1311,15 +1437,23 @@
     // Pure: set of "gx,gy" cells covered by fence containers. Fence gates
     // count too, so a gate dropped into a fence run meshes both ways.
     function fenceCells(list) {
+      return kindCells(list, ['fence', 'fence gate']);
+    }
+    // Pure: generic version — set of "gx,gy" cells covered by containers
+    // whose kind is in the given list.
+    function kindCells(list, kinds) {
       const set = new Set();
       (list || []).forEach((c) => {
         const k = c.kind || '';
-        if (k !== 'fence' && k !== 'fence gate') return;
+        if (!kinds.includes(k)) return;
         const w = c.grid_w || 1, h = c.grid_h || 1;
         for (let dx = 0; dx < w; dx++) for (let dy = 0; dy < h; dy++) set.add(`${(c.grid_x || 0) + dx},${(c.grid_y || 0) + dy}`);
       });
       return set;
     }
+    // Pure: stone edging and drip-line connection sets (fenceSides works on any).
+    function edgingCells(list) { return kindCells(list, ['stone edging']); }
+    function dripCells(list) { return kindCells(list, ['drip line']); }
     // Pure: ids of the n lamps nearest to (cx,cz). Lamp glow is capped for perf.
     function nearestLampIds(lamps, cx, cz, n) {
       return (lamps || [])
@@ -1520,6 +1654,133 @@
       g.userData.topY = 1.15;
     }
 
+    function buildFruitTree(THREE, g, TEX) {
+      // Blocky apple tree: stacked trunk + leaf canopy blob with apple pixels.
+      const barkMat = pixMaterial(THREE, TEX.darkWood);
+      const trunk = box(THREE, 0.36, 1.7, 0.36, barkMat);
+      trunk.position.y = 0.85;
+      const branch = box(THREE, 1.1, 0.24, 0.24, barkMat);
+      branch.position.set(0.25, 1.55, 0);
+      g.add(trunk, branch);
+      const leafMat = pixMaterial(THREE, TEX.appleLeaves);
+      const blobs = [
+        [0, 2.35, 0, 1.5], [-0.75, 2.0, 0.2, 0.95], [0.75, 2.05, -0.15, 0.95],
+        [0.1, 2.9, -0.3, 1.0], [-0.3, 2.6, 0.55, 0.85], [0.45, 1.95, 0.5, 0.8],
+      ];
+      blobs.forEach(([x, y, z, s]) => {
+        const b = box(THREE, s, s * 0.85, s, leafMat);
+        b.position.set(x, y, z);
+        g.add(b);
+      });
+      g.userData.topY = 3.3;
+    }
+
+    function buildShed(THREE, g, w, h, TEX) {
+      // Small wooden garden shed: plank walls, stepped gable roof, door face.
+      const woodMat = pixMaterial(THREE, TEX.wood);
+      const darkMat = pixMaterial(THREE, TEX.darkWood);
+      const walls = box(THREE, w - 0.15, 2.2, h - 0.15, woodMat);
+      walls.position.y = 1.1;
+      g.add(walls);
+      // gable roof: three stepped slabs receding to a ridge along the long axis
+      const longX = w >= h;
+      for (let i = 0; i < 3; i++) {
+        const rw = (longX ? w : w - i * 0.55), rd = (longX ? h - i * 0.55 : h);
+        const slab = box(THREE, rw + 0.3, 0.16, rd + 0.3, darkMat);
+        slab.position.y = 2.28 + i * 0.42;
+        g.add(slab);
+      }
+      const door = box(THREE, 0.95, 1.75, 0.12, darkMat);
+      door.position.set(0, 0.88, h / 2 - 0.02);
+      g.add(door);
+      const knob = box(THREE, 0.1, 0.1, 0.08, pixMaterial(THREE, TEX.metal));
+      knob.position.set(0.32, 0.95, h / 2 + 0.05);
+      g.add(knob);
+      g.userData.topY = 3.6;
+    }
+
+    function buildPergola(THREE, g, w, h, TEX) {
+      // Walk-under pergola: four corner posts + slatted beam roof. No collider.
+      const woodMat = pixMaterial(THREE, TEX.wood);
+      const px = w / 2 - 0.18, pz = h / 2 - 0.18;
+      [[-px, -pz], [px, -pz], [-px, pz], [px, pz]].forEach(([x, z]) => {
+        const post = box(THREE, 0.28, 2.5, 0.28, woodMat);
+        post.position.set(x, 1.25, z);
+        g.add(post);
+      });
+      [-px, px].forEach((x) => { // long beams along the h axis
+        const beam = box(THREE, 0.24, 0.3, h, woodMat);
+        beam.position.set(x, 2.62, 0);
+        g.add(beam);
+      });
+      for (let i = 0; i < 6; i++) { // cross slats
+        const slat = box(THREE, w, 0.14, 0.34, woodMat);
+        slat.position.set(0, 2.85, -h / 2 + 0.3 + (i * (h - 0.6)) / 5);
+        g.add(slat);
+      }
+      g.userData.topY = 3.0;
+    }
+
+    function buildEdging(THREE, g, w, h, TEX, sides) {
+      // Low stone border wall: center post + low walls on sides facing
+      // neighboring edging cells (Minecraft fence-connect pattern).
+      sides = sides || {};
+      const stoneMat = pixMaterial(THREE, TEX.stone);
+      const post = box(THREE, 0.32, 0.52, 0.32, stoneMat);
+      post.position.y = 0.26;
+      g.add(post);
+      const mkWall = (ww, wd, x, z) => {
+        const m = box(THREE, ww, 0.4, wd, stoneMat);
+        m.position.set(x, 0.2, z);
+        g.add(m);
+      };
+      if (sides.n) mkWall(1.0, 0.3, 0, -0.35);
+      if (sides.s) mkWall(1.0, 0.3, 0, 0.35);
+      if (sides.w) mkWall(0.3, 1.0, -0.35, 0);
+      if (sides.e) mkWall(0.3, 1.0, 0.35, 0);
+      g.userData.topY = 0.55;
+    }
+
+    function buildSprinkler(THREE, g, TEX) {
+      // Lawn sprinkler: dark post + head + a static translucent water arc
+      // (parabola of blue boxes reads as spray, very Minecraft).
+      const metalMat = pixMaterial(THREE, TEX.metal);
+      const post = box(THREE, 0.16, 0.55, 0.16, metalMat);
+      post.position.y = 0.275;
+      const head = box(THREE, 0.3, 0.22, 0.3, metalMat);
+      head.position.y = 0.62;
+      g.add(post, head);
+      const waterMat = new THREE.MeshBasicMaterial({ color: 0x77ccff, transparent: true, opacity: 0.55 });
+      for (let i = 0; i <= 8; i++) {
+        const t = i / 8;
+        const drop = box(THREE, 0.15, 0.15, 0.15, waterMat);
+        drop.position.set(-1.25 + 2.5 * t, 0.7 + Math.sin(t * Math.PI) * 1.15, 0);
+        drop.userData.noShadow = true;
+        g.add(drop);
+      }
+      g.userData.topY = 1.9;
+    }
+
+    function buildDripLine(THREE, g, w, h, TEX, sides) {
+      // Thin black irrigation tube: center hub + tubes toward neighboring
+      // drip cells (same connect pattern as fences), lying on the ground.
+      sides = sides || {};
+      const tubeMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1c, roughness: 0.9, metalness: 0 });
+      const hub = box(THREE, 0.36, 0.16, 0.36, tubeMat);
+      hub.position.y = 0.08;
+      g.add(hub);
+      const mkTube = (ww, wd, x, z) => {
+        const t = box(THREE, ww, 0.13, wd, tubeMat);
+        t.position.set(x, 0.065, z);
+        g.add(t);
+      };
+      if (sides.n) mkTube(0.14, 0.55, 0, -0.28);
+      if (sides.s) mkTube(0.14, 0.55, 0, 0.28);
+      if (sides.w) mkTube(0.55, 0.14, -0.28, 0);
+      if (sides.e) mkTube(0.55, 0.14, 0.28, 0);
+      g.userData.topY = 0.2;
+    }
+
     function buildPlantVoxel(THREE, g, px, pz, baseY, species, seed, TEX, big, plantingId) {
       // Minecraft cross-quad: two intersecting pixel-art planes.
       const arch = plantArchetype(species);
@@ -1647,6 +1908,102 @@
       });
     }
 
+    /* ---------------- meadow decor: tall grass + wildflowers, fireflies ---------------- */
+    // Pure: set of "gx,gy" cells covered by any container (grass never grows there).
+    const GRASS_SEED = 4242, GRASS_CAP = 240;
+    function occupiedCellSet(list) {
+      const set = new Set();
+      (list || []).forEach((c) => {
+        const w = c.grid_w || 1, h = c.grid_h || 1;
+        for (let dx = 0; dx < w; dx++) for (let dy = 0; dy < h; dy++) set.add(`${(c.grid_x || 0) + dx},${(c.grid_y || 0) + dy}`);
+      });
+      return set;
+    }
+    // Pure: deterministic scatter of grass/flower tufts on empty cells.
+    // Same seed -> same layout, so rebuilds are stable; capped for perf.
+    function grassLayout(ncols, nrows, occupied, seed) {
+      const rng = mulberry32(seed == null ? GRASS_SEED : seed);
+      const cells = [];
+      for (let gx = 0; gx < ncols; gx++) {
+        for (let gy = 0; gy < nrows; gy++) {
+          if (occupied.has(`${gx},${gy}`)) continue;
+          const r = rng();
+          if (r < 0.52 && cells.length < GRASS_CAP) {
+            cells.push({
+              gx, gy,
+              variant: r < 0.36 ? 'tuft' : r < 0.42 ? 'flower-red' : r < 0.46 ? 'flower-yellow' : r < 0.49 ? 'flower-white' : 'tuft',
+            });
+          }
+        }
+      }
+      return cells;
+    }
+
+    function buildGrass3D(THREE, decor, TEX) {
+      // Cross-quad tufts, Minecraft tall-grass style. Decor layer: no shadows,
+      // no collision, excluded from raycast targets (lives outside T.group).
+      const jrng = mulberry32(GRASS_SEED + 1);
+      const texFor = { tuft: TEX.grassTuft, 'flower-red': TEX.flowerRed, 'flower-yellow': TEX.flowerYellow, 'flower-white': TEX.flowerWhite };
+      grassLayout(cols, rows, occupiedCellSet(containers), GRASS_SEED).forEach(({ gx, gy, variant }) => {
+        const mat = new THREE.MeshBasicMaterial({ map: texFor[variant], alphaTest: 0.5, side: THREE.DoubleSide });
+        const tuft = new THREE.Group();
+        for (let k = 0; k < 2; k++) {
+          const p = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.55), mat);
+          p.rotation.y = (k * Math.PI) / 2 + jrng() * 0.6;
+          p.position.y = 0.27;
+          tuft.add(p);
+        }
+        tuft.position.set(gx + 0.5 - cols / 2 + (jrng() - 0.5) * 0.5, 0, gy + 0.5 - rows / 2 + (jrng() - 0.5) * 0.5);
+        tuft.traverse((o) => { o.castShadow = false; o.receiveShadow = false; });
+        decor.add(tuft);
+      });
+    }
+
+    // Pure: one firefly's position at time t (gentle sin drift around its base).
+    function fireflyPos(base, phase, t) {
+      return {
+        x: base.x + Math.sin(t * 0.7 + phase) * 0.6,
+        y: base.y + Math.sin(t * 1.1 + phase * 1.7) * 0.35,
+        z: base.z + Math.cos(t * 0.5 + phase) * 0.6,
+      };
+    }
+
+    function buildFireflies(THREE) {
+      // ~40 glowing points, night only. Animated in the walk-mode loop;
+      // static in orbit mode so the on-demand renderer can sleep.
+      const N = 40, rng = mulberry32(7777);
+      const pos = new Float32Array(N * 3), base = [], phases = new Float32Array(N);
+      for (let i = 0; i < N; i++) {
+        const b = {
+          x: (rng() - 0.5) * (cols + 4),
+          y: 0.6 + rng() * 1.6,
+          z: (rng() - 0.5) * (rows + 4),
+        };
+        base.push(b); phases[i] = rng() * Math.PI * 2;
+        pos[i * 3] = b.x; pos[i * 3 + 1] = b.y; pos[i * 3 + 2] = b.z;
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      const mat = new THREE.PointsMaterial({
+        color: 0xeaff8a, size: 0.3, transparent: true, opacity: 0.95,
+        blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+      });
+      const pts = new THREE.Points(geo, mat);
+      pts.userData.base = base; pts.userData.phases = phases;
+      pts.visible = dayNight === 'night';
+      return pts;
+    }
+
+    function updateFireflies(t) {
+      if (!T || !T.fireflies || !T.fireflies.visible) return;
+      const ud = T.fireflies.userData, attr = T.fireflies.geometry.attributes.position;
+      for (let i = 0; i < ud.base.length; i++) {
+        const p = fireflyPos(ud.base[i], ud.phases[i], t);
+        attr.setXYZ(i, p.x, p.y, p.z);
+      }
+      attr.needsUpdate = true;
+    }
+
     function buildScene3D() {
       if (!T) return;
       const { THREE, scene, camera, controls, sun } = T;
@@ -1680,8 +2037,20 @@
 
       buildClouds(THREE, group, rng);
 
+      // Meadow decor + fireflies live outside T.group: no raycast targets,
+      // no collision, no placement blocking.
+      if (T.decor) { scene.remove(T.decor); disposeGroup(T.decor); }
+      if (T.fireflies) { scene.remove(T.fireflies); T.fireflies.geometry.dispose(); T.fireflies.material.dispose(); }
+      const decor = new THREE.Group();
+      buildGrass3D(THREE, decor, TEX);
+      scene.add(decor);
+      T.decor = decor;
+      T.fireflies = buildFireflies(THREE);
+      scene.add(T.fireflies);
+
       T.lamps = []; // world-space lamp head positions, for night lighting
       const fc = fenceCells(containers);
+      const ec = edgingCells(containers), dc = dripCells(containers);
 
       containers.forEach((c) => {
         const w = c.grid_w || 1, h = c.grid_h || 1;
@@ -1704,6 +2073,12 @@
         else if (kind === 'compost bin') buildCompostBin(THREE, g, TEX);
         else if (kind === 'hoop house') buildHoopHouse(THREE, g, w, h, c.height_ft || KIND_HEIGHT['hoop house'] || 6, TEX);
         else if (kind === 'bird bath') buildBirdBath(THREE, g, TEX);
+        else if (kind === 'fruit tree') buildFruitTree(THREE, g, TEX);
+        else if (kind === 'shed') buildShed(THREE, g, w, h, TEX);
+        else if (kind === 'pergola') buildPergola(THREE, g, w, h, TEX);
+        else if (kind === 'stone edging') buildEdging(THREE, g, w, h, TEX, fenceSides(c.grid_x || 0, c.grid_y || 0, ec));
+        else if (kind === 'sprinkler') buildSprinkler(THREE, g, TEX);
+        else if (kind === 'drip line') buildDripLine(THREE, g, w, h, TEX, fenceSides(c.grid_x || 0, c.grid_y || 0, dc));
         else buildVessel(THREE, g, w, h, kind, TEX);
         addPlants3D(THREE, g, w, h, kind, c, TEX);
         const label = makeLabel(c.name);
@@ -1730,8 +2105,11 @@
     function render3D() {
       // Note: OrbitControls dispatches 'change' from inside update(), so this
       // must only render — calling update() here would recurse forever.
+      // Bloom composer is a single render() call, so on-demand rendering
+      // keeps working; plain renderer is the fallback when bloom is missing.
       if (!T || view !== '3d') return;
-      T.renderer.render(T.scene, T.camera);
+      if (T.composer) T.composer.render();
+      else T.renderer.render(T.scene, T.camera);
     }
 
     /* ---------------- day / night ---------------- */
@@ -1744,19 +2122,32 @@
       T.lampLights = [];
     }
 
+    // Pure: gradient-sky palette per time of day (also the fog color).
+    function skyColors(night) {
+      // single source of truth for the sky/fog palette (day/night toggle lerps
+      // these; the dome uniforms + fog color are derived in applyDayNight)
+      return night
+        ? { top: 0x050914, horizon: 0x101c3f }
+        : { top: 0x3f8cff, horizon: 0xa3d2ff };
+    }
+
     function applyDayNight() {
       if (!T || !T.sky) return;
       const THREE = T.THREE, night = dayNight === 'night';
-      const skyDay = 0x77a4ff, skyNight = 0x0a1230;
-      T.scene.background.set(night ? skyNight : skyDay);
-      if (T.scene.fog) T.scene.fog.color.set(night ? skyNight : skyDay);
-      T.sky.hemi.intensity = night ? 0.25 : 0.85;
+      const pal = skyColors(night);
+      if (T.sky.dome) {
+        T.sky.dome.material.uniforms.topColor.value.copy(srgbToLinear(THREE, pal.top));
+        T.sky.dome.material.uniforms.horizonColor.value.copy(srgbToLinear(THREE, pal.horizon));
+      }
+      if (T.scene.fog) T.scene.fog.color.copy(srgbToLinear(THREE, pal.horizon));
+      T.sky.hemi.intensity = night ? 0.25 : 0.9;
       T.sky.hemi.color.set(night ? 0x33456e : 0xbdd8ff);
       T.sun.intensity = night ? 0.14 : 0.95; // moonlight at night
-      T.sun.color.set(night ? 0x9db4ff : 0xfff3d6);
+      T.sun.color.set(night ? 0x9db4ff : 0xfff1d4);
       T.sky.sunSprite.visible = !night;
       T.sky.moonSprite.visible = night;
       T.sky.stars.visible = night;
+      if (T.fireflies) T.fireflies.visible = night;
       // clouds tint with the sky (they share one material)
       if (T.clouds && T.clouds.length && T.clouds[0].userData.cloudMat) {
         T.clouds[0].userData.cloudMat.color.set(night ? 0x2a3a5f : 0xffffff);
@@ -1840,6 +2231,7 @@
       (containers || []).forEach((c) => {
         const kind = c.kind || 'grow bag';
         if (kind === 'arch') return; // walk under
+        if (kind === 'pergola') return; // walk under
         if (kind === 'path') return; // flat slab: walked over, not into
         const w = c.grid_w || 1, h = c.grid_h || 1;
         const cx = (c.grid_x || 0) + w / 2 - cols / 2;
@@ -1914,6 +2306,7 @@
       movePlayer(dt);
       updateGhost();
       driftClouds(dt); // slow cloud drift, walk mode only (battery-friendly)
+      updateFireflies(now / 1000); // firefly drift, walk mode only
       updateParticles(dt); // break-particle juice, walk mode only
       render3D();
       return true;
@@ -1976,7 +2369,8 @@
     wrap3d._walk = { // handle for tests / debugging
       resolvePlayerCollision, mulberry32, plantArchetype, walkColliders, makePixTexture,
       archArcPoint, archRibCells, archRibCount, archVineOffset,
-      fenceSides, fenceCells, nearestLampIds, driftClouds,
+      fenceSides, fenceCells, kindCells, edgingCells, dripCells, nearestLampIds, driftClouds,
+      skyColors, grassLayout, occupiedCellSet, fireflyPos, updateFireflies,
       tapeDistance, setTapeMode, clearTape,
       spawnParticles, particleCount, updateParticles,
       get Sound() { return Sound; },
@@ -1988,6 +2382,7 @@
         paintGrassTop, paintDirtSide, paintDirt, paintWoodPlanks, paintDarkWood,
         paintSoil, paintFabric, paintTerracotta, paintLeafBlob, paintMetal, paintWireMesh,
         paintBucket, paintStone, paintBarrel, paintCompost, paintHoopPlastic, paintBasin,
+        paintAppleLeaves, paintGrassTuft, paintWildflower,
         paintSprite, SPRITES,
       },
       get mode() { return walkMode; },
@@ -2178,6 +2573,12 @@
         { key: 'hoop house', emoji: '🏠', label: 'HoopHs' },
         { key: 'fence gate', emoji: '🚪', label: 'Gate' },
         { key: 'bird bath', emoji: '🐦', label: 'Bath' },
+        { key: 'fruit tree', emoji: '🌳', label: 'Tree' },
+        { key: 'shed', emoji: '🏚️', label: 'Shed' },
+        { key: 'pergola', emoji: '🏛️', label: 'Pergola' },
+        { key: 'stone edging', emoji: '🧱', label: 'Edging' },
+        { key: 'sprinkler', emoji: '💦', label: 'Sprinklr' },
+        { key: 'drip line', emoji: '💧', label: 'Drip' },
       ],
       plants: [
         { key: 'tomato', emoji: '🍅', label: 'Tomato', species: 'Tomato' },
@@ -2196,8 +2597,8 @@
 
     // ---- pure helpers (also exposed to tests via wrap3d._build) ----
     // Per-kind build-mode placement footprints. Everything defaults to 1x1;
-    // the hoop house is a 4x8 structure.
-    const PLACE_FOOTPRINTS = { 'hoop house': [4, 8] };
+    // the hoop house is 4x8, the shed 4x6, the pergola 2x4.
+    const PLACE_FOOTPRINTS = { 'hoop house': [4, 8], 'shed': [4, 6], 'pergola': [2, 4] };
     function placeFootprint(key) { return PLACE_FOOTPRINTS[key] || [1, 1]; }
     function cellFromWorld(wx, wz, ncols, nrows) {
       // inverse of the container placement: wx = gx + w/2 - cols/2
@@ -2256,7 +2657,7 @@
           '<div style="font-size:9px;color:#ddd;white-space:nowrap;overflow:hidden">' + s.label + '</div>' +
           '<div style="font-size:9px;color:#9f9;font-weight:700">∞</div></div>';
       };
-      // two rows of 8 when the tab is long (BLOCKS has 16); PLANTS stays one row
+      // rows of 8 while the tab is long (BLOCKS has 22: 8/8/6); PLANTS stays one row
       const slots = buildSlots();
       let html = '';
       for (let r = 0; r * 8 < slots.length; r++) {
@@ -2444,6 +2845,12 @@
       else if (sel.key === 'compost bin') buildCompostBin(THREE, ghost, T.TEX);
       else if (sel.key === 'hoop house') buildHoopHouse(THREE, ghost, pw, ph, 6, T.TEX);
       else if (sel.key === 'bird bath') buildBirdBath(THREE, ghost, T.TEX);
+      else if (sel.key === 'fruit tree') buildFruitTree(THREE, ghost, T.TEX);
+      else if (sel.key === 'shed') buildShed(THREE, ghost, pw, ph, T.TEX);
+      else if (sel.key === 'pergola') buildPergola(THREE, ghost, pw, ph, T.TEX);
+      else if (sel.key === 'stone edging') buildEdging(THREE, ghost, 1, 1, T.TEX, fenceSides(cell.gx, cell.gy, edgingCells(containers)));
+      else if (sel.key === 'sprinkler') buildSprinkler(THREE, ghost, T.TEX);
+      else if (sel.key === 'drip line') buildDripLine(THREE, ghost, 1, 1, T.TEX, fenceSides(cell.gx, cell.gy, dripCells(containers)));
       else buildVessel(THREE, ghost, 1, 1, sel.key, T.TEX);
       const tint = new THREE.Color(ok ? 0x00cc44 : 0xcc2222);
       ghost.traverse((o) => {

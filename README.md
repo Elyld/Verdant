@@ -948,24 +948,31 @@ server local time. Test with `POST /api/digest/send`.
 ## Changelog
 
 - **2.61.0** — **⛏️ Creative-mode building in the planner.** Walk mode grew a
-  Minecraft hotbar: 16 BLOCKS (bed, bag, pot, planter, pallet, arch, cold
-  frame, lamp, fence, bucket, path, rain barrel, compost bin, hoop house,
-  fence gate, bird bath) across two rows of 8, and 6 PLANTS (tomato, pepper,
-  basil, lettuce, carrot, flower), all infinite. **Left-click breaks** the aimed planting or container — breaking a
+  Minecraft hotbar: 22 slots across three rows (8/8/6) — 16 BLOCKS (bed, bag,
+  pot, planter, pallet, arch, cold frame, lamp, fence, bucket, path, rain
+  barrel, compost bin, hoop house, fence gate, bird bath) and 6 PLANTS (tomato,
+  pepper, basil, lettuce, carrot, flower), all infinite. **Left-click breaks** the aimed planting or container — breaking a
   container that holds plantings asks for confirmation first, and the ground
   itself can't be broken. **Right-click places** the selected block on the
   aimed grass cells with a green/red ghost preview (per-kind footprints: the
   hoop house is 4×8), or plants the selected seedling into the aimed container.
   **Q** switches tabs, **1–9**/wheel picks slots, **E** edits the aimed container. Everything goes through the real
   API; the 3D scene refreshes after each change without leaving first person.
-  World dressing: **☀️/🌙 day/night toggle** (blocky square sun, drifting
+  World dressing: **☀️/🌙 day/night toggle** (gradient sky shader with drifting
   clouds, starfield and glowing lamps at night), plus new placeables — **💡
   lamp posts** (real point lights at night, capped at 8 for perf), **⛓️
   chain-link fence** (segments auto-connect into runs), **🪣 5-gal buckets**,
   **🪨 stone path slabs** (flat enough to walk over), **🛢️ rain barrels**,
   **🟤 compost bins**, **🏠 hoop houses** (translucent plastic skin over
-  galvanized ribs), **🚪 fence gates** (mesh into adjacent fence runs), and
-  **🐦 bird baths**. Planning tools: **📏 measuring tape** in orbit mode —
+  galvanized ribs), **🚪 fence gates** (mesh into adjacent fence runs),
+  **🐦 bird baths**, **🌳 fruit trees** (blocky apple trees), **🏚️ garden
+  sheds** (4×6, solid), **🏛️ pergolas** (2×4, walk-under), **🧱 stone
+  edging** (auto-connecting low walls), **💦 sprinklers** (static voxel spray
+  arcs), and **💧 drip lines** (auto-connecting ground tubes). Graphics pass:
+  **bloom postprocessing** (lamps, sun and fireflies glow), **tall grass +
+  wildflowers** scattered on empty cells (seeded, stable across rebuilds),
+  **fireflies** (40 points, night only), warmer sun + tuned hemisphere light.
+  Planning tools: **📏 measuring tape** in orbit mode —
   click two ground points for a live "12.5 ft" readout (ESC clears). Game
   feel: **voxel-cube particle bursts** when things break and tiny WebAudio
   **place/break sounds** (🔊 toggle, default on) — a real game engine isn't
