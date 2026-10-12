@@ -10,19 +10,39 @@
   // linking a packet on an invoice never touches its expense and vice versa.
   function pkApiBase(kind) { return kind === 'invoice' ? '/api/invoices' : '/api/expenses'; }
 
+  // Seed-packet checkbox picker, built LAZILY on first <details> open.
+  // Rendering one 500-checkbox list per cost/invoice row blew the page up
+  // to ~700k DOM nodes at scale; the UX is unchanged (open "＋ link
+  // packets" and the same checkboxes appear).
+  let pkPacketList = [];
+  function packetChecksHTML(kind, id, linkedIds) {
+    if (!pkPacketList.length) return '<span class="text-navy-400">No seed packets yet.</span>';
+    return pkPacketList.map((p) => `
+      <label class="flex items-center gap-1.5 text-xs py-0.5 cursor-pointer"><input type="checkbox" data-pk-check="${kind}:${id}:${p.id}"${linkedIds.has(p.id) ? ' checked' : ''} class="accent-sage-700"> <span>${esc(p.variety_name)}${p.vendor_name ? ` <span class="text-navy-400">(${esc(p.vendor_name)})</span>` : ''}</span></label>`).join('');
+  }
+  // 'toggle' doesn't bubble, so listen in the capture phase.
+  document.addEventListener('toggle', (event) => {
+    const det = event.target && event.target.closest ? event.target.closest('[data-pk-details]') : null;
+    if (!det || !det.open || det.dataset.built) return;
+    det.dataset.built = '1';
+    const [kind, oid] = det.dataset.pkDetails.split(':');
+    const linkedIds = new Set((det.dataset.linked || '').split(',').filter(Boolean).map(Number));
+    const listHost = det.querySelector('[data-pk-list]');
+    if (listHost) listHost.innerHTML = packetChecksHTML(kind, oid, linkedIds);
+  }, true);
+
   function packetBlockHTML(kind, id, linked, suggestions, packetList) {
+    if (Array.isArray(packetList)) pkPacketList = packetList;
     const chips = linked.map((p) => `
       <span class="pill ring-1 bg-sage-100 text-sage-800 ring-sage-300">🌱 ${esc(p.variety_name)}
         <button type="button" data-pk-detach="${kind}:${id}:${p.id}" class="ml-1 font-bold" title="Unlink packet">×</button>
       </span>`).join('');
     const suggBtns = suggestions.slice(0, 3).map((s) => `
       <button type="button" data-pk-attach="${kind}:${id}:${s.packet_id}" class="text-xs text-sage-700 underline" title="Matched “${esc(s.matched_item)}”">+ ${esc(s.variety)}</button>`).join(' ');
-    const linkedIds = new Set(linked.map((p) => p.id));
-    const checks = packetList.map((p) => `
-      <label class="flex items-center gap-1.5 text-xs py-0.5 cursor-pointer"><input type="checkbox" data-pk-check="${kind}:${id}:${p.id}"${linkedIds.has(p.id) ? ' checked' : ''} class="accent-sage-700"> <span>${esc(p.variety_name)}${p.vendor_name ? ` <span class="text-navy-400">(${esc(p.vendor_name)})</span>` : ''}</span></label>`).join('');
+    const linkedCsv = linked.map((p) => p.id).join(',');
     return `<div class="mt-1.5 flex flex-wrap items-center gap-1.5">${chips}
-        <details class="text-xs"><summary class="text-sage-700 underline cursor-pointer">＋ link packets</summary>
-          <div class="mt-1 max-h-40 overflow-y-auto rounded-lg border border-beige-200 bg-white p-2">${checks || '<span class="text-navy-400">No seed packets yet.</span>'}</div>
+        <details class="text-xs" data-pk-details="${kind}:${id}" data-linked="${esc(linkedCsv)}"><summary class="text-sage-700 underline cursor-pointer">＋ link packets</summary>
+          <div class="mt-1 max-h-40 overflow-y-auto rounded-lg border border-beige-200 bg-white p-2" data-pk-list><span class="text-navy-400">Opening…</span></div>
         </details></div>`
       + (suggBtns ? `<div class="mt-1 text-xs text-navy-400">suggested: ${suggBtns}</div>` : '');
   }
@@ -139,12 +159,17 @@
       lastList = list;
       const packetList = Array.isArray(packets) ? packets : [];
       const plantNames = new Map((Array.isArray(plants) ? plants : []).map((p) => [p.id, p.variety_name]));
-      const linkData = await Promise.all(list.map(async (e) => {
-        const [linked, suggestions] = await Promise.all([
-          api.get(`/api/expenses/${e.id}/packets`).catch(() => []),
-          api.get(`/api/expenses/${e.id}/packet-suggestions`).catch(() => []),
-        ]);
-        return { id: e.id, linked, suggestions };
+      // One bulk call for every row's linked packets and one for every
+      // row's suggestions, instead of two requests per row (hundreds of
+      // requests at scale).
+      const bulkLinks = await api.get('/api/expenses/packet-links').catch(() => ({}));
+      const texts = {};
+      list.forEach((e) => { texts[e.id] = [e.description, e.notes].filter(Boolean).join('\n'); });
+      const bulkSugg = await api.post('/api/expenses/packet-suggestions-bulk', { texts }).catch(() => ({}));
+      const linkData = list.map((e) => ({
+        id: e.id,
+        linked: bulkLinks[e.id] || bulkLinks[String(e.id)] || [],
+        suggestions: bulkSugg[e.id] || bulkSugg[String(e.id)] || [],
       }));
       const linksByExp = new Map(linkData.map((d) => [d.id, Array.isArray(d.linked) ? d.linked : []]));
       const suggByExp = new Map(linkData.map((d) => [d.id, Array.isArray(d.suggestions) ? d.suggestions : []]));
@@ -293,12 +318,17 @@
           [...expNames.entries()].map(([id, name]) => `<option value="${id}">${esc(name)}</option>`).join('');
         sel.dataset.loaded = '1';
       }
-      const linkData = await Promise.all(list.map(async (inv) => {
-        const [linked, suggestions] = await Promise.all([
-          api.get(`/api/invoices/${inv.id}/packets`).catch(() => []),
-          (inv.items_summary ? api.get(`/api/invoices/${inv.id}/packet-suggestions`).catch(() => []) : []),
-        ]);
-        return { id: inv.id, linked, suggestions };
+      // One bulk call for every row's linked packets and one for every
+      // row's suggestions, instead of two requests per row (hundreds of
+      // requests at scale).
+      const bulkLinks = await api.get('/api/invoices/packet-links').catch(() => ({}));
+      const texts = {};
+      list.forEach((inv) => { if (inv.items_summary) texts[inv.id] = inv.items_summary; });
+      const bulkSugg = await api.post('/api/invoices/packet-suggestions-bulk', { texts }).catch(() => ({}));
+      const linkData = list.map((inv) => ({
+        id: inv.id,
+        linked: bulkLinks[inv.id] || bulkLinks[String(inv.id)] || [],
+        suggestions: bulkSugg[inv.id] || bulkSugg[String(inv.id)] || [],
       }));
       const linksByInv = new Map(linkData.map((d) => [d.id, Array.isArray(d.linked) ? d.linked : []]));
       const suggByInv = new Map(linkData.map((d) => [d.id, Array.isArray(d.suggestions) ? d.suggestions : []]));

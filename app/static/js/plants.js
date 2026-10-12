@@ -271,17 +271,20 @@
 
     document.addEventListener('verdant:year', renderPlants);
 
+    // One bulk call instead of one /timeline request per card: at scale the
+    // per-plant storm (thousands of requests) hung the page for ~100s.
     async function enrichCovers() {
-      await Promise.all(plants.map(async (plant) => {
+      let covers = {};
+      try {
+        covers = await api.get('/api/plants/covers');
+      } catch { return; /* covers are decorative */ }
+      const byId = new Map(plants.map((p) => [String(p.id), p.variety_name]));
+      for (const [pid, path] of Object.entries(covers || {})) {
         try {
-          const timeline = await api.get(`/api/plants/${plant.id}/timeline`);
-          const photos = timeline.photos || [];
-          if (!photos.length) return;
-          const cover = photos[photos.length - 1];
-          const host = grid.querySelector(`[data-cover="${plant.id}"]`);
-          if (host) host.innerHTML = `<img src="${esc(cover.file_path)}" class="h-full w-full object-cover" alt="${esc(plant.variety_name)}" loading="lazy">`;
+          const host = grid.querySelector(`[data-cover="${pid}"]`);
+          if (host) host.innerHTML = `<img src="${esc(path)}" class="h-full w-full object-cover" alt="${esc(byId.get(pid) || '')}" loading="lazy">`;
         } catch { /* cover is decorative */ }
-      }));
+      }
     }
 
     async function openProfile(plantId) {

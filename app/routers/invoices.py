@@ -1,6 +1,6 @@
 """API router for purchase invoices (seed & garden supplier receipts)."""
 import base64
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
@@ -263,6 +263,32 @@ def _packet_dict(packet: SeedPacket) -> dict:
     }
 
 
+# NOTE: static sub-paths must be registered BEFORE "/{invoice_id}/packets",
+# or FastAPI will try to parse them as an invoice id.
+
+
+@router.get("/packet-links")
+def all_invoice_packet_links(session: Session = Depends(get_session)) -> Dict[int, List[dict]]:
+    """Every invoice -> linked seed packets in ONE query.
+
+    The Costs page used to fetch /{id}/packets per row (hundreds of
+    requests); this bulk endpoint replaces that storm with a single call.
+    """
+    links = session.exec(select(InvoiceSeedPacket)).all()
+    packet_ids = {link.seed_packet_id for link in links}
+    packets = (
+        {p.id: p for p in session.exec(select(SeedPacket).where(SeedPacket.id.in_(packet_ids))).all()}
+        if packet_ids
+        else {}
+    )
+    out: Dict[int, List[dict]] = {}
+    for link in links:
+        packet = packets.get(link.seed_packet_id)
+        if packet is not None:
+            out.setdefault(link.invoice_id, []).append(_packet_dict(packet))
+    return out
+
+
 @router.get("/{invoice_id}/packets")
 def list_invoice_packets(
     invoice_id: int,
@@ -272,8 +298,13 @@ def list_invoice_packets(
     links = session.exec(
         select(InvoiceSeedPacket).where(InvoiceSeedPacket.invoice_id == invoice_id)
     ).all()
-    packets = [session.get(SeedPacket, link.seed_packet_id) for link in links]
-    return [_packet_dict(p) for p in packets if p is not None]
+    packet_ids = [link.seed_packet_id for link in links]
+    packets = (
+        {p.id: p for p in session.exec(select(SeedPacket).where(SeedPacket.id.in_(packet_ids))).all()}
+        if packet_ids
+        else {}
+    )
+    return [_packet_dict(packets[pid]) for pid in packet_ids if pid in packets]
 
 
 @router.post("/{invoice_id}/packets")
@@ -328,6 +359,40 @@ def invoice_packet_suggestions(
     )
     packets = session.exec(select(SeedPacket).order_by(SeedPacket.variety_name)).all()
     return suggest_packets(invoice.items_summary or "", packets, exclude_ids=linked_ids)
+
+
+@router.post("/packet-suggestions-bulk")
+def bulk_invoice_packet_suggestions(
+    payload: dict, session: Session = Depends(get_session)
+) -> Dict[int, List[dict]]:
+    """Heuristic packet suggestions for many invoices in ONE call.
+
+    payload: {"texts": {"<invoice_id>": "<items_summary>"}}.
+    Same ranking as GET /{id}/packet-suggestions (top 3 per row, already-
+    linked packets excluded); replaces the per-row suggestion storm on the
+    Costs page. The UI only ever shows the first 3, so the server trims.
+    """
+    texts = payload.get("texts") or {}
+    iids = []
+    for key in texts:
+        try:
+            iids.append(int(key))
+        except (TypeError, ValueError):
+            continue
+    linked: Dict[int, set] = {}
+    if iids:
+        for link in session.exec(
+            select(InvoiceSeedPacket).where(InvoiceSeedPacket.invoice_id.in_(iids))
+        ).all():
+            linked.setdefault(link.invoice_id, set()).add(link.seed_packet_id)
+    packets = session.exec(select(SeedPacket).order_by(SeedPacket.variety_name)).all()
+    return {
+        iid: suggest_packets(
+            texts.get(str(iid)) or "", packets,
+            exclude_ids=frozenset(linked.get(iid, ())),
+        )[:3]
+        for iid in iids
+    }
 
 
 @router.post("/{invoice_id}/derive-packets")
