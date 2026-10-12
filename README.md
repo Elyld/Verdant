@@ -798,6 +798,47 @@ Full interactive docs at `/docs` when the app is running. Highlights:
 | `GET` | `/api/stats/review` | Season-in-review aggregates |
 | `GET` | `/api/health` | Healthcheck (includes version) |
 
+### API tokens (for Hermes / scripts)
+
+Verdant's API needs no credentials from the web UI — it runs on your own
+server behind your own network. For outside programs (a local assistant on
+the same PC, a cron script), create a **scoped API token** on the Settings
+page (🔑 API tokens section):
+
+1. Give it a name (e.g. `Hermes`) and tick the scopes it needs.
+2. Copy the secret — it's shown **once** and never stored in plaintext
+   (only a SHA-256 hash is kept).
+3. Send it as `Authorization: Bearer verdant_…` on every request.
+
+The rule: **no header → the request works exactly as the web UI does;
+header present → the token must be valid and carry the needed scopes.**
+A bad or revoked token gets `401`; a valid token without the scope gets `403`.
+
+| Scope | Allows |
+|-------|--------|
+| `*` | Full control — everything, read and write |
+| `read` | All GET endpoints |
+| `invoices:write` | Create/edit/delete invoices (incl. packet links) |
+| `seed_packets:write` | Create/edit/delete seed packets (incl. photos) |
+| `plants:write` | Create/edit/delete plants |
+| `harvests:write` | Log/edit/delete harvests |
+| `expenses:write` | Create/edit/delete expenses |
+| `observations:write` | Log/edit/delete observations (incl. photos) |
+| `watering:write` | Log/edit/delete watering & fertilization logs |
+
+Example for a shell script:
+
+```bash
+TOKEN="verdant_paste_your_secret_here"
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/invoices/ | head -c 200
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"vendor":"Baker Creek","total":42.50}' http://localhost:8000/api/invoices/
+```
+
+Revoke a token anytime on the Settings page — programs using it stop
+working immediately. Token endpoints: `GET/POST /api/api-tokens/`,
+`POST /api/api-tokens/{id}/revoke`, `GET /api/api-tokens/scopes`.
+
 ## Upload security
 
 - File type is decided by **magic bytes**, not by the client's filename or
@@ -893,6 +934,13 @@ correct, and the container's clock/timezone matches yours — `DIGEST_TIME` is
 server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
+
+- **2.59.4** — **🔑 Scoped API tokens.** Outside programs (like a local
+  assistant on the same PC) can now use Verdant's API with a bearer token
+  instead of poking the database directly. Create one on the Settings page
+  with exactly the scopes it needs (`*`, `read`, or per-domain write
+  scopes); the secret is shown once and only its hash is stored. Requests
+  without a token work exactly as before — the web UI is untouched.
 
 - **2.59.3** — **⚡ Scale-audit performance fixes.** A simulated commercial
   grow (2,800 plants, 40,000 logs, 500 seed packets) found the Plants page

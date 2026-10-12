@@ -20,6 +20,7 @@ from fastapi.templating import Jinja2Templates
 from app.database import UPLOAD_DIR, init_db
 from app.models import GardenTag, utcnow
 from app.security import RateLimitMiddleware, SecurityHeadersMiddleware, docs_enabled
+from app import api_tokens as api_tokens_mod
 from app.routers import albums, backup, caretaker, chaos, containers, digest, expenses, fertilizations, immich, import_csv, invoices, observations, order_assistant, pests, posts, seed_packets, settings as settings_router, stats, tags, user_reminders, weather, wishlist, yearbook
 from app.routers import agent, ai_log, books, crops, today
 from app.routers import pantry as pantry_router
@@ -224,6 +225,7 @@ app.include_router(order_assistant.router)
 app.include_router(wishlist.router)
 app.include_router(pantry_router.router)
 app.include_router(succession_router.router)
+app.include_router(api_tokens_mod.router)
 
 @app.get("/api/health", tags=["meta"])
 def health() -> dict:

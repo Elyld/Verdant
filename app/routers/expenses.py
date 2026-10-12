@@ -1,6 +1,7 @@
 """API router for garden cost tracking."""
 from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from app.api_tokens import require_domain
 from sqlalchemy.orm import Session
 from sqlmodel import select
 
@@ -9,7 +10,7 @@ from app.models import Expense, ExpenseSeedPacket, Invoice, SeedPacket, apply_pa
 from app.packet_match import suggest_packets
 from app.schemas import ExpenseCreate, ExpenseRead
 
-router = APIRouter(prefix="/api/expenses", tags=["expenses"])
+router = APIRouter(prefix="/api/expenses", tags=["expenses"], dependencies=[Depends(require_domain("expenses"))])
 
 # Must match the category dropdown on the /costs page.
 EXPENSE_CATEGORIES = ("Seeds", "Soil", "Fertilizer", "Tools", "Plants", "Supplies", "Other")

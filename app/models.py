@@ -744,3 +744,36 @@ class BookCheck(SQLModel, table=True):
     level: str = Field(default="ok")  # ok | warn | error
     summary_json: str = Field(default="{}")
     findings_json: str = Field(default="[]")
+
+
+# --------------------------------------------------------------------------- #
+# API tokens (for Hermes / scripts: bearer auth with scopes)
+# --------------------------------------------------------------------------- #
+class ApiToken(SQLModel, table=True):
+    """A bearer token for programmatic API access.
+
+    Only the SHA-256 hex of the secret is stored — the plaintext is shown
+    once at creation and never again. Verdant's web UI needs no token
+    (local-trust model); when an Authorization: Bearer header IS present,
+    the token must be valid and carry the scopes the endpoint needs.
+    """
+
+    __tablename__ = "api_tokens"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(max_length=80)  # e.g. "Hermes"
+    token_hash: str = Field(max_length=64, unique=True, index=True)  # sha256 hex
+    scopes_json: str = Field(default="[]")  # JSON list of scope strings
+    created_at: datetime = Field(default_factory=utcnow)
+    last_used_at: Optional[datetime] = Field(default=None)
+    revoked: bool = Field(default=False)
+
+    @property
+    def scopes(self) -> list:
+        import json
+
+        try:
+            scopes = json.loads(self.scopes_json or "[]")
+        except (ValueError, TypeError):
+            return []
+        return [s for s in scopes if isinstance(s, str)]

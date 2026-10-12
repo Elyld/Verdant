@@ -1,13 +1,14 @@
 """API router for watering history and method tracking."""
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from app.api_tokens import require_domain
 from sqlalchemy.orm import Session
 
 from app.database import get_session
 from app.models import WateringLog, Location, Plant, apply_patch
 from app.schemas import WateringCreate
 
-router = APIRouter(prefix="/api/watering-logs", tags=["watering-logs"])
+router = APIRouter(prefix="/api/watering-logs", tags=["watering-logs"], dependencies=[Depends(require_domain("watering_logs"))])
 
 
 def _get_or_404(session: Session, watering_id: int) -> WateringLog:

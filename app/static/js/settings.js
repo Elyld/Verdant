@@ -391,6 +391,106 @@
     $('#set-lon').addEventListener('change', maybeAutoDetect);
 
     load().catch((error) => toast(`Could not load settings: ${error.message}`, 'err'));
+    initTokens();
+  }
+
+  // ---- API tokens ---------------------------------------------------------
+  function fmtTokDate(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
+    return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString();
+  }
+
+  async function initTokens() {
+    const listHost = $('#tok-list');
+    if (!listHost) return;
+
+    async function refreshTokens() {
+      let tokens = [];
+      try {
+        tokens = await api.get('/api/api-tokens/');
+      } catch (error) {
+        listHost.innerHTML = `<p class="text-sm text-red-700">Could not load tokens: ${esc(error.message)}</p>`;
+        return;
+      }
+      if (!tokens.length) {
+        listHost.innerHTML = '<p class="text-sm text-navy-400">No tokens yet.</p>';
+        return;
+      }
+      listHost.innerHTML = tokens.map((t) => `
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-beige-100 px-4 py-2.5 ring-1 ring-beige-300${t.revoked ? ' opacity-60' : ''}">
+          <span class="text-sm font-medium text-navy-800">${esc(t.name)}${t.revoked ? ' <span class="text-xs text-navy-400">(revoked)</span>' : ''}</span>
+          <span class="text-xs text-navy-500">${(t.scopes || []).map(esc).join(', ') || 'no scopes'}</span>
+          <span class="text-xs text-navy-400">created ${esc(fmtTokDate(t.created_at))} · last used ${esc(fmtTokDate(t.last_used_at))}</span>
+          ${t.revoked ? '' : `<button type="button" class="btn-ghost ml-auto px-2 py-1 text-xs" data-tok-revoke="${t.id}">Revoke</button>`}
+        </div>`).join('');
+    }
+
+    try {
+      const scopes = await api.get('/api/api-tokens/scopes');
+      $('#tok-scopes').innerHTML = scopes.map((s) => `
+        <label class="flex items-start gap-2 text-sm text-navy-700">
+          <input type="checkbox" class="mt-0.5 h-4 w-4 shrink-0 accent-sage-600" data-tok-scope="${esc(s.scope)}" />
+          <span><code class="text-xs font-medium text-navy-800">${esc(s.scope)}</code>
+          <span class="text-navy-500"> — ${esc(s.description)}</span></span>
+        </label>`).join('');
+    } catch {
+      $('#tok-scopes').innerHTML = '<p class="text-sm text-red-700">Could not load scopes.</p>';
+    }
+
+    listHost.addEventListener('click', async (event) => {
+      const btn = event.target.closest('[data-tok-revoke]');
+      if (!btn) return;
+      if (!window.confirm('Revoke this token? Programs using it will stop working.')) return;
+      try {
+        await api.post(`/api/api-tokens/${btn.dataset.tokRevoke}/revoke`);
+        toast('Token revoked.', 'ok');
+        await refreshTokens();
+      } catch (error) {
+        toast(`Revoke failed: ${error.message}`, 'err');
+      }
+    });
+
+    $('#tok-copy').addEventListener('click', async () => {
+      const input = $('#tok-secret');
+      input.select();
+      try {
+        await navigator.clipboard.writeText(input.value);
+        toast('Secret copied.', 'ok');
+      } catch {
+        document.execCommand('copy');
+      }
+    });
+
+    $('#tok-create').addEventListener('click', async () => {
+      const name = $('#tok-name').value.trim();
+      const scopes = [...document.querySelectorAll('[data-tok-scope]:checked')]
+        .map((box) => box.dataset.tokScope);
+      const status = $('#tok-create-status');
+      if (!name) {
+        toast('Give the token a name first.', 'err');
+        return;
+      }
+      const btn = $('#tok-create');
+      btn.disabled = true;
+      try {
+        const res = await api.post('/api/api-tokens/', { name, scopes });
+        $('#tok-secret').value = res.secret;
+        $('#tok-secret-wrap').classList.remove('hidden');
+        $('#tok-name').value = '';
+        document.querySelectorAll('[data-tok-scope]:checked').forEach((box) => { box.checked = false; });
+        status.textContent = `Token “${res.token.name}” created.`;
+        toast('Token created — copy the secret now.', 'ok');
+        await refreshTokens();
+      } catch (error) {
+        status.textContent = '';
+        toast(`Create failed: ${error.message}`, 'err');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    await refreshTokens();
   }
 
   globalThis.Verdant.onBoot(initSettings);

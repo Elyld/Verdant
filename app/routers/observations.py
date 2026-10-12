@@ -5,6 +5,7 @@ from datetime import date as Date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from app.api_tokens import require_domain
 from sqlmodel import Session, func, select
 
 from app.database import get_session
@@ -18,7 +19,7 @@ from app.schemas import (
 from app.storage import delete_stored, save_uploads
 from app.weather import fetch_current_weather
 
-router = APIRouter(prefix="/api/observations", tags=["observations"])
+router = APIRouter(prefix="/api/observations", tags=["observations"], dependencies=[Depends(require_domain("observations"))])
 
 
 def _get_or_404(session: Session, obs_id: int) -> ObservationLog:
