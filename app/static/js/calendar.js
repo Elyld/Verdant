@@ -88,8 +88,7 @@
     function render(forYear) {
       const legend = `<div class="flex items-center justify-end gap-1.5 pt-2 text-xs text-navy-500"><span>Less</span>${[0, 1, 2, 3, 4].map((level) => `<span class="heat-swatch heat-${level}" aria-hidden="true"></span>`).join('')}<span>More</span></div>`;
       const head = `<p class="text-sm text-navy-500">Showing the ${forYear} season — change it with the Season picker up top.</p>`;
-      grid.innerHTML = head + Array.from({ length: 12 }, (_, month) => {
-        const monthDate = new Date(forYear, month, 1);
+      grid.innerHTML = head + Array.from({ length: 12 }, (_, month) => {        const monthDate = new Date(forYear, month, 1);
         const leadBlanks = (monthDate.getDay() - weekStart + 7) % 7;
         const cells = Array(leadBlanks).fill('<div class="calendar-day calendar-empty"></div>');
         const days = new Date(forYear, month + 1, 0).getDate();
@@ -103,8 +102,8 @@
             : `No observations on ${iso}`;
           cells.push(`<a href="/observations?date=${iso}" data-date="${iso}" class="calendar-day heat-${level}" title="${esc(tip)}"><span>${day}</span></a>`);
         }
-        return `<section class="card"><h2 class="mb-4 font-display text-xl font-semibold">${monthDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</h2><div class="calendar-weekdays">${weekdays.map((day) => `<span>${day}</span>`).join('')}</div><div class="calendar-month">${cells.join('')}</div>${legend}</section>`;
-      }).join('');
+        return `<section class="card"><h2 class="mb-4 font-display text-xl font-semibold">${monthDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</h2><div class="calendar-weekdays">${weekdays.map((day) => `<span>${day}</span>`).join('')}</div><div class="calendar-month">${cells.join('')}</div></section>`;
+      }).join('') + legend;
       if (!observations.length) $('#calendar-empty')?.classList.remove('hidden');
       else $('#calendar-empty')?.classList.add('hidden');
     }
