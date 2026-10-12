@@ -2233,6 +2233,17 @@
     function buildFireflies(THREE) {
       // ~40 glowing points, night only. Animated in the walk-mode loop;
       // static in orbit mode so the on-demand renderer can sleep.
+      // Round soft-glow sprite texture so near-camera points don't render as squares.
+      const glowCanvas = document.createElement('canvas');
+      glowCanvas.width = glowCanvas.height = 64;
+      const gg = glowCanvas.getContext('2d');
+      const grad = gg.createRadialGradient(32, 32, 0, 32, 32, 32);
+      grad.addColorStop(0, 'rgba(255,255,255,1)');
+      grad.addColorStop(0.35, 'rgba(255,255,255,0.55)');
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      gg.fillStyle = grad;
+      gg.fillRect(0, 0, 64, 64);
+      const glowTex = new THREE.CanvasTexture(glowCanvas);
       const N = 40, rng = mulberry32(7777);
       const pos = new Float32Array(N * 3), base = [], phases = new Float32Array(N);
       for (let i = 0; i < N; i++) {
@@ -2247,7 +2258,7 @@
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
       const mat = new THREE.PointsMaterial({
-        color: 0xeaff8a, size: 0.3, transparent: true, opacity: 0.95,
+        color: 0xeaff8a, size: 0.3, map: glowTex, transparent: true, opacity: 0.95,
         blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
       });
       const pts = new THREE.Points(geo, mat);
