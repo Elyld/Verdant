@@ -428,8 +428,13 @@ def _harvest_weight_from_row(row: Dict[str, str], unit: str) -> tuple[Optional[f
     return weight, weight_unit
 
 
-def _build_harvest(row: Dict[str, str], ctx: _Ctx, assignments: Dict[str, Any]) -> Dict[str, Any]:
+def _build_harvest(row: Dict[str, str], ctx: _Ctx, assignments: Dict[str, Any],
+                  idx: int = 0) -> Dict[str, Any]:
     code = row.get("Log ID", "")
+    # Rows without a Log ID still need a stable, unique handle so the
+    # plant picker on the Import page can assign them (keyed by Log ID
+    # when present, otherwise by row position).
+    akey = code or f"row-{idx}"
     unit = row.get("Unit", "") or "fruit"
     weight, weight_unit = _harvest_weight_from_row(row, unit)
 
@@ -461,18 +466,18 @@ def _build_harvest(row: Dict[str, str], ctx: _Ctx, assignments: Dict[str, Any]) 
     if quantity is None:
         problems.append("bad or missing quantity")
     plant = None
-    assigned = assignments.get(code) if code else None
+    assigned = assignments.get(akey)
     if assigned:
         plant = ctx.session.get(Plant, int(assigned)) if str(assigned).isdigit() else None
     if plant is None and code in HARVEST_PLANT_HINTS:
         plant = ctx.plants_by_variety.get(HARVEST_PLANT_HINTS[code].strip().lower())
     if problems:
-        return {"status": "error", "label": f"{code or '?'}: {', '.join(problems)}", "key": code}
+        return {"status": "error", "label": f"{code or '?'}: {', '.join(problems)}", "key": akey}
     if plant is None:
         return {
             "status": "needs_plant",
             "label": f"{code} {when.isoformat()} — {quantity} {unit}: pick a plant",
-            "key": code,
+            "key": akey,
             "hint_variety": HARVEST_PLANT_HINTS.get(code),
         }
     # Natural-key dedup in case the log ID wasn't preserved.
@@ -499,7 +504,7 @@ def _build_harvest(row: Dict[str, str], ctx: _Ctx, assignments: Dict[str, Any]) 
             notes=row.get("Notes", "") or None,
             **kwargs,
         )
-    return {"status": "new", "label": f"{code} {when.isoformat()} — {quantity} × {plant.variety_name}", "key": code, "make": make}
+    return {"status": "new", "label": f"{code} {when.isoformat()} — {quantity} × {plant.variety_name}", "key": akey, "make": make}
 
 
 BUILDERS = {
@@ -515,9 +520,9 @@ BUILDERS = {
 
 def _process(entity: str, rows: List[Dict[str, str]], ctx: _Ctx, assignments: Dict[str, Any]) -> List[Dict[str, Any]]:
     results = []
-    for row in rows:
+    for i, row in enumerate(rows):
         if entity == "harvests":
-            results.append(_build_harvest(row, ctx, assignments))
+            results.append(_build_harvest(row, ctx, assignments, idx=i))
         else:
             results.append(BUILDERS[entity](row, ctx))
     return results

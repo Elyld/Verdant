@@ -209,13 +209,16 @@ def chat_turn(conv_id: int, payload: ChatTurn,
     if image and not (image.startswith("data:image/") or image.startswith("https://")):
         raise HTTPException(400, "That image isn't usable.")
 
-    session.add(AgentMessage(conversation_id=conv.id, role="user", content=text))
-
+    # History BEFORE the add: session.add() below would autoflush the new
+    # row into the SELECT, duplicating the user's message in the prompt
+    # (once from history, once appended in run_agent_turn).
     past = session.exec(select(AgentMessage)
                         .where(AgentMessage.conversation_id == conv.id)
                         .order_by(AgentMessage.id.desc()).limit(20)).all()
     history = [{"role": m.role, "content": m.content}
                for m in reversed(past) if m.role in ("user", "assistant")][-10:]
+
+    session.add(AgentMessage(conversation_id=conv.id, role="user", content=text))
 
     result = run_agent_turn(session, text, history, image=image)
 
