@@ -149,6 +149,7 @@ def test_ollama_blank_images_ignored(monkeypatch):
 
 def test_chat_with_image_forwards_to_llm(monkeypatch):
     calls = _stub_chat(monkeypatch, '{"reply": "I see aphids on the leaves."}')
+    monkeypatch.setattr(ai_log.llm_mod, "model_supports_vision", lambda session: True)
     r = client.post("/api/ai/chat", json={
         "message": "what's on my leaves?",
         "image": "data:image/jpeg;base64,AAA",
@@ -162,6 +163,94 @@ def test_chat_with_image_forwards_to_llm(monkeypatch):
     # the vision sentence lands in the system prompt
     assert "you CAN see it" in messages[0]["content"]
     assert messages[-1] == {"role": "user", "content": "what's on my leaves?"}
+
+
+def test_chat_with_image_text_only_model_is_honest(monkeypatch):
+    calls = _stub_chat(monkeypatch, '{"reply": "I cannot see images."}')
+    monkeypatch.setattr(ai_log.llm_mod, "model_supports_vision", lambda session: False)
+    r = client.post("/api/ai/chat", json={
+        "message": "what's on my leaves?",
+        "image": "data:image/jpeg;base64,AAA",
+    })
+    assert r.status_code == 200, r.text
+    messages, _ = calls[0]
+    system = messages[0]["content"]
+    assert "you CAN see it" not in system
+    assert "cannot see images" in system
+    assert "never" in system and "guess" in system  # no hallucinating the photo
+
+
+# --- model_supports_vision ---------------------------------------------------
+
+def _set_model(monkeypatch, provider, model):
+    llm_mod._VISION_CACHE.clear()
+    with SQLSession(engine) as s:
+        frost_mod.set_setting(s, "ai_provider", provider)
+        if provider == "ollama":
+            frost_mod.set_setting(s, "local_ai_model", model)
+        else:
+            frost_mod.set_setting(s, "openrouter_model", model)
+        s.commit()
+
+
+def _vision_with(monkeypatch):
+    with SQLSession(engine) as s:
+        return llm_mod.model_supports_vision(s)
+
+
+def test_vision_ollama_reports_vision(monkeypatch):
+    def fake_post_json(url, payload, timeout, headers=None):
+        assert url.endswith("/api/show")
+        return {"capabilities": ["completion", "vision"]}
+    monkeypatch.setattr(llm_mod, "_post_json", fake_post_json)
+    _set_model(monkeypatch, "ollama", "llava:latest")
+    assert _vision_with(monkeypatch) is True
+
+
+def test_vision_ollama_text_only(monkeypatch):
+    def fake_post_json(url, payload, timeout, headers=None):
+        return {"capabilities": ["completion"]}
+    monkeypatch.setattr(llm_mod, "_post_json", fake_post_json)
+    _set_model(monkeypatch, "ollama", "qwen3:4b")
+    assert _vision_with(monkeypatch) is False
+
+
+def test_vision_ollama_unreachable_is_conservative(monkeypatch):
+    def boom(url, payload, timeout, headers=None):
+        raise llm_mod.LLMError("nope")
+    monkeypatch.setattr(llm_mod, "_post_json", boom)
+    _set_model(monkeypatch, "ollama", "llava:latest")
+    assert _vision_with(monkeypatch) is False
+
+
+def test_vision_openrouter_image_modality(monkeypatch):
+    def fake_get_json(url, timeout, headers=None):
+        return {"data": [
+            {"id": "openai/gpt-4o-mini",
+             "architecture": {"input_modalities": ["text", "image"]}},
+            {"id": "meta-llama/llama-3-8b",
+             "architecture": {"input_modalities": ["text"]}},
+        ]}
+    monkeypatch.setattr(llm_mod, "_get_json", fake_get_json)
+    _set_model(monkeypatch, "openrouter", "openai/gpt-4o-mini")
+    assert _vision_with(monkeypatch) is True
+    _set_model(monkeypatch, "openrouter", "meta-llama/llama-3-8b")
+    assert _vision_with(monkeypatch) is False
+    _set_model(monkeypatch, "openrouter", "unknown/model-xyz")
+    assert _vision_with(monkeypatch) is False
+
+
+def test_vision_result_is_cached(monkeypatch):
+    hits = []
+
+    def fake_post_json(url, payload, timeout, headers=None):
+        hits.append(url)
+        return {"capabilities": ["vision"]}
+    monkeypatch.setattr(llm_mod, "_post_json", fake_post_json)
+    _set_model(monkeypatch, "ollama", "llava:latest")
+    assert _vision_with(monkeypatch) is True
+    assert _vision_with(monkeypatch) is True
+    assert len(hits) == 1  # second call served from cache
 
 
 def test_chat_rejects_bad_image(monkeypatch):

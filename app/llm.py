@@ -13,6 +13,7 @@ so adding a provider never means touching every feature.
 from __future__ import annotations
 
 import json
+import time
 import urllib.error
 import urllib.request
 
@@ -267,6 +268,66 @@ def chat(session, messages: list[dict], *, json_mode: bool = False,
                                 json_mode, timeout or 60, images=images)
     return _ollama_chat(cfg["ollama_base_url"], cfg["ollama_model"], messages,
                         json_mode, timeout or 120, images=images)
+
+
+_VISION_CACHE: dict[tuple[str, str], tuple[float, bool]] = {}
+_VISION_CACHE_TTL = 3600  # seconds — model capabilities don't change often
+
+
+def model_supports_vision(session) -> bool:
+    """Can the configured model actually see attached images?
+
+    Conservative by design: returns False unless the provider positively
+    reports vision capability. Telling a text-only model "you CAN see it"
+    sets it up to hallucinate photo descriptions, which is worse than an
+    honest "I can't see images".
+    """
+    cfg = get_config(session)
+    provider = cfg["provider"]
+    model = cfg["ollama_model"] if provider == "ollama" else cfg["openrouter_model"]
+    key = (provider, (model or "").strip().lower())
+    now = time.monotonic()
+    hit = _VISION_CACHE.get(key)
+    if hit and now - hit[0] < _VISION_CACHE_TTL:
+        return hit[1]
+    try:
+        result = _check_vision(provider, cfg, model)
+    except Exception:
+        result = False
+    _VISION_CACHE[key] = (now, result)
+    return result
+
+
+def _check_vision(provider: str, cfg: dict, model: str) -> bool:
+    model = (model or "").strip()
+    if not model:
+        return False
+    if provider == "openrouter":
+        return _openrouter_model_sees(model)
+    return _ollama_model_sees(cfg, model)
+
+
+def _ollama_model_sees(cfg: dict, model: str) -> bool:
+    # Ollama's /api/show reports e.g. "capabilities": ["vision", "completion"].
+    body = _post_json(f"{cfg['ollama_base_url']}/api/show",
+                      {"model": model, "name": model}, timeout=8)
+    caps = body.get("capabilities") or []
+    return any(str(c).lower() == "vision" for c in caps)
+
+
+def _openrouter_model_sees(model: str) -> bool:
+    # The public models list carries architecture.input_modalities per model id.
+    body = _get_json(f"{OPENROUTER_BASE}/models", timeout=10)
+    want = model.strip().lower()
+    for m in (body.get("data") or []):
+        if not isinstance(m, dict):
+            continue
+        if str(m.get("id") or "").strip().lower() != want:
+            continue
+        arch = m.get("architecture") or {}
+        modalities = [str(x).lower() for x in (arch.get("input_modalities") or [])]
+        return "image" in modalities
+    return False
 
 
 def status(session) -> dict:

@@ -363,9 +363,17 @@ def run_agent_turn(session: Session, message: str,
         tools=tools_json, context=context)
     system += agent_identity_block(session)
     if image:
-        system += ("\n\nThe gardener attached a photo with this message — you CAN see it. "
-                   "Use what you see for pest ID, ripeness, or plant health, "
-                   "and mention what you observe in your reply.")
+        if llm_mod.model_supports_vision(session):
+            system += ("\n\nThe gardener attached a photo with this message — you CAN see it. "
+                       "Use what you see for pest ID, ripeness, or plant health, "
+                       "and mention what you observe in your reply.")
+        else:
+            system += ("\n\nThe gardener attached a photo with this message, but the AI model "
+                       "you are running on cannot see images. Be honest about that — never "
+                       "describe or guess at the photo's contents. Ask the gardener to describe "
+                       "what they see (spots, wilting, bugs, discoloration) and help from their "
+                       "description instead. If they need a visual ID, point them at the "
+                       "🔍 Identify button on the Plants page.")
 
     clean_history = [
         {"role": h["role"], "content": (h.get("content") or "")[:1500]}
