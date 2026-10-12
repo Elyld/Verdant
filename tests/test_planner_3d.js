@@ -290,6 +290,36 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
   check('break confirm when plantings exist', buildApi.needsBreakConfirm({ id: 12 }) === true);
   check('no confirm when empty', buildApi.needsBreakConfirm({ id: 13 }) === false);
 
+  // ---- cattle-panel arch geometry (pure helpers) ----
+  const ribCells = walkApi.archRibCells(4, 7);
+  check('arch ribs are stepped arcs (many voxel segments)', ribCells.length > 20);
+  const crown = walkApi.archArcPoint(4, 7, 0.5);
+  check('arch crown height ≈ 7 ft', Math.abs(crown.y - 7) < 1e-9 && Math.abs(crown.x) < 1e-9);
+  const footL = walkApi.archArcPoint(4, 7, 0), footR = walkApi.archArcPoint(4, 7, 1);
+  check('arch feet at ground level, span ±2', Math.abs(footL.y) < 1e-9 && Math.abs(footR.y) < 1e-9 && Math.abs(Math.abs(footL.x) - 2) < 1e-9);
+  check('arch rib count 5-7 for a 4-ft run', walkApi.archRibCount(4) >= 5 && walkApi.archRibCount(4) <= 7);
+  check('arch rib count caps at 7', walkApi.archRibCount(20) === 7);
+  // every rib voxel sits on the true arc (stepped, not floating)
+  let worstGap = 0;
+  ribCells.forEach((c) => {
+    let best = 1e9;
+    for (let i = 0; i <= 60; i++) {
+      const p = walkApi.archArcPoint(4, 7, i / 60);
+      const d = Math.hypot(c.x - p.x, c.y - p.y);
+      if (d < best) best = d;
+    }
+    if (best > worstGap) worstGap = best;
+  });
+  check('rib voxels hug the arc (worst gap < 0.3)', worstGap < 0.3);
+  // vine blobs sit ON the rib: small outward offset, never floating nearby
+  let vineOk = true;
+  for (let i = 0; i <= 20; i++) {
+    const p = walkApi.archArcPoint(4, 7, 0.05 + 0.9 * (i / 20));
+    const vo = walkApi.archVineOffset(4, 7, p);
+    if (Math.abs(Math.hypot(vo.x, vo.y) - 0.16) > 1e-9) vineOk = false;
+  }
+  check('vine blobs hug the rib (0.16 outward offset)', vineOk);
+
   console.log(failures ? `\n${failures} check(s) failed.` : '\nAll checks passed.');
   process.exit(failures ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

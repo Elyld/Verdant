@@ -691,6 +691,23 @@
       }
     }
 
+    function paintMetal(ctx, S, rng) {
+      // galvanized light metal for cattle-panel ribs
+      noiseFill(ctx, S, rng, ['#7d838a', '#71767d', '#8b9096', '#666b72']);
+    }
+
+    function paintWireMesh(ctx, S, rng) {
+      // transparent canvas; thin galvanized grid lines read as wire mesh
+      // through alphaTest. rng unused by design (regular grid).
+      for (let i = 0; i < S; i += 4) {
+        px(ctx, i, 0, 1, S, '#a8b0b8');
+        px(ctx, 0, i, S, 1, '#a8b0b8');
+      }
+      for (let y = 0; y < S; y += 4) {
+        for (let x = 0; x < S; x += 4) px(ctx, x, y, 1, 1, '#cdd5dd'); // intersection glint
+      }
+    }
+
     // Pixel-sprite maps: one char per pixel, '.' = transparent.
     const SPR_PALETTE = {
       s: '#6e4f2e', g: '#3f8f37', G: '#5cb85c', r: '#d9402e', R: '#a82c1f',
@@ -967,6 +984,8 @@
       TEX.fabric = makePixTexture(THREE, 16, paintFabric, 18);
       TEX.terracotta = makePixTexture(THREE, 16, paintTerracotta, 19);
       TEX.leafBlob = makePixTexture(THREE, 16, paintLeafBlob, 20);
+      TEX.metal = makePixTexture(THREE, 16, paintMetal, 22);
+      TEX.wireMesh = makePixTexture(THREE, 16, paintWireMesh, 23, [1, 1]); // [1,1] enables RepeatWrapping for UV tiling
       TEX.plants = {};
       Object.keys(SPRITES).forEach((name) => {
         TEX.plants[name] = makePixTexture(THREE, 16, (ctx) => paintSprite(ctx, name), 21);
@@ -1047,45 +1066,113 @@
       g.userData.topY = 0.42;
     }
 
+    // ---- cattle-panel arch geometry (pure helpers; also exposed to tests) ----
+    function archArcPoint(span, height, t) {
+      // t in [0,1] along a half-ellipse from one ground foot to the other
+      const th = Math.PI * t;
+      return { x: (span / 2) * Math.cos(th), y: height * Math.sin(th) };
+    }
+    function archRibCells(span, height) {
+      // Quantize the arc to 0.2-unit voxels, Minecraft-circle style: a
+      // stepped arc of small axis-aligned boxes, no smooth curves.
+      const cs = 0.2, seen = new Set(), cells = [];
+      for (let i = 0; i <= 240; i++) {
+        const p = archArcPoint(span, height, i / 240);
+        const k = Math.round(p.x / cs) + ':' + Math.round(p.y / cs);
+        if (!seen.has(k)) {
+          seen.add(k);
+          cells.push({ x: Math.round(p.x / cs) * cs, y: Math.max(0, Math.round(p.y / cs) * cs) });
+        }
+      }
+      return cells;
+    }
+    function archRibCount(len) {
+      return Math.max(5, Math.min(7, Math.round(len * 1.25)));
+    }
+    function archVineOffset(span, height, p) {
+      // small outward push (ellipse normal) so a vine blob hugs the rib
+      // instead of sitting inside it or floating nearby
+      const nx = p.x / ((span * span) / 4 + 1e-6), ny = p.y / (height * height + 1e-6);
+      const nl = Math.hypot(nx, ny) || 1;
+      return { x: (nx / nl) * 0.16, y: (ny / nl) * 0.16 };
+    }
+
     function buildArch(THREE, g, w, h, height, TEX) {
-      // voxel trellis: chunky posts + crossbars + climbing vine blobs
+      // Cattle-panel archway: curved wire-mesh hoops arcing over the short
+      // dimension (ribs spaced along the long dimension), vines climbing ON
+      // the ribs. Walk-under-able: no collision (see walkColliders).
       const span = Math.min(w, h);
       const len = Math.max(w, h);
-      const a = Math.max(0.75, span / 2);
-      const hh = Math.max(1.5, height || 4);
-      const postMat = pixMaterial(THREE, TEX.darkWood);
-      const off = a * 0.92, along = len / 2 - 0.35;
-      const corners = w > h
-        ? [[-along, -off], [-along, off], [along, -off], [along, off]]
-        : [[-off, -along], [off, -along], [-off, along], [off, along]];
-      const postGeo = new THREE.BoxGeometry(0.24, hh, 0.24);
-      corners.forEach(([fx, fz]) => {
-        const f = new THREE.Mesh(postGeo, postMat);
-        f.position.set(fx, hh / 2, fz);
-        g.add(f);
-      });
-      // crossbars across the span at three heights (span runs along X when
-      // w<=h, along Z when w>h)
-      [0.35, 0.65, 0.95].forEach((t) => {
-        const bar = box(THREE, a * 2 + 0.24, 0.16, 0.16, postMat);
-        bar.position.set(0, hh * t, 0);
-        if (w > h) bar.rotation.y = Math.PI / 2;
-        g.add(bar);
-      });
-      // vine leaf blobs climbing the posts (seeded = stable)
-      const rng = mulberry32((w * 131 + h * 17 + ((g.userData.containerId || 0) * 7)) | 0);
+      const H = Math.max(1.5, height || 7);
+      const spanAlongX = w <= h; // rib arcs live in the X-Y plane when the footprint is taller than wide
+      const metalMat = pixMaterial(THREE, TEX.metal);
       const leafMat = pixMaterial(THREE, TEX.leafBlob);
-      const blobGeo = new THREE.BoxGeometry(0.3, 0.3, 0.3);
-      corners.forEach(([fx, fz]) => {
+      const meshMat = new THREE.MeshStandardMaterial({
+        map: TEX.wireMesh, alphaTest: 0.4, side: THREE.DoubleSide,
+        roughness: 0.55, metalness: 0.45,
+      });
+
+      // Ribs: stepped voxel arcs, shared geometry across every segment.
+      const segGeo = new THREE.BoxGeometry(0.15, 0.15, 0.13);
+      const cells = archRibCells(span, H);
+      const nRibs = archRibCount(len);
+      const ribOff = (r) => (nRibs === 1 ? 0 : -len / 2 + (r / (nRibs - 1)) * len);
+      for (let r = 0; r < nRibs; r++) {
+        const off = ribOff(r);
+        cells.forEach((c) => {
+          const seg = new THREE.Mesh(segGeo, metalMat);
+          if (spanAlongX) seg.position.set(c.x, c.y, off);
+          else seg.position.set(off, c.y, c.x);
+          g.add(seg);
+        });
+      }
+
+      // Wire-mesh skin: one curved ribbon surface spanning the tunnel.
+      const M = 28;
+      const pos = [], uv = [], idx = [];
+      const uRep = Math.max(1, Math.round(len / 0.75));
+      const vRep = Math.max(2, Math.round((Math.PI * (span / 2 + H)) / 2 / 0.75));
+      for (let j = 0; j <= M; j++) {
+        const p = archArcPoint(span, H, j / M);
+        const v = (j / M) * vRep;
+        if (spanAlongX) { pos.push(p.x, p.y, -len / 2, p.x, p.y, len / 2); }
+        else { pos.push(-len / 2, p.y, p.x, len / 2, p.y, p.x); }
+        uv.push(0, v, uRep, v);
+      }
+      for (let j = 0; j < M; j++) {
+        const a = j * 2, b = a + 1, c = a + 2, d = a + 3;
+        idx.push(a, b, c, b, d, c);
+      }
+      const skinGeo = new THREE.BufferGeometry();
+      skinGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      skinGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      skinGeo.setIndex(idx);
+      skinGeo.computeVertexNormals();
+      const skin = new THREE.Mesh(skinGeo, meshMat);
+      skin.userData.noShadow = true; // alpha-tested mesh would cast a solid blob shadow
+      g.add(skin);
+
+      // Vines climbing ON the ribs (seeded = stable): a few ribs, blobs at
+      // intervals along each rib's arc, hugging the curve.
+      const rng = mulberry32((w * 131 + h * 17 + ((g.userData.containerId || 0) * 7)) | 0);
+      const blobGeo = new THREE.BoxGeometry(0.34, 0.34, 0.34);
+      const vineRibs = new Set();
+      while (vineRibs.size < Math.min(3, nRibs)) vineRibs.add((rng() * nRibs) | 0);
+      vineRibs.forEach((r) => {
+        const off = ribOff(r);
         const n = 3 + ((rng() * 3) | 0);
         for (let i = 0; i < n; i++) {
+          const t = Math.min(0.95, 0.08 + (0.84 * (i + rng() * 0.6)) / n);
+          const p = archArcPoint(span, H, t);
+          const vo = archVineOffset(span, H, p);
           const b = new THREE.Mesh(blobGeo, leafMat);
-          b.position.set(fx + (rng() - 0.5) * 0.5, 0.4 + rng() * (hh - 0.8), fz + (rng() - 0.5) * 0.5);
+          if (spanAlongX) b.position.set(p.x + vo.x, p.y + vo.y, off);
+          else b.position.set(off, p.y + vo.y, p.x + vo.x);
           b.userData.noShadow = true;
           g.add(b);
         }
       });
-      g.userData.topY = hh;
+      g.userData.topY = H;
     }
 
     function buildPlantVoxel(THREE, g, px, pz, baseY, species, seed, TEX, big, plantingId) {
@@ -1448,9 +1535,11 @@
 
     wrap3d._walk = { // handle for tests / debugging
       resolvePlayerCollision, mulberry32, plantArchetype, walkColliders, makePixTexture,
+      archArcPoint, archRibCells, archRibCount, archVineOffset,
       painters: {
         paintGrassTop, paintDirtSide, paintDirt, paintWoodPlanks, paintDarkWood,
-        paintSoil, paintFabric, paintTerracotta, paintLeafBlob, paintSprite, SPRITES,
+        paintSoil, paintFabric, paintTerracotta, paintLeafBlob, paintMetal, paintWireMesh,
+        paintSprite, SPRITES,
       },
       get mode() { return walkMode; },
       _get: () => walk,
