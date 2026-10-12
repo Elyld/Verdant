@@ -155,6 +155,8 @@ globalThis.Verdant = {
   healthBar: () => '',
   plantCard: () => '',
   onBoot: (fn) => {},
+  year: () => 2026,
+  setYear: () => {},
 };
 
 const tick = (ms) => new Promise((r) => setTimeout(r, ms));

@@ -116,6 +116,7 @@
               <label class="block"><span class="lbl">Packet photo</span><input id="packet-photo" type="file" accept="image/*" class="inp text-sm" /></label>
               <label class="block"><span class="lbl">Back of packet <span class="text-navy-400">(growing info)</span></span><input id="packet-photo-back" type="file" accept="image/*" class="inp text-sm" /></label>
             </div>
+            <div id="packet-current-photos" class="hidden flex-wrap gap-3"></div>
             <div id="packet-library-row" class="hidden flex flex-wrap gap-2">
               <button type="button" id="packet-library-front" class="btn-ghost text-sm">🖼️ Front from photo library</button>
               <button type="button" id="packet-library-back" class="btn-ghost text-sm">🖼️ Back from photo library</button>
@@ -149,6 +150,32 @@
 {% block overlays %}
 <div id="lightbox" class="fixed inset-0 z-50 hidden items-center justify-center bg-navy-900/80 p-4">
   <img id="lightbox-img" class="max-h-full max-w-full rounded-xl shadow-botanical" alt="Garden photo enlarged" />
+</div>
+<!-- Photo crop tool: crop a packet's front/back photo in place. -->
+<div id="crop-modal" class="fixed inset-0 z-[60] hidden items-center justify-center bg-navy-900/85 p-4">
+  <div class="card w-full max-w-3xl space-y-3">
+    <div class="flex items-center justify-between">
+      <h3 class="font-display text-lg font-semibold text-navy-800">Crop photo <span id="crop-side-label" class="text-sm font-normal text-navy-400"></span></h3>
+      <button type="button" id="crop-close" class="btn-ghost text-sm">✕</button>
+    </div>
+    <div id="crop-stage" class="relative mx-auto select-none overflow-hidden rounded-lg bg-navy-900" style="touch-action:none;max-width:100%">
+      <img id="crop-img" alt="Photo to crop" class="block max-h-[60vh] w-auto max-w-full" draggable="false" />
+      <div id="crop-box" class="absolute hidden border-2 border-sage-300 shadow-[0_0_0_9999px_rgba(13,23,37,0.55)]" style="cursor:move">
+        <span id="crop-handle" class="absolute -bottom-2 -right-2 h-5 w-5 cursor-nwse-resize rounded-sm border-2 border-sage-300 bg-beige-50"></span>
+      </div>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <span class="text-xs font-semibold uppercase text-navy-400">Ratio</span>
+      <button type="button" data-crop-ratio="" class="btn-ghost text-xs crop-ratio-on">Free</button>
+      <button type="button" data-crop-ratio="1" class="btn-ghost text-xs">1:1</button>
+      <button type="button" data-crop-ratio="1.3333" class="btn-ghost text-xs">4:3</button>
+      <button type="button" data-crop-ratio="0.75" class="btn-ghost text-xs">3:4</button>
+      <span class="flex-1"></span>
+      <button type="button" id="crop-reset" class="btn-ghost text-sm">Reset</button>
+      <button type="button" id="crop-apply" class="btn-primary text-sm">Apply crop</button>
+    </div>
+    <p class="text-xs text-navy-400">Drag on the photo to draw the crop area, drag inside it to move, drag the corner to resize. Applying replaces the packet's saved photo — the original library photo is untouched.</p>
+  </div>
 </div>
 {% endblock %}
 {% block footer %}

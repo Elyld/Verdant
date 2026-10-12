@@ -66,9 +66,10 @@ Discord digest says the same.
 ![Today](docs/screenshots/today.png)
 
 ### 📅 Calendar — daily log at a glance
-A GitHub-style heatmap of every observation, watering, and fertilization. Click
-any day to see exactly what happened: health scores, notes, pests, weather.
-The homepage for your garden's daily rhythm.
+A GitHub-style heatmap of every observation, watering, and fertilization —
+all twelve months of the season picked up top. Click any day to see exactly
+what happened: health scores, notes, pests, weather. Changing the Season
+picker re-renders the whole year.
 
 ### 🌱 Plants — profiles, care cadence, timelines
 Every plant gets a profile: variety, species, location, planted date, days to
@@ -161,7 +162,8 @@ type, year bought, and how many seeds are left. Searchable and filterable —
 including a 📷 filter for which packs have photos. Packet photos can be
 uploaded or picked straight from your photo library (e.g. an Immich album of
 packet shots), and the ⇄ flip button shows the growing info on the back of
-the packet. Stick an NFC tag on the binder and tapping it opens the
+the packet. Crooked scan? The ✂️ Crop button on each side lets you straighten
+a packet photo in place — the library original stays untouched. Stick an NFC tag on the binder and tapping it opens the
 "add packet" form.
 
 ![Seed stash](docs/screenshots/seed-stash.png)
@@ -891,6 +893,17 @@ correct, and the container's clock/timezone matches yours — `DIGEST_TIME` is
 server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
+
+- **2.59.0** — **✂️ Crop packet photos, 📅 a real calendar, one Season to rule them all.**
+  The Seeds catalog gains a crop tool: open a packet, hit **✂️ Crop** on the
+  front or back photo, drag the area you want, and it replaces the packet's
+  saved photo (your library/Immich original is never touched) — no more
+  re-importing when a scan needs straightening. The Calendar page now shows
+  all 12 months of the selected season instead of a fixed 3-month window, and
+  the header **Season** picker is finally the single source of truth: Calendar,
+  Review, and Planner all follow it (Review's and Planner's own year controls
+  stay in sync both ways). The header itself got tidier — slimmer, frost badge
+  inline with the title instead of dangling below it.
 
 - **2.58.0** — **🎯 Match photos to seed packets too.** The Match page's
   "This photo shows…" dropdown was plants-only — now it's two groups,

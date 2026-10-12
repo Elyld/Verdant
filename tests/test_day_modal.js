@@ -60,6 +60,7 @@ global.document = {
   },
   querySelectorAll: () => [],
   addEventListener: (t, fn) => { (docListeners[t] = docListeners[t] || []).push(fn); },
+  dispatchEvent: (ev) => { for (const fn of docListeners[ev.type] || []) fn(ev); return true; },
   createElement: () => makeEl(),
   documentElement: makeEl(),
   body: makeEl(),
@@ -95,18 +96,26 @@ function check(name, cond) {
 }
 
 (async () => {
+  store['verdant.year'] = '2026';
   for (const fn of docListeners.DOMContentLoaded || []) await fn();
   await new Promise((r) => setTimeout(r, 50)); // let the fetch promise settle
 
   const html = gridEl.innerHTML;
-  check('grid rendered 3 month sections', (html.match(/calendar-month/g) || []).length === 3);
+  check('grid rendered 12 month sections for the season year', (html.match(/calendar-month/g) || []).length === 12);
+  check('grid header names the season year', html.includes('2026 season'));
   const days = (html.match(/data-date="/g) || []).length;
-  const now = new Date();
   let expected = 0;
-  for (let d = -2; d <= 0; d += 1) expected += new Date(now.getFullYear(), now.getMonth() + d + 1, 0).getDate();
+  for (let m = 0; m < 12; m += 1) expected += new Date(2026, m + 1, 0).getDate();
   check(`all ${expected} day cells rendered`, days === expected);
   check('2026-09-15 link is heat-2', /data-date="2026-09-15"[^>]*heat-2|heat-2"[^>]*data-date="2026-09-15/.test(html) || html.includes('data-date="2026-09-15" class="calendar-day heat-2"'));
   check('bad date skipped', !html.includes('not-a-date'));
+
+  // Changing the Season picker re-renders the whole year.
+  document.dispatchEvent({ type: 'verdant:year', detail: { year: 2025 } });
+  const html25 = gridEl.innerHTML;
+  check('year change re-renders 12 sections', (html25.match(/calendar-month/g) || []).length === 12);
+  check('re-render names the new year', html25.includes('2025 season'));
+  check('re-render uses the new year in dates', html25.includes('data-date="2025-01-01"') && !html25.includes('data-date="2026-01-01"'));
 
   // Click the busy day -> modal opens with its observations.
   const gridClick = (gridEl._listeners.click || [])[0];

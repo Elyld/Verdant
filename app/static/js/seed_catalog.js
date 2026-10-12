@@ -104,6 +104,8 @@
       // attached right after the packet is created on save.
       pendingLibrary = {};
       renderPending();
+      // Show current photos with crop buttons when editing an existing packet.
+      renderCurrentPhotos(packet);
       $('#packet-library-row').classList.remove('hidden');
       $('#packet-library-row').classList.add('flex');
       $('#packet-library-hint').classList.remove('hidden');
@@ -136,6 +138,203 @@
     $('#catalog-search').addEventListener('input', load);
     $('#catalog-category').addEventListener('change', load);
     $('#catalog-photo').addEventListener('change', load);
+
+    // ---- Photo crop tool ----
+    // Crops a packet's saved front/back photo in place (the library original
+    // is never touched — the packet holds its own copy). Reuses the existing
+    // /photo?side= upload endpoint; the crop happens client-side on a canvas.
+    const crop = { packetId: null, side: 'front', ratio: null, rect: null, mode: null, start: null };
+
+    function cropImg() { return $('#crop-img'); }
+    function cropBox() { return $('#crop-box'); }
+    function cropStage() { return $('#crop-stage'); }
+
+    function imgOffset() {
+      const s = cropStage().getBoundingClientRect();
+      const i = cropImg().getBoundingClientRect();
+      return { x: i.left - s.left, y: i.top - s.top, w: i.width, h: i.height };
+    }
+
+    function paintBox() {
+      const box = cropBox();
+      if (!crop.rect) { box.classList.add('hidden'); return; }
+      const o = imgOffset();
+      box.classList.remove('hidden');
+      box.style.left = `${o.x + crop.rect.x}px`;
+      box.style.top = `${o.y + crop.rect.y}px`;
+      box.style.width = `${crop.rect.w}px`;
+      box.style.height = `${crop.rect.h}px`;
+    }
+
+    function clampRect(r) {
+      const o = imgOffset();
+      r.x = Math.max(0, Math.min(r.x, o.w - 8));
+      r.y = Math.max(0, Math.min(r.y, o.h - 8));
+      r.w = Math.max(8, Math.min(r.w, o.w - r.x));
+      r.h = Math.max(8, Math.min(r.h, o.h - r.y));
+      return r;
+    }
+
+    function openCrop(src, side, packetId) {
+      crop.packetId = packetId;
+      crop.side = side;
+      crop.rect = null;
+      crop.ratio = null;
+      $$('#crop-modal [data-crop-ratio]').forEach((b) =>
+        b.classList.toggle('crop-ratio-on', b.dataset.cropRatio === ''));
+      const img = cropImg();
+      img.onload = () => paintBox();
+      img.src = src;
+      $('#crop-side-label').textContent = side === 'front' ? '— front of packet' : '— back of packet';
+      $('#crop-modal').classList.remove('hidden');
+      $('#crop-modal').classList.add('flex');
+    }
+
+    function closeCrop() {
+      $('#crop-modal').classList.add('hidden');
+      $('#crop-modal').classList.remove('flex');
+      cropImg().src = '';
+      crop.rect = null;
+      crop.mode = null;
+    }
+
+    function stagePoint(ev) {
+      const o = imgOffset();
+      const s = cropStage().getBoundingClientRect();
+      return {
+        x: Math.max(0, Math.min(ev.clientX - s.left - o.x, o.w)),
+        y: Math.max(0, Math.min(ev.clientY - s.top - o.y, o.h)),
+      };
+    }
+
+    function applyRatio(r, anchor) {
+      // anchor: which corner stays fixed while the ratio is enforced.
+      if (!crop.ratio) return r;
+      const want = crop.ratio;
+      if (anchor === 'se') {
+        if (r.w / r.h > want) r.w = r.h * want; else r.h = r.w / want;
+      }
+      return clampRect(r);
+    }
+
+    cropStage().addEventListener('pointerdown', (ev) => {
+      if (ev.target.closest('#crop-handle')) {
+        crop.mode = 'resize';
+      } else if (crop.rect) {
+        const p = stagePoint(ev);
+        const r = crop.rect;
+        if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) {
+          crop.mode = 'move';
+        } else {
+          crop.mode = 'draw';
+        }
+      } else {
+        crop.mode = 'draw';
+      }
+      const p = stagePoint(ev);
+      crop.start = { x: p.x, y: p.y, rx: crop.rect?.x ?? 0, ry: crop.rect?.y ?? 0, rw: crop.rect?.w ?? 0, rh: crop.rect?.h ?? 0 };
+      cropStage().setPointerCapture(ev.pointerId);
+      ev.preventDefault();
+    });
+
+    cropStage().addEventListener('pointermove', (ev) => {
+      if (!crop.mode) return;
+      const p = stagePoint(ev);
+      const s = crop.start;
+      if (crop.mode === 'draw') {
+        let r = { x: Math.min(s.x, p.x), y: Math.min(s.y, p.y), w: Math.abs(p.x - s.x), h: Math.abs(p.y - s.y) };
+        r = applyRatio(r, 'se');
+        crop.rect = clampRect(r);
+      } else if (crop.mode === 'move') {
+        crop.rect = clampRect({ x: s.rx + (p.x - s.x), y: s.ry + (p.y - s.y), w: s.rw, h: s.rh });
+      } else if (crop.mode === 'resize') {
+        let r = { x: s.rx, y: s.ry, w: Math.max(8, s.rw + (p.x - s.x)), h: Math.max(8, s.rh + (p.y - s.y)) };
+        r = applyRatio(r, 'se');
+        crop.rect = clampRect(r);
+      }
+      paintBox();
+    });
+
+    cropStage().addEventListener('pointerup', () => { crop.mode = null; });
+    cropStage().addEventListener('pointercancel', () => { crop.mode = null; });
+
+    $$('#crop-modal [data-crop-ratio]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        crop.ratio = btn.dataset.cropRatio ? Number(btn.dataset.cropRatio) : null;
+        $$('#crop-modal [data-crop-ratio]').forEach((b) => b.classList.toggle('crop-ratio-on', b === btn));
+        if (crop.rect && crop.ratio) {
+          crop.rect = applyRatio({ ...crop.rect }, 'se');
+          paintBox();
+        }
+      });
+    });
+
+    $('#crop-reset').addEventListener('click', () => { crop.rect = null; paintBox(); });
+    $('#crop-close').addEventListener('click', closeCrop);
+
+    $('#crop-apply').addEventListener('click', async () => {
+      const img = cropImg();
+      if (!crop.rect || !img.naturalWidth) { toast('Draw a crop area first.', 'error'); return; }
+      const scale = img.naturalWidth / img.clientWidth;
+      const sx = Math.round(crop.rect.x * scale);
+      const sy = Math.round(crop.rect.y * scale);
+      const sw = Math.round(crop.rect.w * scale);
+      const sh = Math.round(crop.rect.h * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = sw;
+      canvas.height = sh;
+      canvas.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+      if (!blob) { toast('Could not render the crop.', 'error'); return; }
+      try {
+        const form = new FormData();
+        form.append('file', blob, 'crop.jpg');
+        const updated = await api.upload(`/api/seed-packets/${crop.packetId}/photo?side=${crop.side}`, form);
+        const local = packets.find((p) => p.id === crop.packetId);
+        if (local) {
+          if (crop.side === 'front') local.photo_path = updated.photo_path;
+          else local.photo_back_path = updated.photo_back_path;
+          renderCurrentPhotos(local);
+        }
+        toast('Crop applied.');
+        closeCrop();
+        load();
+      } catch (err) {
+        toast(err.message || 'Could not apply the crop.', 'error');
+      }
+    });
+
+    function renderCurrentPhotos(packet) {
+      const wrap = $('#packet-current-photos');
+      if (!packet || (!packet.photo_path && !packet.photo_back_path)) {
+        wrap.classList.add('hidden');
+        wrap.classList.remove('flex');
+        wrap.innerHTML = '';
+        return;
+      }
+      const thumb = (src, side, label) => src ? `
+        <div class="flex items-center gap-2 rounded-xl bg-beige-100 p-2 ring-1 ring-beige-200">
+          <img src="${esc(src)}" alt="${label} of packet" class="h-16 w-16 rounded-lg object-cover" />
+          <div class="text-xs">
+            <p class="font-semibold text-navy-700">${label}</p>
+            <button type="button" data-crop-side="${side}" class="text-sage-700 underline">✂️ Crop</button>
+          </div>
+        </div>` : '';
+      wrap.innerHTML = thumb(packet.photo_path, 'front', 'Front') + thumb(packet.photo_back_path, 'back', 'Back');
+      wrap.classList.remove('hidden');
+      wrap.classList.add('flex');
+    }
+
+    $('#packet-current-photos').addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-crop-side]');
+      if (!btn) return;
+      const packetId = Number($('#packet-id').value);
+      const packet = packets.find((p) => p.id === packetId);
+      if (!packet) return;
+      const side = btn.dataset.cropSide;
+      const src = side === 'front' ? packet.photo_path : packet.photo_back_path;
+      if (src) openCrop(src, side, packetId);
+    });
 
     // ---- Photo library picker ----
     let libSide = 'front';

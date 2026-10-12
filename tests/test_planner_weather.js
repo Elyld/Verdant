@@ -128,6 +128,8 @@ globalThis.Verdant = {
     del: (p) => fetch(p, { method: 'DELETE' }).then((r) => r.json()),
   },
   toast: () => {},
+  year: () => 2026,
+  setYear: () => {},
 };
 
 const tick = (ms) => new Promise((r) => setTimeout(r, ms));
