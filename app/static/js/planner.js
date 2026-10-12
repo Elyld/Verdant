@@ -639,308 +639,148 @@
       return c;
     }
 
-    /* ---------- pixel-art helpers ---------- */
+    /* ---------- soft miniature painters (64x64, LinearFilter) ---------- */
     function px(ctx, x, y, w, h, c) {
       ctx.fillStyle = c;
       ctx.fillRect(x | 0, y | 0, Math.ceil(w), Math.ceil(h));
     }
 
-    function noiseFill(ctx, S, rng, palette) {
-      for (let y = 0; y < S; y++) {
-        for (let x = 0; x < S; x++) {
-          px(ctx, x, y, 1, 1, palette[(rng() * palette.length) | 0]);
-        }
+    // soft mottled noise: translucent circles over a base coat
+    function softNoise(ctx, S, rng, palette, count, rMin, rMax) {
+      const n = count || Math.round((S * S) / 5);
+      for (let i = 0; i < n; i++) {
+        ctx.fillStyle = palette[(rng() * palette.length) | 0];
+        ctx.globalAlpha = 0.18 + rng() * 0.28;
+        ctx.beginPath();
+        ctx.arc(rng() * S, rng() * S, rMin + rng() * (rMax - rMin), 0, 6.2832);
+        ctx.fill();
       }
+      ctx.globalAlpha = 1;
     }
+    function baseCoat(ctx, S, c) { ctx.fillStyle = c; ctx.fillRect(0, 0, S, S); }
 
-    // 16x16 painters. Each takes (ctx, S, rng). Transparent pixels simply
-    // aren't painted (canvas starts clear).
-    function paintGrassTop(ctx, S, rng) {
-      noiseFill(ctx, S, rng, ['#6fbf5a', '#6fbf5a', '#65b551', '#7acc66', '#5da84b']);
-      // 1px darker seam = the 1-ft grid lines between blocks
-      px(ctx, 0, 0, S, 1, '#4f9440'); px(ctx, 0, S - 1, S, 1, '#4f9440');
-      px(ctx, 0, 0, 1, S, '#4f9440'); px(ctx, S - 1, 0, 1, S, '#4f9440');
+    // 64x64 soft painters. Each takes (ctx, S, rng).
+    function paintGrass(ctx, S, rng) {
+      baseCoat(ctx, S, '#69b455');
+      softNoise(ctx, S, rng, ['#5da84b', '#7acc66', '#64b356', '#74c05e'], 900, 1, 4);
     }
-
-    function paintDirtSide(ctx, S, rng) {
-      noiseFill(ctx, S, rng, ['#8a5f3c', '#7d5535', '#96684a', '#755031']);
-      // green fringe along the top edge, ragged
-      for (let x = 0; x < S; x++) {
-        const d = 2 + ((rng() * 3) | 0);
-        for (let y = 0; y < d; y++) px(ctx, x, y, 1, 1, y === d - 1 && rng() < 0.5 ? '#5da84b' : '#6fbf5a');
-      }
+    function paintGroundSide(ctx, S, rng) {
+      // soft dark skirt under the platform
+      const g = ctx.createLinearGradient(0, 0, 0, S);
+      g.addColorStop(0, '#4c8a3e'); g.addColorStop(1, '#2e5b26');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
+      softNoise(ctx, S, rng, ['#3c7030', '#548c40'], 260, 1, 5);
     }
-
-    function paintDirt(ctx, S, rng) {
-      noiseFill(ctx, S, rng, ['#8a5f3c', '#7d5535', '#96684a', '#755031', '#6e4a2e']);
-    }
-
-    function paintWoodPlanks(ctx, S, rng) {
-      px(ctx, 0, 0, S, S, '#a0824f');
-      for (let y = 0; y < S; y += 4) px(ctx, 0, y, S, 1, '#6e5636'); // plank seams
-      for (let i = 0; i < 26; i++) px(ctx, (rng() * S) | 0, (rng() * S) | 0, 1 + ((rng() * 2) | 0), 1, rng() < 0.5 ? '#8f7040' : '#b08d58');
-      if (rng() < 0.7) { // knot
-        const kx = 2 + ((rng() * (S - 4)) | 0), ky = 2 + ((rng() * (S - 4)) | 0);
-        px(ctx, kx, ky, 2, 2, '#5e482c');
-      }
-    }
-
-    function paintDarkWood(ctx, S, rng) {
-      noiseFill(ctx, S, rng, ['#6e5636', '#654e2f', '#78593a']);
-    }
-
     function paintSoil(ctx, S, rng) {
-      noiseFill(ctx, S, rng, ['#4a3520', '#42301c', '#54402a', '#3a2a18']);
-      for (let i = 0; i < 5; i++) px(ctx, (rng() * (S - 1)) | 0, (rng() * (S - 1)) | 0, 2, 1, '#6b5a3a'); // tiny stones
+      baseCoat(ctx, S, '#4a3520');
+      softNoise(ctx, S, rng, ['#3a2a18', '#54402a', '#5d4a30', '#2f2113'], 700, 1, 3.5);
     }
-
+    function paintWood(ctx, S, rng) {
+      baseCoat(ctx, S, '#a0824f');
+      // long soft grain streaks
+      for (let i = 0; i < 22; i++) {
+        ctx.strokeStyle = rng() < 0.5 ? '#8a6c3e' : '#b5935e';
+        ctx.globalAlpha = 0.35; ctx.lineWidth = 1 + rng() * 2;
+        const y = rng() * S;
+        ctx.beginPath(); ctx.moveTo(0, y);
+        ctx.bezierCurveTo(S * 0.3, y + (rng() - 0.5) * 8, S * 0.7, y + (rng() - 0.5) * 8, S, y);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      softNoise(ctx, S, rng, ['#96794a', '#ab8857'], 200, 1, 3);
+    }
+    function paintDarkWood(ctx, S, rng) {
+      baseCoat(ctx, S, '#6e5636');
+      softNoise(ctx, S, rng, ['#5e482c', '#7d6440'], 500, 1, 3.5);
+    }
     function paintFabric(ctx, S, rng) {
-      for (let y = 0; y < S; y++) {
-        for (let x = 0; x < S; x++) {
-          px(ctx, x, y, 1, 1, ((x + y) % 2 === 0) ? '#3a3f44' : '#2f3338');
-        }
-      }
-      for (let i = 0; i < 12; i++) px(ctx, (rng() * S) | 0, (rng() * S) | 0, 1, 1, '#4a5058');
+      baseCoat(ctx, S, '#35393f');
+      softNoise(ctx, S, rng, ['#2b2e33', '#41464d', '#3d4248'], 600, 1, 2.5);
     }
-
     function paintTerracotta(ctx, S, rng) {
-      px(ctx, 0, 0, S, S, '#c1663e');
-      px(ctx, 0, 0, S, 3, '#a0522d'); // rim band
-      px(ctx, 0, 3, S, 1, '#8f4726');
-      for (let i = 0; i < 18; i++) px(ctx, (rng() * S) | 0, 4 + ((rng() * (S - 4)) | 0), 1, 1, rng() < 0.5 ? '#d4764c' : '#b25a36');
+      baseCoat(ctx, S, '#c1663e');
+      const g = ctx.createLinearGradient(0, 0, 0, S);
+      g.addColorStop(0, 'rgba(255,255,255,0.10)'); g.addColorStop(1, 'rgba(0,0,0,0.14)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
+      softNoise(ctx, S, rng, ['#b25a36', '#d4764c'], 420, 1, 3);
     }
-
-    function paintLeafBlob(ctx, S, rng) {
-      const greens = ['#3f8f37', '#4e9e3f', '#5cb85c', '#357a2e'];
-      for (let y = 2; y < S - 2; y++) {
-        for (let x = 2; x < S - 2; x++) {
-          const dx = (x - S / 2) / (S / 2), dy = (y - S / 2) / (S / 2);
-          if (dx * dx + dy * dy < 0.75 && rng() < 0.92) px(ctx, x, y, 1, 1, greens[(rng() * greens.length) | 0]);
-        }
-      }
-    }
-
     function paintMetal(ctx, S, rng) {
-      // galvanized light metal for cattle-panel ribs
-      noiseFill(ctx, S, rng, ['#7d838a', '#71767d', '#8b9096', '#666b72']);
+      baseCoat(ctx, S, '#7d838a');
+      softNoise(ctx, S, rng, ['#6a7076', '#8b9096', '#757b82'], 500, 1, 3);
     }
-
     function paintWireMesh(ctx, S, rng) {
-      // transparent canvas; thin galvanized grid lines read as wire mesh
-      // through alphaTest. rng unused by design (regular grid).
-      for (let i = 0; i < S; i += 4) {
-        px(ctx, i, 0, 1, S, '#a8b0b8');
-        px(ctx, 0, i, S, 1, '#a8b0b8');
-      }
-      for (let y = 0; y < S; y += 4) {
-        for (let x = 0; x < S; x += 4) px(ctx, x, y, 1, 1, '#cdd5dd'); // intersection glint
+      // transparent canvas; fine wire grid reads through alphaTest
+      ctx.strokeStyle = '#9aa2ab'; ctx.lineWidth = 1;
+      for (let i = 0; i <= S; i += 6) {
+        ctx.beginPath(); ctx.moveTo(i + 0.5, 0); ctx.lineTo(i + 0.5, S); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, i + 0.5); ctx.lineTo(S, i + 0.5); ctx.stroke();
       }
     }
-
     function paintBucket(ctx, S, rng) {
-      // white plastic 5-gal bucket: bright body, subtle horizontal ridges
-      noiseFill(ctx, S, rng, ['#e8ecef', '#dde3e8', '#f2f5f7', '#d3d9df']);
-      for (let y = 3; y < S; y += 4) px(ctx, 0, y, S, 1, '#c3cbd2'); // ridge shadow
+      baseCoat(ctx, S, '#e8ecef');
+      const g = ctx.createLinearGradient(0, 0, S, 0);
+      g.addColorStop(0, 'rgba(0,0,0,0.10)'); g.addColorStop(0.25, 'rgba(255,255,255,0.12)');
+      g.addColorStop(0.6, 'rgba(0,0,0,0.04)'); g.addColorStop(1, 'rgba(0,0,0,0.12)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
+      softNoise(ctx, S, rng, ['#dfe5ea', '#f2f5f7'], 200, 1, 3);
     }
-
     function paintStone(ctx, S, rng) {
-      // speckled gray flagstone
-      noiseFill(ctx, S, rng, ['#9aa0a6', '#8b9096', '#a7adb3', '#7d838a']);
-      for (let i = 0; i < 14; i++) px(ctx, (rng() * S) | 0, (rng() * S) | 0, 1, 1, '#5f656c'); // dark speckles
+      baseCoat(ctx, S, '#9aa0a6');
+      softNoise(ctx, S, rng, ['#8b9096', '#a7adb3', '#7d838a', '#b5bac0'], 650, 1, 3.5);
     }
-
     function paintBarrel(ctx, S, rng) {
-      // blue plastic rain barrel: saturated blue body, darker ridge bands
-      noiseFill(ctx, S, rng, ['#2b6cb0', '#2f78c2', '#265e9c', '#3579bd']);
-      for (let y = 2; y < S; y += 5) px(ctx, 0, y, S, 1, '#1d4e89'); // ridge shadow
-      for (let y = 3; y < S; y += 5) px(ctx, 0, y, S, 1, '#4d8fd4'); // ridge highlight
+      baseCoat(ctx, S, '#2f78c2');
+      const g = ctx.createLinearGradient(0, 0, S, 0);
+      g.addColorStop(0, 'rgba(0,0,0,0.18)'); g.addColorStop(0.3, 'rgba(255,255,255,0.14)');
+      g.addColorStop(1, 'rgba(0,0,0,0.16)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
+      softNoise(ctx, S, rng, ['#2b6cb0', '#3b85cc'], 300, 1, 3);
     }
-
     function paintCompost(ctx, S, rng) {
-      // dark slatted compost bin: near-black brown slats with gaps
-      noiseFill(ctx, S, rng, ['#3a2d20', '#443423', '#2f2417', '#4d3a26']);
-      for (let y = 0; y < S; y += 4) px(ctx, 0, y, S, 1, '#14100a'); // slat gaps
-      for (let i = 0; i < 10; i++) px(ctx, (rng() * S) | 0, (rng() * S) | 0, 1, 1, '#5d4a30'); // wood flecks
+      baseCoat(ctx, S, '#3a2d20');
+      softNoise(ctx, S, rng, ['#2f2417', '#4d3a26', '#443423'], 550, 1, 3.5);
     }
-
     function paintHoopPlastic(ctx, S, rng) {
-      // greenhouse film: milky white with a faint ribbed sheen (material is translucent)
-      noiseFill(ctx, S, rng, ['#eef2f4', '#e4ebef', '#f6fafb', '#dde6ea']);
-      for (let x = 0; x < S; x += 4) px(ctx, x, 0, 1, S, '#ffffff'); // sheen lines
+      baseCoat(ctx, S, '#eef2f4');
+      softNoise(ctx, S, rng, ['#e2e9ed', '#f7fafb'], 260, 2, 6);
     }
-
     function paintBasin(ctx, S, rng) {
-      // weathered stone basin: pale gray with mossy flecks
-      noiseFill(ctx, S, rng, ['#b9bdc2', '#aeb3b9', '#c4c9ce', '#9fa5ab']);
-      for (let i = 0; i < 12; i++) px(ctx, (rng() * S) | 0, (rng() * S) | 0, 1, 1, '#7a8a5a'); // moss
+      baseCoat(ctx, S, '#b9bdc2');
+      softNoise(ctx, S, rng, ['#a9aeb4', '#c6cbd0', '#9fa5ab'], 550, 1, 3.5);
     }
-
-    function paintAppleLeaves(ctx, S, rng) {
-      // leaf canopy with red apple pixels tucked in
-      const greens = ['#3f8f37', '#4e9e3f', '#5cb85c', '#357a2e'];
-      for (let y = 1; y < S - 1; y++) {
-        for (let x = 1; x < S - 1; x++) {
-          const dx = (x - S / 2) / (S / 2), dy = (y - S / 2) / (S / 2);
-          if (dx * dx + dy * dy < 0.8 && rng() < 0.94) px(ctx, x, y, 1, 1, greens[(rng() * greens.length) | 0]);
-        }
-      }
-      for (let i = 0; i < 4; i++) { // apples: 2x2 red clusters
-        const ax = 2 + ((rng() * (S - 5)) | 0), ay = 2 + ((rng() * (S - 5)) | 0);
-        px(ctx, ax, ay, 2, 2, '#d63c2f');
-        px(ctx, ax, ay, 1, 1, '#f06655'); // highlight
-      }
+    function paintLeaf(ctx, S, rng) {
+      baseCoat(ctx, S, '#4e9e3f');
+      softNoise(ctx, S, rng, ['#3f8f37', '#5cb85c', '#357a2e', '#66b95a'], 700, 1, 4);
     }
-
     function paintGrassTuft(ctx, S, rng) {
-      // meadow grass blades: vertical green strokes on transparency
+      // soft meadow blades on transparency
       const greens = ['#4e9e3f', '#5cb85c', '#3f8f37', '#6fbf5a'];
-      for (let i = 0; i < 26; i++) {
-        const x = (rng() * S) | 0, h = 5 + ((rng() * (S - 6)) | 0);
-        px(ctx, x, S - h, 1, h, greens[(rng() * greens.length) | 0]);
-        if (rng() < 0.5) px(ctx, x + (rng() < 0.5 ? -1 : 1), S - h + 1, 1, 2, greens[(rng() * greens.length) | 0]);
+      ctx.lineCap = 'round';
+      for (let i = 0; i < 22; i++) {
+        ctx.strokeStyle = greens[(rng() * greens.length) | 0];
+        ctx.lineWidth = 2 + rng() * 2;
+        const x = 4 + rng() * (S - 8), h = S * (0.45 + rng() * 0.45);
+        const lean = (rng() - 0.5) * 14;
+        ctx.beginPath(); ctx.moveTo(x, S);
+        ctx.quadraticCurveTo(x + lean * 0.4, S - h * 0.6, x + lean, S - h); ctx.stroke();
       }
     }
-
     function paintWildflower(ctx, S, rng, colorIdx) {
-      // stem + leaves + one flower head; colorIdx picks the palette (rng when omitted)
-      const heads = ['#e0483e', '#f2c531', '#f5f5f5']; // red, yellow, white
+      const heads = ['#e0483e', '#f2c531', '#f5f5f5'];
       const head = heads[colorIdx == null ? (rng() * 3) | 0 : colorIdx % 3];
-      px(ctx, 7, 4, 2, 12, '#3f8f37'); // stem
-      px(ctx, 4, 9, 3, 2, '#4e9e3f'); // leaves
-      px(ctx, 9, 11, 3, 2, '#4e9e3f');
-      for (let y = 0; y < 5; y++) for (let x = 0; x < 5; x++) { // head blob
-        const dx = x - 2, dy = y - 2;
-        if (dx * dx + dy * dy <= 5) px(ctx, 5 + x, 0 + y, 1, 1, head);
-      }
-      px(ctx, 6, 1, 3, 3, '#ffdf5e'); // center
-      for (let i = 0; i < 8; i++) px(ctx, (rng() * S) | 0, 10 + ((rng() * 6) | 0), 1, 1, '#357a2e'); // grass flecks
-    }
-
-    // Pixel-sprite maps: one char per pixel, '.' = transparent.
-    const SPR_PALETTE = {
-      s: '#6e4f2e', g: '#3f8f37', G: '#5cb85c', r: '#d9402e', R: '#a82c1f',
-      o: '#e08a2e', y: '#f2d13d', p: '#e06ba8', w: '#fdfdfd',
-    };
-    const SPRITES = {
-      tomato: [
-        '................',
-        '.......gg.......',
-        '......gggg......',
-        '.......gg.......',
-        '.......ss.......',
-        '.....ggssgg.....',
-        '....gggssggg....',
-        '.....gsssgg.....',
-        '....ggssrrgg....',
-        '.....gssRRg.....',
-        '....gggssggg....',
-        '.....gggssg.....',
-        '....ggrrsgg.....',
-        '.....grrRg......',
-        '......ggg.......',
-        '.......s........',
-      ],
-      pepper: [
-        '................',
-        '.....gggg.......',
-        '....gggggg......',
-        '...gggggggg.....',
-        '...gggggggg.....',
-        '....gggggg......',
-        '.....gggg.......',
-        '....gggggg......',
-        '...gggooogg.....',
-        '...gggooogg.....',
-        '....ggoooog.....',
-        '.....gooo.......',
-        '......gg........',
-        '......gg........',
-        '................',
-        '................',
-      ],
-      leafy: [
-        '................',
-        '................',
-        '.....GGGG.......',
-        '....GGGGGG......',
-        '...GGgGGgGG.....',
-        '...GgGGGGgG.....',
-        '....GGGGGG......',
-        '...GGGGGGGG.....',
-        '....gGGGGg......',
-        '.....GGGG.......',
-        '......gg........',
-        '................',
-        '................',
-        '................',
-        '................',
-        '................',
-      ],
-      vine: [
-        '................',
-        'gg..............',
-        '.ggg............',
-        '..gggg..........',
-        '...ggggg........',
-        '....gggygg......',
-        '.....gggyy......',
-        '......ggg.......',
-        '.......ggg......',
-        '........ggg.....',
-        '.........gggy...',
-        '..........ggy...',
-        '...........gg...',
-        '............g...',
-        '................',
-        '................',
-      ],
-      flower: [
-        '................',
-        '......pppp......',
-        '.....pppppp.....',
-        '.....pyyypp.....',
-        '.....pppppp.....',
-        '......pppp......',
-        '.......ss.......',
-        '....g..ss.......',
-        '.....g.ss.......',
-        '......ssg.......',
-        '......ss........',
-        '......ss........',
-        '................',
-        '................',
-        '................',
-        '................',
-      ],
-      generic: [
-        '................',
-        '................',
-        '................',
-        '................',
-        '......gg........',
-        '.....gggg.......',
-        '......gg........',
-        '.......ss.......',
-        '...g...ss.......',
-        '....g..ss..g....',
-        '.....g.ss.g.....',
-        '.......ss.......',
-        '.......ss.......',
-        '................',
-        '................',
-        '................',
-      ],
-    };
-
-    function paintSprite(ctx, name) {
-      const map = SPRITES[name] || SPRITES.generic;
-      for (let y = 0; y < map.length; y++) {
-        const row = map[y];
-        for (let x = 0; x < row.length; x++) {
-          const c = SPR_PALETTE[row[x]];
-          if (c) px(ctx, x, y, 1, 1, c);
-        }
-      }
+      ctx.strokeStyle = '#3f8f37'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(S / 2, S);
+      ctx.quadraticCurveTo(S / 2 - 4, S * 0.55, S / 2, S * 0.3); ctx.stroke();
+      ctx.fillStyle = '#4e9e3f';
+      ctx.beginPath(); ctx.ellipse(S / 2 - 8, S * 0.62, 7, 3.5, -0.5, 0, 6.2832); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(S / 2 + 8, S * 0.72, 7, 3.5, 0.5, 0, 6.2832); ctx.fill();
+      const hx = S / 2, hy = S * 0.22, hr = S * 0.13;
+      const g = ctx.createRadialGradient(hx - 2, hy - 2, 1, hx, hy, hr);
+      g.addColorStop(0, '#ffffff'); g.addColorStop(0.25, head); g.addColorStop(1, head);
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(hx, hy, hr, 0, 6.2832); ctx.fill();
+      ctx.fillStyle = '#ffdf5e';
+      ctx.beginPath(); ctx.arc(hx, hy, hr * 0.4, 0, 6.2832); ctx.fill();
     }
 
     function plantArchetype(species) {
@@ -959,8 +799,8 @@
       const ctx = cv.getContext('2d');
       painter(ctx, size, mulberry32(seed || 1));
       const tex = new THREE.CanvasTexture(cv);
-      tex.magFilter = THREE.NearestFilter;
-      tex.minFilter = THREE.NearestMipmapLinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      tex.minFilter = THREE.LinearMipmapLinearFilter;
       tex.generateMipmaps = true;
       tex.encoding = THREE.sRGBEncoding;
       if (repeat) {
@@ -971,7 +811,7 @@
     }
 
     function pixMaterial(THREE, tex, opts) {
-      return new THREE.MeshStandardMaterial(Object.assign({ map: tex, roughness: 1, metalness: 0 }, opts || {}));
+      return new THREE.MeshStandardMaterial(Object.assign({ map: tex, roughness: 0.9, metalness: 0 }, opts || {}));
     }
 
     async function ensureThree() {
@@ -1071,9 +911,8 @@
         grd.addColorStop(1, 'rgba(0,0,0,0)');
         cx.fillStyle = grd;
         cx.fillRect(0, 0, 128, 128);
-        const o = 64 - corePx / 2;
         cx.fillStyle = core;
-        cx.fillRect(o, o, corePx, corePx);
+        cx.beginPath(); cx.arc(64, 64, corePx / 2, 0, 6.2832); cx.fill();
         const tex = new THREE.CanvasTexture(cv);
         tex.encoding = THREE.sRGBEncoding;
         const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false }));
@@ -1200,39 +1039,39 @@
 
     // Build (and cache on T) the shared pixel textures for one scene build.
     function buildTextures(THREE) {
+      const S = 64; // soft miniature textures
       const TEX = {};
-      TEX.grass = makePixTexture(THREE, 16, paintGrassTop, 11, [cols + 8, rows + 8]);
-      TEX.dirtSideX = makePixTexture(THREE, 16, paintDirtSide, 12, [rows + 8, 1]);
-      TEX.dirtSideZ = makePixTexture(THREE, 16, paintDirtSide, 13, [cols + 8, 1]);
-      TEX.dirt = makePixTexture(THREE, 16, paintDirt, 14);
-      TEX.wood = makePixTexture(THREE, 16, paintWoodPlanks, 15);
-      TEX.darkWood = makePixTexture(THREE, 16, paintDarkWood, 16);
-      TEX.soil = makePixTexture(THREE, 16, paintSoil, 17);
-      TEX.fabric = makePixTexture(THREE, 16, paintFabric, 18);
-      TEX.terracotta = makePixTexture(THREE, 16, paintTerracotta, 19);
-      TEX.leafBlob = makePixTexture(THREE, 16, paintLeafBlob, 20);
-      TEX.metal = makePixTexture(THREE, 16, paintMetal, 22);
-      TEX.wireMesh = makePixTexture(THREE, 16, paintWireMesh, 23, [1, 1]); // [1,1] enables RepeatWrapping for UV tiling
-      TEX.bucket = makePixTexture(THREE, 16, paintBucket, 24);
-      TEX.stone = makePixTexture(THREE, 16, paintStone, 25);
-      TEX.barrel = makePixTexture(THREE, 16, paintBarrel, 26);
-      TEX.compost = makePixTexture(THREE, 16, paintCompost, 27);
-      TEX.hoopPlastic = makePixTexture(THREE, 16, paintHoopPlastic, 28);
-      TEX.basin = makePixTexture(THREE, 16, paintBasin, 29);
-      TEX.appleLeaves = makePixTexture(THREE, 16, paintAppleLeaves, 30);
-      TEX.grassTuft = makePixTexture(THREE, 16, paintGrassTuft, 31);
-      TEX.flowerRed = makePixTexture(THREE, 16, (ctx, S) => paintWildflower(ctx, S, mulberry32(101), 0), 32);
-      TEX.flowerYellow = makePixTexture(THREE, 16, (ctx, S) => paintWildflower(ctx, S, mulberry32(102), 1), 33);
-      TEX.flowerWhite = makePixTexture(THREE, 16, (ctx, S) => paintWildflower(ctx, S, mulberry32(103), 2), 34);
-      TEX.plants = {};
-      Object.keys(SPRITES).forEach((name) => {
-        TEX.plants[name] = makePixTexture(THREE, 16, (ctx) => paintSprite(ctx, name), 21);
-      });
+      TEX.grass = makePixTexture(THREE, S, paintGrass, 11, [cols + 8, rows + 8]);
+      TEX.groundSide = makePixTexture(THREE, S, paintGroundSide, 12);
+      TEX.soil = makePixTexture(THREE, S, paintSoil, 17);
+      TEX.wood = makePixTexture(THREE, S, paintWood, 15);
+      TEX.darkWood = makePixTexture(THREE, S, paintDarkWood, 16);
+      TEX.fabric = makePixTexture(THREE, S, paintFabric, 18);
+      TEX.terracotta = makePixTexture(THREE, S, paintTerracotta, 19);
+      TEX.metal = makePixTexture(THREE, S, paintMetal, 22);
+      TEX.wireMesh = makePixTexture(THREE, S, paintWireMesh, 23, [1, 1]); // [1,1] enables RepeatWrapping for UV tiling
+      TEX.bucket = makePixTexture(THREE, S, paintBucket, 24);
+      TEX.stone = makePixTexture(THREE, S, paintStone, 25);
+      TEX.barrel = makePixTexture(THREE, S, paintBarrel, 26);
+      TEX.compost = makePixTexture(THREE, S, paintCompost, 27);
+      TEX.hoopPlastic = makePixTexture(THREE, S, paintHoopPlastic, 28);
+      TEX.basin = makePixTexture(THREE, S, paintBasin, 29);
+      TEX.leaf = makePixTexture(THREE, S, paintLeaf, 30);
+      TEX.grassTuft = makePixTexture(THREE, S, paintGrassTuft, 31);
+      TEX.flowerRed = makePixTexture(THREE, S, (ctx, Sd) => paintWildflower(ctx, Sd, mulberry32(101), 0), 32);
+      TEX.flowerYellow = makePixTexture(THREE, S, (ctx, Sd) => paintWildflower(ctx, Sd, mulberry32(102), 1), 33);
+      TEX.flowerWhite = makePixTexture(THREE, S, (ctx, Sd) => paintWildflower(ctx, Sd, mulberry32(103), 2), 34);
       return TEX;
     }
 
     function box(THREE, w, h, d, mat) {
       return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    }
+    function ball(THREE, r, mat, detail) {
+      return new THREE.Mesh(new THREE.IcosahedronGeometry(r, detail == null ? 1 : detail), mat);
+    }
+    function cyl(THREE, rt, rb, h, mat, seg) {
+      return new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg || 20), mat);
     }
 
     function buildVessel(THREE, g, w, h, kind, TEX) {
@@ -1245,25 +1084,32 @@
       const darkWoodMat = pixMaterial(THREE, TEX.darkWood);
       const soilMat = pixMaterial(THREE, TEX.soil);
       if (kind === 'pot') {
-        // terracotta block pot
+        // smooth tapered terracotta pot + rim + soil
         const s = Math.max(0.6, Math.min(w, h) * 0.7);
-        const body = box(THREE, s, bodyH, s, pixMaterial(THREE, TEX.terracotta));
+        const body = cyl(THREE, s * 0.52, s * 0.4, bodyH, pixMaterial(THREE, TEX.terracotta));
         body.position.y = bodyH / 2;
         g.add(body);
-        const soil = box(THREE, s - 0.18, 0.1, s - 0.18, soilMat);
-        soil.position.y = bodyH - 0.04;
+        const rim = cyl(THREE, s * 0.56, s * 0.54, 0.14, pixMaterial(THREE, TEX.terracotta));
+        rim.position.y = bodyH - 0.07;
+        g.add(rim);
+        const soil = cyl(THREE, s * 0.46, s * 0.46, 0.08, soilMat, 16);
+        soil.position.y = bodyH - 0.1;
         soil.receiveShadow = true;
         g.add(soil);
       } else if (kind === 'grow bag') {
+        // soft fabric form with a folded cuff
         const body = box(THREE, w * 0.94, bodyH, h * 0.94, pixMaterial(THREE, TEX.fabric));
         body.position.y = bodyH / 2;
         g.add(body);
-        const soil = box(THREE, w * 0.94 - 0.18, 0.1, h * 0.94 - 0.18, soilMat);
-        soil.position.y = bodyH - 0.04;
+        const cuff = box(THREE, w * 0.94 + 0.06, 0.16, h * 0.94 + 0.06, pixMaterial(THREE, TEX.fabric));
+        cuff.position.y = bodyH - 0.08;
+        g.add(cuff);
+        const soil = box(THREE, w * 0.94 - 0.2, 0.1, h * 0.94 - 0.2, soilMat);
+        soil.position.y = bodyH - 0.12;
         soil.receiveShadow = true;
         g.add(soil);
       } else {
-        // wooden box + rim boards + soil inset
+        // wooden box + rim boards + soil inset, soft grain
         const bw = w * 0.98, bd = h * 0.98;
         const body = box(THREE, bw, bodyH, bd, woodMat);
         body.position.y = bodyH / 2;
@@ -1304,49 +1150,29 @@
       g.userData.topY = 0.42;
     }
 
-    // ---- cattle-panel arch geometry (pure helpers; also exposed to tests) ----
+    // ---- arch geometry (pure helpers; also exposed to tests) ----
     function archArcPoint(span, height, t) {
       // t in [0,1] along a half-ellipse from one ground foot to the other
       const th = Math.PI * t;
       return { x: (span / 2) * Math.cos(th), y: height * Math.sin(th) };
     }
-    function archRibCells(span, height) {
-      // Quantize the arc to 0.2-unit voxels, Minecraft-circle style: a
-      // stepped arc of small axis-aligned boxes, no smooth curves.
-      const cs = 0.2, seen = new Set(), cells = [];
-      for (let i = 0; i <= 240; i++) {
-        const p = archArcPoint(span, height, i / 240);
-        const k = Math.round(p.x / cs) + ':' + Math.round(p.y / cs);
-        if (!seen.has(k)) {
-          seen.add(k);
-          cells.push({ x: Math.round(p.x / cs) * cs, y: Math.max(0, Math.round(p.y / cs) * cs) });
-        }
-      }
-      return cells;
-    }
     function archRibCount(len) {
       return Math.max(5, Math.min(7, Math.round(len * 1.25)));
     }
-    function archVineOffset(span, height, p) {
-      // small outward push (ellipse normal) so a vine blob hugs the rib
-      // instead of sitting inside it or floating nearby
-      const nx = p.x / ((span * span) / 4 + 1e-6), ny = p.y / (height * height + 1e-6);
-      const nl = Math.hypot(nx, ny) || 1;
-      return { x: (nx / nl) * 0.16, y: (ny / nl) * 0.16 };
-    }
 
     function buildArch(THREE, g, w, h, height, TEX, opts) {
-      // Cattle-panel archway: curved wire-mesh hoops arcing over the short
-      // dimension (ribs spaced along the long dimension), vines climbing ON
-      // the ribs. Walk-under-able: no collision (see walkColliders).
-      // opts.plastic -> hoop-house variant: translucent plastic skin, no vines.
+      // Soft garden archway: smooth half-ellipse tube ribs + fine wire mesh
+      // (or translucent plastic for the hoop-house variant). Vines are soft
+      // leaf blobs hugging the ribs. Walk-under-able: no collision.
       opts = opts || {};
       const span = Math.min(w, h);
       const len = Math.max(w, h);
       const H = Math.max(1.5, height || 7);
       const spanAlongX = w <= h; // rib arcs live in the X-Y plane when the footprint is taller than wide
-      const metalMat = pixMaterial(THREE, TEX.metal);
-      const leafMat = pixMaterial(THREE, TEX.leafBlob);
+      const metalMat = new THREE.MeshStandardMaterial({
+        map: TEX.metal, roughness: 0.45, metalness: 0.6,
+      });
+      const leafMat = new THREE.MeshStandardMaterial({ color: 0x4e9e3f, roughness: 0.9, metalness: 0 });
       const meshMat = opts.plastic
         ? new THREE.MeshStandardMaterial({
             map: TEX.hoopPlastic, transparent: true, opacity: 0.42, side: THREE.DoubleSide,
@@ -1357,22 +1183,20 @@
             roughness: 0.55, metalness: 0.45,
           });
 
-      // Ribs: stepped voxel arcs, shared geometry across every segment.
-      const segGeo = new THREE.BoxGeometry(0.15, 0.15, 0.13);
-      const cells = archRibCells(span, H);
+      // Ribs: smooth half-ellipse tubes (torus arc scaled to the crown height).
+      const R = span / 2;
       const nRibs = archRibCount(len);
       const ribOff = (r) => (nRibs === 1 ? 0 : -len / 2 + (r / (nRibs - 1)) * len);
       for (let r = 0; r < nRibs; r++) {
         const off = ribOff(r);
-        cells.forEach((c) => {
-          const seg = new THREE.Mesh(segGeo, metalMat);
-          if (spanAlongX) seg.position.set(c.x, c.y, off);
-          else seg.position.set(off, c.y, c.x);
-          g.add(seg);
-        });
+        const rib = new THREE.Mesh(new THREE.TorusGeometry(R, 0.09, 10, 32, Math.PI), metalMat);
+        rib.scale.y = H / R; // circle -> half-ellipse with crown H
+        if (spanAlongX) rib.position.set(0, 0, off);
+        else { rib.rotation.y = Math.PI / 2; rib.position.set(off, 0, 0); }
+        g.add(rib);
       }
 
-      // Wire-mesh skin: one curved ribbon surface spanning the tunnel.
+      // Wire-mesh / plastic skin: one curved ribbon surface spanning the tunnel.
       const M = 28;
       const pos = [], uv = [], idx = [];
       const uRep = Math.max(1, Math.round(len / 0.75));
@@ -1397,28 +1221,28 @@
       skin.userData.noShadow = true; // alpha-tested mesh would cast a solid blob shadow
       g.add(skin);
 
-      // Vines climbing ON the ribs (seeded = stable): a few ribs, blobs at
-      // intervals along each rib's arc, hugging the curve. Skipped for the
+      // Soft leaf blobs hugging the ribs (seeded = stable). Skipped for the
       // plastic hoop-house variant (clean greenhouse look).
       const rng = mulberry32((w * 131 + h * 17 + ((g.userData.containerId || 0) * 7)) | 0);
       if (!opts.plastic) {
-      const blobGeo = new THREE.BoxGeometry(0.34, 0.34, 0.34);
-      const vineRibs = new Set();
-      while (vineRibs.size < Math.min(3, nRibs)) vineRibs.add((rng() * nRibs) | 0);
-      vineRibs.forEach((r) => {
-        const off = ribOff(r);
-        const n = 3 + ((rng() * 3) | 0);
-        for (let i = 0; i < n; i++) {
-          const t = Math.min(0.95, 0.08 + (0.84 * (i + rng() * 0.6)) / n);
-          const p = archArcPoint(span, H, t);
-          const vo = archVineOffset(span, H, p);
-          const b = new THREE.Mesh(blobGeo, leafMat);
-          if (spanAlongX) b.position.set(p.x + vo.x, p.y + vo.y, off);
-          else b.position.set(off, p.y + vo.y, p.x + vo.x);
-          b.userData.noShadow = true;
-          g.add(b);
-        }
-      });
+        const blobGeo = new THREE.IcosahedronGeometry(0.24, 1);
+        const vineRibs = new Set();
+        while (vineRibs.size < Math.min(3, nRibs)) vineRibs.add((rng() * nRibs) | 0);
+        vineRibs.forEach((r) => {
+          const off = ribOff(r);
+          const n = 3 + ((rng() * 3) | 0);
+          for (let i = 0; i < n; i++) {
+            const t = Math.min(0.95, 0.08 + (0.84 * (i + rng() * 0.6)) / n);
+            const p = archArcPoint(span, H, t);
+            const b = new THREE.Mesh(blobGeo, leafMat);
+            const s = 0.7 + rng() * 0.7;
+            b.scale.set(s, s * 0.8, s);
+            if (spanAlongX) b.position.set(p.x, p.y + 0.12, off);
+            else b.position.set(off, p.y + 0.12, p.x);
+            b.userData.noShadow = true;
+            g.add(b);
+          }
+        });
       }
       g.userData.topY = H;
     }
@@ -1463,32 +1287,33 @@
         .map((o) => o.i);
     }
 
+
     function buildLamp(THREE, g, w, h, TEX) {
-      // Short dark post + warm glowing lamp head (voxel lantern).
-      const post = box(THREE, 0.22, 1.5, 0.22, pixMaterial(THREE, TEX.metal));
+      // Short dark post + warm glowing globe.
+      const post = cyl(THREE, 0.09, 0.11, 1.5, pixMaterial(THREE, TEX.metal));
       post.position.y = 0.75;
       g.add(post);
       const headMat = new THREE.MeshStandardMaterial({
         color: 0xffc46b, emissive: 0xff9d2e, emissiveIntensity: 0.15,
         roughness: 0.6, metalness: 0,
       });
-      const head = box(THREE, 0.55, 0.45, 0.55, headMat);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 12), headMat);
       head.position.y = 1.72;
       head.userData.lampHead = true;
       head.userData.noShadow = true;
       g.add(head);
-      const cap = box(THREE, 0.65, 0.12, 0.65, pixMaterial(THREE, TEX.metal));
-      cap.position.y = 2.0;
+      const cap = cyl(THREE, 0.36, 0.3, 0.12, pixMaterial(THREE, TEX.metal));
+      cap.position.y = 2.05;
       g.add(cap);
-      g.userData.topY = 2.1;
+      g.userData.topY = 2.15;
       g.userData.lampPos = { x: 0, y: 1.72, z: 0 }; // local; scene build converts to world
     }
 
     function buildFence(THREE, g, w, h, TEX, sides) {
-      // Minecraft-style chain-link: center post + mesh planes only on sides
+      // Chain-link: round center post + fine mesh planes only on sides
       // facing another fence segment. Single fence = just a post.
       sides = sides || {};
-      const post = box(THREE, 0.24, 1.1, 0.24, pixMaterial(THREE, TEX.metal));
+      const post = cyl(THREE, 0.1, 0.12, 1.1, pixMaterial(THREE, TEX.metal));
       post.position.y = 0.55;
       g.add(post);
       const meshMat = new THREE.MeshStandardMaterial({
@@ -1511,21 +1336,15 @@
     }
 
     function buildBucket(THREE, g, TEX) {
-      // White 5-gal bucket: slightly tapered box + rim + handle arc.
-      const body = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.42, 0.34, 0.85, 8),
-        pixMaterial(THREE, TEX.bucket)
-      );
+      // White 5-gal bucket: smooth tapered cylinder + rim + handle arc.
+      const body = cyl(THREE, 0.42, 0.34, 0.85, pixMaterial(THREE, TEX.bucket), 20);
       body.position.y = 0.425;
       g.add(body);
-      const rim = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.45, 0.45, 0.1, 8),
-        pixMaterial(THREE, TEX.bucket)
-      );
+      const rim = cyl(THREE, 0.45, 0.45, 0.1, pixMaterial(THREE, TEX.bucket), 20);
       rim.position.y = 0.85;
       g.add(rim);
       const handle = new THREE.Mesh(
-        new THREE.TorusGeometry(0.4, 0.045, 6, 12, Math.PI),
+        new THREE.TorusGeometry(0.4, 0.045, 8, 20, Math.PI),
         pixMaterial(THREE, TEX.metal)
       );
       handle.position.y = 0.9;
@@ -1535,7 +1354,7 @@
     }
 
     function buildPath(THREE, g, TEX) {
-      // Flat speckled stone slab for walkways. No collider (walked over).
+      // Flat stone slab for walkways. No collider (walked over).
       const slab = box(THREE, 0.96, 0.15, 0.96, pixMaterial(THREE, TEX.stone));
       slab.position.y = 0.075;
       slab.receiveShadow = true;
@@ -1544,27 +1363,22 @@
     }
 
     function buildRainBarrel(THREE, g, TEX) {
-      // Blue voxel rain barrel: stepped cylinder body, lid, spigot near base.
-      const body = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.44, 0.4, 1.6, 10),
-        pixMaterial(THREE, TEX.barrel)
-      );
+      // Blue rain barrel: smooth cylinder body, lid, spigot near base.
+      const body = cyl(THREE, 0.44, 0.4, 1.6, pixMaterial(THREE, TEX.barrel), 20);
       body.position.y = 0.8;
       g.add(body);
-      const lid = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.47, 0.47, 0.12, 10),
-        pixMaterial(THREE, TEX.metal)
-      );
+      const lid = cyl(THREE, 0.47, 0.47, 0.12, pixMaterial(THREE, TEX.metal), 20);
       lid.position.y = 1.66;
       g.add(lid);
-      const spigot = box(THREE, 0.16, 0.16, 0.3, pixMaterial(THREE, TEX.metal));
+      const spigot = cyl(THREE, 0.08, 0.08, 0.3, pixMaterial(THREE, TEX.metal), 10);
+      spigot.rotation.x = Math.PI / 2;
       spigot.position.set(0, 0.35, 0.48);
       g.add(spigot);
       g.userData.topY = 1.75;
     }
 
     function buildCompostBin(THREE, g, TEX) {
-      // Dark slatted compost cube with a slightly ajar lid.
+      // Dark compost cube with a slightly ajar lid.
       const mat = pixMaterial(THREE, TEX.compost);
       const body = box(THREE, 0.95, 0.95, 0.95, mat);
       body.position.y = 0.475;
@@ -1577,17 +1391,17 @@
     }
 
     function buildHoopHouse(THREE, g, w, h, height, TEX) {
-      // Bigger cousin of the cattle-panel arch: galvanized ribs + translucent
+      // Bigger cousin of the garden arch: smooth tube ribs + translucent
       // plastic skin. Solid in v1 (no walking inside — see walkColliders).
       buildArch(THREE, g, w, h, height || KIND_HEIGHT['hoop house'] || 6, TEX, { plastic: true });
-      // end-wall frames so it reads as a structure, not a tunnel
+      // end-wall footings so it reads as a structure, not a tunnel
       const metalMat = pixMaterial(THREE, TEX.metal);
       const span = Math.min(w, h), len = Math.max(w, h);
       const H = Math.max(1.5, height || KIND_HEIGHT['hoop house'] || 6);
       const p0 = archArcPoint(span, H, 0), p1 = archArcPoint(span, H, 1);
       [[-len / 2], [len / 2]].forEach(([off]) => {
-        const foot1 = box(THREE, 0.2, 1.2, 0.2, metalMat);
-        const foot2 = box(THREE, 0.2, 1.2, 0.2, metalMat);
+        const foot1 = cyl(THREE, 0.09, 0.11, 1.2, metalMat);
+        const foot2 = cyl(THREE, 0.09, 0.11, 1.2, metalMat);
         if (w <= h) { foot1.position.set(p0.x, 0.6, off); foot2.position.set(p1.x, 0.6, off); }
         else { foot1.position.set(off, 0.6, p0.x); foot2.position.set(off, 0.6, p1.x); }
         g.add(foot1, foot2);
@@ -1595,7 +1409,7 @@
     }
 
     function buildFenceGate(THREE, g, w, h, TEX, sides) {
-      // 1x1 chain-link gate: frame posts on both sides + mesh panel + handle.
+      // 1x1 chain-link gate: round frame posts + fine mesh panel + handle.
       // Auto-connects visually to adjacent fence segments via fenceSides.
       sides = sides || {};
       const metalMat = pixMaterial(THREE, TEX.metal);
@@ -1603,16 +1417,16 @@
         map: TEX.wireMesh, alphaTest: 0.4, side: THREE.DoubleSide,
         roughness: 0.7, metalness: 0.4,
       });
-      const post1 = box(THREE, 0.2, 1.15, 0.2, metalMat);
+      const post1 = cyl(THREE, 0.09, 0.11, 1.15, metalMat);
       post1.position.set(-0.42, 0.575, 0);
-      const post2 = box(THREE, 0.2, 1.15, 0.2, metalMat);
+      const post2 = cyl(THREE, 0.09, 0.11, 1.15, metalMat);
       post2.position.set(0.42, 0.575, 0);
       g.add(post1, post2);
       const panel = new THREE.Mesh(new THREE.PlaneGeometry(0.72, 0.85), meshMat);
       panel.position.set(0, 0.6, 0);
       panel.userData.noShadow = true;
       g.add(panel);
-      const handle = box(THREE, 0.1, 0.1, 0.14, pixMaterial(THREE, TEX.darkWood));
+      const handle = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), pixMaterial(THREE, TEX.darkWood));
       handle.position.set(0.28, 0.62, 0.08);
       g.add(handle);
       // connect to neighboring fence runs on the gate's long axis sides
@@ -1632,22 +1446,17 @@
     }
 
     function buildBirdBath(THREE, g, TEX) {
-      // Stone pedestal (stacked boxes) + wide shallow basin + water top.
+      // Stone pedestal + wide shallow basin + water disc.
       const stoneMat = pixMaterial(THREE, TEX.basin);
-      const base = box(THREE, 0.5, 0.18, 0.5, stoneMat);
+      const base = cyl(THREE, 0.28, 0.34, 0.18, stoneMat, 16);
       base.position.y = 0.09;
-      const stem = box(THREE, 0.28, 0.7, 0.28, stoneMat);
+      const stem = cyl(THREE, 0.14, 0.18, 0.7, stoneMat, 14);
       stem.position.y = 0.53;
-      const basin = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.55, 0.4, 0.25, 10),
-        stoneMat
-      );
+      const basin = cyl(THREE, 0.55, 0.4, 0.25, stoneMat, 18);
       basin.position.y = 1.0;
       g.add(base, stem, basin);
-      const water = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.46, 0.46, 0.04, 10),
-        new THREE.MeshStandardMaterial({ color: 0x4fa3d8, transparent: true, opacity: 0.75, roughness: 0.15, metalness: 0 })
-      );
+      const water = cyl(THREE, 0.46, 0.46, 0.04,
+        new THREE.MeshStandardMaterial({ color: 0x4fa3d8, transparent: true, opacity: 0.75, roughness: 0.15, metalness: 0 }), 18);
       water.position.y = 1.1;
       water.userData.noShadow = true;
       g.add(water);
@@ -1655,56 +1464,86 @@
     }
 
     function buildFruitTree(THREE, g, TEX) {
-      // Blocky apple tree: stacked trunk + leaf canopy blob with apple pixels.
+      // Apple tree: round trunk + soft canopy blobs + little apples.
       const barkMat = pixMaterial(THREE, TEX.darkWood);
-      const trunk = box(THREE, 0.36, 1.7, 0.36, barkMat);
+      const trunk = cyl(THREE, 0.16, 0.22, 1.7, barkMat, 12);
       trunk.position.y = 0.85;
-      const branch = box(THREE, 1.1, 0.24, 0.24, barkMat);
-      branch.position.set(0.25, 1.55, 0);
-      g.add(trunk, branch);
-      const leafMat = pixMaterial(THREE, TEX.appleLeaves);
+      g.add(trunk);
+      const branch = cyl(THREE, 0.09, 0.12, 1.1, barkMat, 10);
+      branch.rotation.z = Math.PI / 2 - 0.25;
+      branch.position.set(0.3, 1.6, 0);
+      g.add(branch);
+      const leafMat = new THREE.MeshStandardMaterial({ color: 0x4e9e3f, roughness: 0.9, metalness: 0 });
+      const blobGeo = new THREE.IcosahedronGeometry(1, 1);
+      const rng = mulberry32(((g.userData.containerId || 1) * 31 + 7) | 0);
       const blobs = [
-        [0, 2.35, 0, 1.5], [-0.75, 2.0, 0.2, 0.95], [0.75, 2.05, -0.15, 0.95],
-        [0.1, 2.9, -0.3, 1.0], [-0.3, 2.6, 0.55, 0.85], [0.45, 1.95, 0.5, 0.8],
+        [0, 2.5, 0, 1.35], [-0.7, 2.1, 0.25, 0.85], [0.7, 2.15, -0.2, 0.85],
+        [0.1, 3.0, -0.25, 0.9], [-0.25, 2.7, 0.5, 0.75],
       ];
       blobs.forEach(([x, y, z, s]) => {
-        const b = box(THREE, s, s * 0.85, s, leafMat);
+        const b = new THREE.Mesh(blobGeo, leafMat);
+        b.scale.set(s, s * 0.85, s);
         b.position.set(x, y, z);
+        b.rotation.y = rng() * Math.PI;
         g.add(b);
       });
-      g.userData.topY = 3.3;
+      const appleMat = new THREE.MeshStandardMaterial({ color: 0xd63c2f, roughness: 0.5, metalness: 0 });
+      for (let i = 0; i < 6; i++) {
+        const a = new THREE.Mesh(blobGeo, appleMat);
+        const th = rng() * Math.PI * 2, rr = 0.7 + rng() * 0.5;
+        a.scale.setScalar(0.11 + rng() * 0.04);
+        a.position.set(Math.cos(th) * rr, 2.1 + rng() * 1.0, Math.sin(th) * rr);
+        a.userData.noShadow = true;
+        g.add(a);
+      }
+      g.userData.topY = 3.5;
     }
 
     function buildShed(THREE, g, w, h, TEX) {
-      // Small wooden garden shed: plank walls, stepped gable roof, door face.
+      // Small garden shed: plank walls, smooth gable roof, door face.
       const woodMat = pixMaterial(THREE, TEX.wood);
       const darkMat = pixMaterial(THREE, TEX.darkWood);
       const walls = box(THREE, w - 0.15, 2.2, h - 0.15, woodMat);
       walls.position.y = 1.1;
       g.add(walls);
-      // gable roof: three stepped slabs receding to a ridge along the long axis
-      const longX = w >= h;
-      for (let i = 0; i < 3; i++) {
-        const rw = (longX ? w : w - i * 0.55), rd = (longX ? h - i * 0.55 : h);
-        const slab = box(THREE, rw + 0.3, 0.16, rd + 0.3, darkMat);
-        slab.position.y = 2.28 + i * 0.42;
-        g.add(slab);
-      }
+      // gable roof: two sloped slabs + triangle gable ends; ridge along the long axis
+      const L = Math.max(w, h), S = Math.min(w, h), apexH = 1.0;
+      const roof = new THREE.Group();
+      const slopeLen = Math.hypot(S / 2 + 0.25, apexH);
+      const ang = Math.atan2(apexH, S / 2 + 0.25);
+      [-1, 1].forEach((s) => {
+        const slab = box(THREE, slopeLen + 0.1, 0.14, L + 0.35, darkMat);
+        slab.position.set((s * S) / 4, 2.2 + apexH / 2, 0);
+        slab.rotation.z = -s * ang;
+        roof.add(slab);
+      });
+      const tri = new THREE.Shape();
+      tri.moveTo(-S / 2, 0); tri.lineTo(S / 2, 0); tri.lineTo(0, apexH); tri.closePath();
+      const gableGeo = new THREE.ShapeGeometry(tri);
+      [-1, 1].forEach((s) => {
+        const gable = new THREE.Mesh(gableGeo, new THREE.MeshStandardMaterial({
+          map: TEX.wood, roughness: 0.9, metalness: 0, side: THREE.DoubleSide,
+        }));
+        gable.position.set(0, 2.2, s * (L / 2 - 0.08));
+        roof.add(gable);
+      });
+      if (w < h) roof.rotation.y = Math.PI / 2;
+      g.add(roof);
       const door = box(THREE, 0.95, 1.75, 0.12, darkMat);
       door.position.set(0, 0.88, h / 2 - 0.02);
       g.add(door);
-      const knob = box(THREE, 0.1, 0.1, 0.08, pixMaterial(THREE, TEX.metal));
+      const knob = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), pixMaterial(THREE, TEX.metal));
       knob.position.set(0.32, 0.95, h / 2 + 0.05);
       g.add(knob);
-      g.userData.topY = 3.6;
+      g.userData.topY = 3.4;
     }
 
     function buildPergola(THREE, g, w, h, TEX) {
-      // Walk-under pergola: four corner posts + slatted beam roof. No collider.
+      // Walk-under pergola: four round posts + beam + slat roof. No collider.
       const woodMat = pixMaterial(THREE, TEX.wood);
       const px = w / 2 - 0.18, pz = h / 2 - 0.18;
       [[-px, -pz], [px, -pz], [-px, pz], [px, pz]].forEach(([x, z]) => {
-        const post = box(THREE, 0.28, 2.5, 0.28, woodMat);
+        const post = cyl(THREE, 0.13, 0.15, 2.5, woodMat, 12);
         post.position.set(x, 1.25, z);
         g.add(post);
       });
@@ -1722,11 +1561,11 @@
     }
 
     function buildEdging(THREE, g, w, h, TEX, sides) {
-      // Low stone border wall: center post + low walls on sides facing
-      // neighboring edging cells (Minecraft fence-connect pattern).
+      // Low stone border wall: rounded post + low walls on sides facing
+      // neighboring edging cells (fence-connect pattern).
       sides = sides || {};
       const stoneMat = pixMaterial(THREE, TEX.stone);
-      const post = box(THREE, 0.32, 0.52, 0.32, stoneMat);
+      const post = cyl(THREE, 0.16, 0.18, 0.52, stoneMat, 12);
       post.position.y = 0.26;
       g.add(post);
       const mkWall = (ww, wd, x, z) => {
@@ -1742,23 +1581,21 @@
     }
 
     function buildSprinkler(THREE, g, TEX) {
-      // Lawn sprinkler: dark post + head + a static translucent water arc
-      // (parabola of blue boxes reads as spray, very Minecraft).
+      // Lawn sprinkler: dark post + head + smooth translucent water arc.
       const metalMat = pixMaterial(THREE, TEX.metal);
-      const post = box(THREE, 0.16, 0.55, 0.16, metalMat);
+      const post = cyl(THREE, 0.08, 0.1, 0.55, metalMat, 10);
       post.position.y = 0.275;
-      const head = box(THREE, 0.3, 0.22, 0.3, metalMat);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), metalMat);
       head.position.y = 0.62;
       g.add(post, head);
-      const waterMat = new THREE.MeshBasicMaterial({ color: 0x77ccff, transparent: true, opacity: 0.55 });
-      for (let i = 0; i <= 8; i++) {
-        const t = i / 8;
-        const drop = box(THREE, 0.15, 0.15, 0.15, waterMat);
-        drop.position.set(-1.25 + 2.5 * t, 0.7 + Math.sin(t * Math.PI) * 1.15, 0);
-        drop.userData.noShadow = true;
-        g.add(drop);
-      }
-      g.userData.topY = 1.9;
+      const arc = new THREE.Mesh(
+        new THREE.TorusGeometry(1.25, 0.09, 8, 24, Math.PI),
+        new THREE.MeshStandardMaterial({ color: 0x77ccff, transparent: true, opacity: 0.5, roughness: 0.2, metalness: 0 })
+      );
+      arc.position.y = 0.68;
+      arc.userData.noShadow = true;
+      g.add(arc);
+      g.userData.topY = 1.95;
     }
 
     function buildDripLine(THREE, g, w, h, TEX, sides) {
@@ -1766,42 +1603,98 @@
       // drip cells (same connect pattern as fences), lying on the ground.
       sides = sides || {};
       const tubeMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1c, roughness: 0.9, metalness: 0 });
-      const hub = box(THREE, 0.36, 0.16, 0.36, tubeMat);
+      const hub = cyl(THREE, 0.18, 0.18, 0.16, tubeMat, 12);
       hub.position.y = 0.08;
       g.add(hub);
-      const mkTube = (ww, wd, x, z) => {
-        const t = box(THREE, ww, 0.13, wd, tubeMat);
-        t.position.set(x, 0.065, z);
-        g.add(t);
+      const mkTube = (len, x, z, rotY) => {
+        const t = cyl(THREE, 0.07, 0.07, len, tubeMat, 8);
+        t.rotation.z = Math.PI / 2;
+        const holder = new THREE.Group();
+        holder.add(t);
+        holder.rotation.y = rotY;
+        holder.position.set(x, 0.065, z);
+        g.add(holder);
       };
-      if (sides.n) mkTube(0.14, 0.55, 0, -0.28);
-      if (sides.s) mkTube(0.14, 0.55, 0, 0.28);
-      if (sides.w) mkTube(0.55, 0.14, -0.28, 0);
-      if (sides.e) mkTube(0.55, 0.14, 0.28, 0);
+      if (sides.n) mkTube(0.55, 0, -0.28, Math.PI / 2);
+      if (sides.s) mkTube(0.55, 0, 0.28, Math.PI / 2);
+      if (sides.w) mkTube(0.55, -0.28, 0, 0);
+      if (sides.e) mkTube(0.55, 0.28, 0, 0);
       g.userData.topY = 0.2;
     }
 
-    function buildPlantVoxel(THREE, g, px, pz, baseY, species, seed, TEX, big, plantingId) {
-      // Minecraft cross-quad: two intersecting pixel-art planes.
-      const arch = plantArchetype(species);
-      const mat = new THREE.MeshStandardMaterial({
-        map: TEX.plants[arch], alphaTest: 0.5, side: THREE.DoubleSide, roughness: 1, metalness: 0,
-      });
-      const H = big ? 2.0 : 1.3;
-      const geo = new THREE.PlaneGeometry(1, H);
-      const grp = new THREE.Group();
-      const p1 = new THREE.Mesh(geo, mat);
-      const p2 = new THREE.Mesh(geo, mat);
-      p2.rotation.y = Math.PI / 2;
-      p1.userData.noShadow = true;
-      p2.userData.noShadow = true;
-      grp.add(p1, p2);
-      if (plantingId != null) grp.userData.plantingId = plantingId; // build-mode breaking
+    // Pure: soft foliage cluster for a plant archetype + seed. Deterministic
+    // so rebuilds are stable. Returns {blobs:[{dx,dy,dz,s}], fruits:[...]}.
+    const PLANT_GREENS = {
+      tomato: 0x4e9e3f, pepper: 0x3f8f37, leafy: 0x5cb85c,
+      vine: 0x4e9e3f, flower: 0x55a848, generic: 0x4e9e3f,
+    };
+    function plantFoliage(arch, seed) {
       const rng = mulberry32(seed);
+      const n = 2 + ((rng() * 3) | 0); // 2-4 blobs
+      const blobs = [];
+      for (let i = 0; i < n; i++) {
+        blobs.push({
+          dx: (rng() - 0.5) * 0.5,
+          dy: 0.35 + rng() * 0.5,
+          dz: (rng() - 0.5) * 0.5,
+          s: 0.32 + rng() * 0.28,
+        });
+      }
+      const fruits = [];
+      if (arch === 'tomato' || arch === 'pepper') {
+        const nf = 2 + ((rng() * 3) | 0);
+        for (let i = 0; i < nf; i++) {
+          fruits.push({
+            dx: (rng() - 0.5) * 0.6, dy: 0.3 + rng() * 0.45, dz: (rng() - 0.5) * 0.6,
+            s: 0.09 + rng() * 0.05, c: arch === 'tomato' ? 0xd9402e : 0xe08a2e,
+          });
+        }
+      } else if (arch === 'flower') {
+        const nf = 1 + ((rng() * 2) | 0);
+        const cols = [0xe06ba8, 0xf2d13d, 0xf5f5f5];
+        for (let i = 0; i < nf; i++) {
+          fruits.push({
+            dx: (rng() - 0.5) * 0.5, dy: 0.7 + rng() * 0.35, dz: (rng() - 0.5) * 0.5,
+            s: 0.1 + rng() * 0.05, c: cols[(rng() * cols.length) | 0],
+          });
+        }
+      }
+      return { blobs, fruits };
+    }
+
+    function buildPlantSoft(THREE, g, px, pz, baseY, species, seed, big, plantingId) {
+      // Soft miniature plant: a small cluster of smooth-shaded foliage blobs,
+      // with fruit spheres for fruiting archetypes. Seeded = stable layout.
+      const arch = plantArchetype(species);
+      const grp = new THREE.Group();
+      const cluster = plantFoliage(arch, seed);
+      const leafMat = new THREE.MeshStandardMaterial({
+        color: PLANT_GREENS[arch] || 0x4e9e3f, roughness: 0.9, metalness: 0,
+      });
+      const blobGeo = new THREE.IcosahedronGeometry(1, 1);
+      cluster.blobs.forEach((b) => {
+        const m = new THREE.Mesh(blobGeo, leafMat);
+        m.scale.set(b.s, b.s * 0.85, b.s);
+        m.position.set(b.dx, b.dy, b.dz);
+        m.userData.noShadow = true;
+        grp.add(m);
+      });
+      const fruitGeo = new THREE.IcosahedronGeometry(1, 1);
+      cluster.fruits.forEach((f) => {
+        const m = new THREE.Mesh(fruitGeo, new THREE.MeshStandardMaterial({
+          color: f.c, roughness: 0.55, metalness: 0,
+        }));
+        m.scale.setScalar(f.s);
+        m.position.set(f.dx, f.dy, f.dz);
+        m.userData.noShadow = true;
+        grp.add(m);
+      });
+      if (plantingId != null) grp.userData.plantingId = plantingId; // build-mode breaking
+      const rng = mulberry32(seed ^ 0x9e37);
       grp.rotation.y = rng() * Math.PI;
-      const s = 0.9 + rng() * 0.35;
+      const s = (big ? 1.5 : 1) * (0.9 + rng() * 0.3);
       grp.scale.set(s, s, s);
-      grp.position.set(px, baseY + (H * s) / 2 - 0.05, pz);
+      grp.position.set(px, baseY - 0.05, pz);
       g.add(grp);
     }
 
@@ -1834,7 +1727,7 @@
       const baseY = (kind === 'arch' || kind === 'hoop house') ? 0 : (g.userData.topY || 1);
       spots.forEach(([spx, spz], i) => {
         const p = ps[i];
-        buildPlantVoxel(THREE, g, spx, spz, baseY, p && p.species_type, (c.id * 1009 + i * 101) | 0, TEX, kind === 'arch', p && p.id);
+        buildPlantSoft(THREE, g, spx, spz, baseY, p && p.species_type, (c.id * 1009 + i * 101) | 0, kind === 'arch', p && p.id);
       });
     }
 
@@ -1874,18 +1767,20 @@
     }
 
     function buildClouds(THREE, group, rng) {
-      // Chunky blocky Minecraft clouds, prominent in the sky. They drift in
+      // Soft miniature clouds: merged sphere clusters. They drift in
       // walk mode (see driftClouds); in orbit mode they stay static so the
       // on-demand renderer can sleep.
       T.clouds = [];
-      const mat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.92 });
       for (let i = 0; i < 9; i++) {
         const cw = 9 + rng() * 9, cd = 6 + rng() * 6;
         const cloud = new THREE.Group();
-        const n = 3 + ((rng() * 3) | 0);
+        const n = 4 + ((rng() * 3) | 0);
         for (let j = 0; j < n; j++) {
-          const puff = box(THREE, cw * (0.5 + rng() * 0.5), 1.8, cd * (0.5 + rng() * 0.5), mat);
-          puff.position.set((rng() - 0.5) * cw, (rng() - 0.5) * 0.8, (rng() - 0.5) * cd);
+          const r = 2.2 + rng() * 2.4;
+          const puff = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), mat);
+          puff.scale.y = 0.55;
+          puff.position.set((rng() - 0.5) * cw, (rng() - 0.5) * 1.2, (rng() - 0.5) * cd);
           cloud.add(puff);
         }
         const ext = Math.max(cols, rows) / 2 + 14;
@@ -2017,22 +1912,33 @@
       T.TEX = TEX;
       const rng = mulberry32(1234);
 
-      // the world: one big grass block (dirt sides, grass fringe)
+      // the world: a smooth miniature base — soft grass top, dark skirt,
+      // with the 1-ft planning grid as subtle thin lines (not block seams).
       const gw = cols + 8, gd = rows + 8;
+      const sideMat = pixMaterial(THREE, TEX.groundSide);
       const ground = new THREE.Mesh(
         new THREE.BoxGeometry(gw, 1, gd),
-        [
-          pixMaterial(THREE, TEX.dirtSideX),
-          pixMaterial(THREE, TEX.dirtSideX),
-          pixMaterial(THREE, TEX.grass),
-          pixMaterial(THREE, TEX.dirt),
-          pixMaterial(THREE, TEX.dirtSideZ),
-          pixMaterial(THREE, TEX.dirtSideZ),
-        ]
+        [sideMat, sideMat, pixMaterial(THREE, TEX.grass), sideMat, sideMat, sideMat]
       );
       ground.position.y = -0.5;
       ground.receiveShadow = true;
       ground.userData.isGround = true; // build-mode placement targets this
+      const gridPts = [];
+      for (let gx = 0; gx <= cols; gx++) {
+        const x = gx - cols / 2;
+        gridPts.push(new THREE.Vector3(x, 0.52, -rows / 2), new THREE.Vector3(x, 0.52, rows / 2));
+      }
+      for (let gz = 0; gz <= rows; gz++) {
+        const z = gz - rows / 2;
+        gridPts.push(new THREE.Vector3(-cols / 2, 0.52, z), new THREE.Vector3(cols / 2, 0.52, z));
+      }
+      const gridLines = new THREE.LineSegments(
+        new THREE.BufferGeometry().setFromPoints(gridPts),
+        new THREE.LineBasicMaterial({ color: 0x3f7a32, transparent: true, opacity: 0.35 })
+      );
+      gridLines.raycast = () => {}; // never a raycast target; ground beneath handles it
+      ground.add(gridLines);
+      T.gridLines = gridLines;
       group.add(ground);
 
       buildClouds(THREE, group, rng);
@@ -2140,6 +2046,10 @@
         T.sky.dome.material.uniforms.horizonColor.value.copy(srgbToLinear(THREE, pal.horizon));
       }
       if (T.scene.fog) T.scene.fog.color.copy(srgbToLinear(THREE, pal.horizon));
+      if (T.gridLines) {
+        T.gridLines.material.opacity = night ? 0.16 : 0.35;
+        T.gridLines.material.color.set(night ? 0x2a5522 : 0x3f7a32);
+      }
       T.sky.hemi.intensity = night ? 0.25 : 0.9;
       T.sky.hemi.color.set(night ? 0x33456e : 0xbdd8ff);
       T.sun.intensity = night ? 0.14 : 0.95; // moonlight at night
@@ -2368,7 +2278,7 @@
 
     wrap3d._walk = { // handle for tests / debugging
       resolvePlayerCollision, mulberry32, plantArchetype, walkColliders, makePixTexture,
-      archArcPoint, archRibCells, archRibCount, archVineOffset,
+      archArcPoint, archRibCount, plantFoliage,
       fenceSides, fenceCells, kindCells, edgingCells, dripCells, nearestLampIds, driftClouds,
       skyColors, grassLayout, occupiedCellSet, fireflyPos, updateFireflies,
       tapeDistance, setTapeMode, clearTape,
@@ -2379,11 +2289,10 @@
       get dayNight() { return dayNight; },
       _toggleDayNight: () => toggleDayNight(),
       painters: {
-        paintGrassTop, paintDirtSide, paintDirt, paintWoodPlanks, paintDarkWood,
-        paintSoil, paintFabric, paintTerracotta, paintLeafBlob, paintMetal, paintWireMesh,
+        paintGrass, paintGroundSide, paintSoil, paintWood, paintDarkWood,
+        paintFabric, paintTerracotta, paintMetal, paintWireMesh,
         paintBucket, paintStone, paintBarrel, paintCompost, paintHoopPlastic, paintBasin,
-        paintAppleLeaves, paintGrassTuft, paintWildflower,
-        paintSprite, SPRITES,
+        paintLeaf, paintGrassTuft, paintWildflower,
       },
       get mode() { return walkMode; },
       _get: () => walk,

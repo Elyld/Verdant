@@ -279,15 +279,15 @@ and you can't drop one on top of another). A container holds **many plants**
 now — a bed lists everything in it — and the **🔁 rotation check** flags when
 you put the same plant family where it grew last season. Copy last season's
 layout into the new year and shuffle things around. Flip to the **3D view** and
-the yard renders as a little Minecraft world — pixel-textured grass blocks,
-plank-sided raised beds, terracotta pots, fabric grow bags, and cross-quad
-pixel plants (tomatoes even grow tiny red fruit). Hit **🚶 Walk** to drop to
+the yard renders as a soft miniature diorama — smooth-shaded beds, pots and
+bags on a grass platform with a subtle 1-ft grid, and little foliage clusters
+for plants (tomatoes even grow tiny red fruit). Hit **🚶 Walk** to drop to
 eye level and stroll between the beds with WASD + mouse (Shift to sprint).
-Walk mode is **⛏️ creative mode**: a Minecraft-style hotbar (Q switches between
+Walk mode is **creative mode**: a hotbar (Q switches between
 **BLOCKS** and **PLANTS**, 1–9 or the mouse wheel picks a slot, everything is
 ∞) lets you build the garden by walking around it — **left-click breaks** the
 aimed planting or container (breaking a planted container asks first), and
-**right-click places** the selected block on the aimed grass cell — a green/red
+**right-click places** the selected item on the aimed grass cell — a green/red
 ghost preview shows exactly where it'll land — or plants the selected seedling
 into the aimed container. **E** edits the aimed container, ESC releases the
 mouse. Every placement and break goes through the real API and edits your real
@@ -947,36 +947,41 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
-- **2.61.0** — **⛏️ Creative-mode building in the planner.** Walk mode grew a
-  Minecraft hotbar: 22 slots across three rows (8/8/6) — 16 BLOCKS (bed, bag,
-  pot, planter, pallet, arch, cold frame, lamp, fence, bucket, path, rain
-  barrel, compost bin, hoop house, fence gate, bird bath) and 6 PLANTS (tomato,
-  pepper, basil, lettuce, carrot, flower), all infinite. **Left-click breaks** the aimed planting or container — breaking a
-  container that holds plantings asks for confirmation first, and the ground
-  itself can't be broken. **Right-click places** the selected block on the
-  aimed grass cells with a green/red ghost preview (per-kind footprints: the
-  hoop house is 4×8), or plants the selected seedling into the aimed container.
-  **Q** switches tabs, **1–9**/wheel picks slots, **E** edits the aimed container. Everything goes through the real
+- **2.61.0** — **Creative-mode building in the planner, reskinned as a soft
+  miniature diorama.** Walk mode grew a hotbar: 22 slots across three rows
+  (8/8/6) — 16 BLOCKS (bed, bag, pot, planter, pallet, arch, cold frame,
+  lamp, fence, bucket, path, rain barrel, compost bin, hoop house, fence gate,
+  bird bath) and 6 PLANTS (tomato, pepper, basil, lettuce, carrot, flower),
+  all infinite. **Left-click breaks** the aimed planting or container —
+  breaking a container that holds plantings asks for confirmation first, and
+  the ground itself can't be broken. **Right-click places** the selected item
+  on the aimed grass cells with a green/red ghost preview (per-kind
+  footprints: the hoop house is 4×8, the shed 4×6), or plants the selected
+  seedling into the aimed container. **Q** switches tabs, **1–9**/wheel picks
+  slots, **E** edits the aimed container. Everything goes through the real
   API; the 3D scene refreshes after each change without leaving first person.
+  The whole 3D view is now smooth-shaded and softly textured (64px
+  LinearFilter canvas textures, MeshStandardMaterial) — no more blocky voxels:
+  rounded foliage blobs with real fruit spheres, smooth torus-arc trellises,
+  tapered terracotta pots, gabled shed roofs, and soft sphere-clouds.
   World dressing: **☀️/🌙 day/night toggle** (gradient sky shader with drifting
   clouds, starfield and glowing lamps at night), plus new placeables — **💡
   lamp posts** (real point lights at night, capped at 8 for perf), **⛓️
   chain-link fence** (segments auto-connect into runs), **🪣 5-gal buckets**,
   **🪨 stone path slabs** (flat enough to walk over), **🛢️ rain barrels**,
   **🟤 compost bins**, **🏠 hoop houses** (translucent plastic skin over
-  galvanized ribs), **🚪 fence gates** (mesh into adjacent fence runs),
-  **🐦 bird baths**, **🌳 fruit trees** (blocky apple trees), **🏚️ garden
-  sheds** (4×6, solid), **🏛️ pergolas** (2×4, walk-under), **🧱 stone
-  edging** (auto-connecting low walls), **💦 sprinklers** (static voxel spray
-  arcs), and **💧 drip lines** (auto-connecting ground tubes). Graphics pass:
-  **bloom postprocessing** (lamps, sun and fireflies glow), **tall grass +
-  wildflowers** scattered on empty cells (seeded, stable across rebuilds),
+  smooth ribs), **🚪 fence gates** (mesh into adjacent fence runs),
+  **🐦 bird baths**, **🌳 fruit trees** (round canopy + apple spheres),
+  **🏚️ garden sheds** (4×6, solid), **🏛️ pergolas** (2×4, walk-under),
+  **🧱 stone edging** (auto-connecting low walls), **💦 sprinklers** (smooth
+  water arcs), and **💧 drip lines** (auto-connecting ground tubes). Graphics
+  pass: **bloom postprocessing** (lamps, sun and fireflies glow), **tall grass
+  + wildflowers** scattered on empty cells (seeded, stable across rebuilds),
   **fireflies** (40 points, night only), warmer sun + tuned hemisphere light.
   Planning tools: **📏 measuring tape** in orbit mode —
   click two ground points for a live "12.5 ft" readout (ESC clears). Game
-  feel: **voxel-cube particle bursts** when things break and tiny WebAudio
-  **place/break sounds** (🔊 toggle, default on) — a real game engine isn't
-  needed; the juice is hand-rolled.
+  feel: **particle bursts** when things break and tiny WebAudio **place/break
+  sounds** (🔊 toggle, default on).
 
 - **2.60.0** — **⛏️ The planner goes Minecraft.** The 3D view is now a voxel
   world: 16×16 pixel textures with crisp NearestFilter rendering, grass-block

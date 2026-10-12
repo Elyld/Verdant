@@ -171,24 +171,29 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
   check('flower archetype', arch('Marigold') === 'flower');
   check('generic fallback', arch('Mystery Plant') === 'generic' && arch('') === 'generic' && arch(null) === 'generic');
 
-  // pixel painters run on a stub ctx
-  const paintCalls = [];
-  const stubCtx = { fillStyle: '', fillRect: (x, y, w, h) => paintCalls.push([x, y, w, h, stubCtx.fillStyle]) };
+  // soft painters run on a stub ctx with a full 2d API surface
+  let drawCalls = 0;
+  const gradStub = { addColorStop: () => {} };
+  const stubCtx = {
+    fillStyle: '', strokeStyle: '', lineWidth: 1, lineCap: '', globalAlpha: 1,
+    fillRect: () => { drawCalls++; }, strokeRect: () => { drawCalls++; },
+    beginPath: () => {}, closePath: () => {}, moveTo: () => {}, lineTo: () => {},
+    quadraticCurveTo: () => {}, bezierCurveTo: () => {},
+    arc: () => { drawCalls++; }, ellipse: () => { drawCalls++; },
+    fill: () => { drawCalls++; }, stroke: () => { drawCalls++; },
+    createLinearGradient: () => gradStub, createRadialGradient: () => gradStub,
+  };
   const rng = walkApi.mulberry32(5);
   Object.entries(walkApi.painters).forEach(([name, fn]) => {
-    if (name === 'SPRITES' || name === 'paintSprite') return;
-    paintCalls.length = 0;
-    fn(stubCtx, 16, rng);
-    check(`painter ${name} paints pixels`, paintCalls.length > 10);
+    drawCalls = 0;
+    fn(stubCtx, 64, rng);
+    check(`painter ${name} paints`, drawCalls > 5);
   });
-  paintCalls.length = 0;
-  walkApi.painters.paintSprite(stubCtx, 'tomato');
-  check('tomato sprite paints pixels', paintCalls.length > 20);
-  check('all 6 sprites defined', ['tomato', 'pepper', 'leafy', 'vine', 'flower', 'generic'].every((k) => Array.isArray(walkApi.painters.SPRITES[k])));
 
   // makePixTexture sets NearestFilter (crisp pixels) with a stub THREE
   const THREEStub = {
     NearestFilter: 1003, NearestMipmapLinearFilter: 1004, LinearFilter: 1005,
+    LinearMipmapLinearFilter: 1006,
     sRGBEncoding: 3001, RepeatWrapping: 1000,
     CanvasTexture: function (cv) {
       this.image = cv;
@@ -197,10 +202,11 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
   };
   const origCreate = global.document.createElement;
   global.document.createElement = () => ({ width: 0, height: 0, getContext: () => stubCtx });
-  const tex = walkApi.makePixTexture(THREEStub, 16, walkApi.painters.paintGrassTop, 11, [4, 4]);
+  const tex = walkApi.makePixTexture(THREEStub, 64, walkApi.painters.paintGrass, 11, [4, 4]);
   global.document.createElement = origCreate;
-  check('pixel texture uses NearestFilter', tex.magFilter === 1003);
-  check('pixel texture repeats', tex.wrapS === 1000 && tex.repeat.x === 4 && tex.repeat.y === 4);
+  check('soft texture uses LinearFilter', tex.magFilter === 1005);
+  check('soft texture is 64px', tex.image.width === 64 && tex.image.height === 64);
+  check('soft texture repeats', tex.wrapS === 1000 && tex.repeat.x === 4 && tex.repeat.y === 4);
 
   // AABB collision math
   const box1 = { minX: -1, maxX: 1, minZ: -1, maxZ: 1 };
@@ -290,35 +296,17 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
   check('break confirm when plantings exist', buildApi.needsBreakConfirm({ id: 12 }) === true);
   check('no confirm when empty', buildApi.needsBreakConfirm({ id: 13 }) === false);
 
-  // ---- cattle-panel arch geometry (pure helpers) ----
-  const ribCells = walkApi.archRibCells(4, 7);
-  check('arch ribs are stepped arcs (many voxel segments)', ribCells.length > 20);
+  // ---- garden arch geometry (pure helpers; smooth torus ribs now) ----
   const crown = walkApi.archArcPoint(4, 7, 0.5);
   check('arch crown height ≈ 7 ft', Math.abs(crown.y - 7) < 1e-9 && Math.abs(crown.x) < 1e-9);
   const footL = walkApi.archArcPoint(4, 7, 0), footR = walkApi.archArcPoint(4, 7, 1);
   check('arch feet at ground level, span ±2', Math.abs(footL.y) < 1e-9 && Math.abs(footR.y) < 1e-9 && Math.abs(Math.abs(footL.x) - 2) < 1e-9);
   check('arch rib count 5-7 for a 4-ft run', walkApi.archRibCount(4) >= 5 && walkApi.archRibCount(4) <= 7);
   check('arch rib count caps at 7', walkApi.archRibCount(20) === 7);
-  // every rib voxel sits on the true arc (stepped, not floating)
-  let worstGap = 0;
-  ribCells.forEach((c) => {
-    let best = 1e9;
-    for (let i = 0; i <= 60; i++) {
-      const p = walkApi.archArcPoint(4, 7, i / 60);
-      const d = Math.hypot(c.x - p.x, c.y - p.y);
-      if (d < best) best = d;
-    }
-    if (best > worstGap) worstGap = best;
-  });
-  check('rib voxels hug the arc (worst gap < 0.3)', worstGap < 0.3);
-  // vine blobs sit ON the rib: small outward offset, never floating nearby
-  let vineOk = true;
-  for (let i = 0; i <= 20; i++) {
-    const p = walkApi.archArcPoint(4, 7, 0.05 + 0.9 * (i / 20));
-    const vo = walkApi.archVineOffset(4, 7, p);
-    if (Math.abs(Math.hypot(vo.x, vo.y) - 0.16) > 1e-9) vineOk = false;
-  }
-  check('vine blobs hug the rib (0.16 outward offset)', vineOk);
+  // the arc is smooth: midpoints between samples stay on the ellipse
+  const arcMid = walkApi.archArcPoint(4, 7, 0.25);
+  const onEllipse = Math.pow(arcMid.x / 2, 2) + Math.pow(arcMid.y / 7, 2);
+  check('arch arc is a true half-ellipse', Math.abs(onEllipse - 1) < 1e-9);
 
   // ---- world dressing: fence auto-connect, lamp light cap, day/night ----
   // fenceSides: single fence = post only; neighbors add mesh per side
@@ -383,10 +371,28 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
   check('PLANTS tab stays one row', (plantHtml.match(/margin-bottom:4px/g) || []).length === 1);
   buildApi._setTab('blocks');
 
-  // new pixel painters registered (auto-covered by the painter loop above too)
-  ['paintBarrel', 'paintCompost', 'paintHoopPlastic', 'paintBasin'].forEach((n) => {
+  // new soft painters registered (auto-covered by the painter loop above too)
+  ['paintBarrel', 'paintCompost', 'paintHoopPlastic', 'paintBasin', 'paintGroundSide', 'paintLeaf'].forEach((n) => {
     check(`painter ${n} registered`, typeof walkApi.painters[n] === 'function');
   });
+  check('voxel painters are gone', walkApi.painters.paintGrassTop === undefined &&
+    walkApi.painters.paintSprite === undefined && walkApi.painters.SPRITES === undefined);
+
+  // soft plant foliage: deterministic clusters, fruiting archetypes bear fruit
+  const fol1 = walkApi.plantFoliage('tomato', 1234), fol2 = walkApi.plantFoliage('tomato', 1234);
+  check('foliage deterministic (same seed)', JSON.stringify(fol1) === JSON.stringify(fol2));
+  const fol3 = walkApi.plantFoliage('tomato', 999);
+  check('foliage seed-sensitive', JSON.stringify(fol1) !== JSON.stringify(fol3));
+  check('foliage has 2-4 blobs', fol1.blobs.length >= 2 && fol1.blobs.length <= 4);
+  check('tomato bears fruit', fol1.fruits.length >= 2 && fol1.fruits.every((f) => f.c === 0xd9402e));
+  const folPep = walkApi.plantFoliage('pepper', 1234);
+  check('pepper bears orange fruit', folPep.fruits.length >= 2 && folPep.fruits.every((f) => f.c === 0xe08a2e));
+  const folLeafy = walkApi.plantFoliage('leafy', 1234);
+  check('leafy has no fruit', folLeafy.fruits.length === 0);
+  const folFlower = walkApi.plantFoliage('flower', 1234);
+  check('flowers bloom in pastel colors', folFlower.fruits.length >= 1 &&
+    folFlower.fruits.every((f) => [0xe06ba8, 0xf2d13d, 0xf5f5f5].includes(f.c)));
+  check('blobs sit above the soil', fol1.blobs.every((b) => b.dy > 0.2 && b.dy < 1.1));
 
   // per-kind placement footprints: hoop house is 4x8, everything else 1x1
   check('hoop house footprint 4x8', JSON.stringify(buildApi.placeFootprint('hoop house')) === '[4,8]');
@@ -456,7 +462,7 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
 
   // ---- graphics batch: sky, grass, fireflies, new-kind connections ----
   // new pixel painters registered (auto-covered by the painter loop above too)
-  ['paintAppleLeaves', 'paintGrassTuft', 'paintWildflower'].forEach((n) => {
+  ['paintLeaf', 'paintGrassTuft', 'paintWildflower'].forEach((n) => {
     check(`painter ${n} registered`, typeof walkApi.painters[n] === 'function');
   });
 
