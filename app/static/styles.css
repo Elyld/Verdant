@@ -208,6 +208,12 @@
   background-position: bottom center;
 }
 
+/* Photo crop tool (seed packets). */
+.crop-ratio-on {
+  background-color: #e2ebdf;
+  color: #233d5c;
+}
+
 /* Mobile bottom tab bar */
 .mobile-tab {
   position: relative;

@@ -69,27 +69,32 @@
     const weekStart = Number((await getSettings()).week_start || 0);
     const base = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const weekdays = base.slice(weekStart).concat(base.slice(0, weekStart));
+
+    let observations = [];
     try {
-      const observations = await api.get('/api/stats/calendar');
-      const byDate = new Map();
-      observations.forEach((item) => {
-        const key = String(item.date).slice(0, 10);
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return;
-        if (!byDate.has(key)) byDate.set(key, []);
-        byDate.get(key).push(item);
-      });
-      const today = new Date();
-      const months = [];
-      for (let delta = -2; delta <= 0; delta += 1) months.push(new Date(today.getFullYear(), today.getMonth() + delta, 1));
+      observations = await api.get('/api/stats/calendar');
+    } catch (error) {
+      grid.innerHTML = `<div class="card text-red-700">Could not load calendar: ${esc(error.message)}</div>`;
+      return;
+    }
+    const byDate = new Map();
+    observations.forEach((item) => {
+      const key = String(item.date).slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return;
+      if (!byDate.has(key)) byDate.set(key, []);
+      byDate.get(key).push(item);
+    });
+
+    function render(forYear) {
       const legend = `<div class="flex items-center justify-end gap-1.5 pt-2 text-xs text-navy-500"><span>Less</span>${[0, 1, 2, 3, 4].map((level) => `<span class="heat-swatch heat-${level}" aria-hidden="true"></span>`).join('')}<span>More</span></div>`;
-      grid.innerHTML = months.map((monthDate) => {
-        const year = monthDate.getFullYear();
-        const month = monthDate.getMonth();
+      const head = `<p class="text-sm text-navy-500">Showing the ${forYear} season — change it with the Season picker up top.</p>`;
+      grid.innerHTML = head + Array.from({ length: 12 }, (_, month) => {
+        const monthDate = new Date(forYear, month, 1);
         const leadBlanks = (monthDate.getDay() - weekStart + 7) % 7;
         const cells = Array(leadBlanks).fill('<div class="calendar-day calendar-empty"></div>');
-        const days = new Date(year, month + 1, 0).getDate();
+        const days = new Date(forYear, month + 1, 0).getDate();
         for (let day = 1; day <= days; day += 1) {
-          const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          const iso = `${forYear}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           const entries = byDate.get(iso) || [];
           const level = heatLevel(entries.length);
           const average = entries.length ? Math.round(entries.reduce((sum, item) => sum + item.health_scale, 0) / entries.length) : null;
@@ -100,24 +105,29 @@
         }
         return `<section class="card"><h2 class="mb-4 font-display text-xl font-semibold">${monthDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</h2><div class="calendar-weekdays">${weekdays.map((day) => `<span>${day}</span>`).join('')}</div><div class="calendar-month">${cells.join('')}</div>${legend}</section>`;
       }).join('');
-      grid.addEventListener('click', (ev) => {
-        const link = ev.target.closest('a[data-date]');
-        if (!link) return;
-        ev.preventDefault();
-        const iso = link.getAttribute('data-date');
-        openDayModal(iso, byDate.get(iso) || []);
-      });
-      const modal = $('#day-modal');
-      modal?.addEventListener('click', (ev) => {
-        if (ev.target.closest('[data-close]')) closeDayModal();
-      });
-      document.addEventListener('keydown', (ev) => {
-        if (ev.key === 'Escape') closeDayModal();
-      });
       if (!observations.length) $('#calendar-empty')?.classList.remove('hidden');
-    } catch (error) {
-      grid.innerHTML = `<div class="card text-red-700">Could not load calendar: ${esc(error.message)}</div>`;
+      else $('#calendar-empty')?.classList.add('hidden');
     }
+
+    render(globalThis.Verdant.year());
+    // The Season picker in the header is the single source of truth —
+    // re-render the whole year when it changes.
+    document.addEventListener('verdant:year', (e) => render(Number(e.detail.year)));
+
+    grid.addEventListener('click', (ev) => {
+      const link = ev.target.closest('a[data-date]');
+      if (!link) return;
+      ev.preventDefault();
+      const iso = link.getAttribute('data-date');
+      openDayModal(iso, byDate.get(iso) || []);
+    });
+    const modal = $('#day-modal');
+    modal?.addEventListener('click', (ev) => {
+      if (ev.target.closest('[data-close]')) closeDayModal();
+    });
+    document.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape') closeDayModal();
+    });
   }
 
   globalThis.Verdant.onBoot(initCalendar);

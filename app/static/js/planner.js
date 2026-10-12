@@ -27,7 +27,7 @@
     let locations = [];
     let years = [];
     let warnings = [];
-    let year = new Date().getFullYear();
+    let year = globalThis.Verdant.year(); // header Season picker is the source of truth
     let cols = 24, rows = 16;
     let editingId = null;
     let pendingPlantings = [];
@@ -468,7 +468,8 @@
     $('#heatmap-toggle').addEventListener('click', toggleHeatmap);
     $('#container-close').addEventListener('click', closeModal);
     $('#container-cancel').addEventListener('click', closeModal);
-    $('#planner-year').addEventListener('change', (e) => { year = Number(e.target.value); load(); });
+    $('#planner-year').addEventListener('change', (e) => { globalThis.Verdant.setYear(Number(e.target.value)); });
+    document.addEventListener('verdant:year', (e) => { year = Number(e.detail.year); load(); });
     $('#rotation-dismiss').addEventListener('click', () => $('#rotation-banner').classList.add('hidden'));
 
     $('#grid-apply').addEventListener('click', async () => {

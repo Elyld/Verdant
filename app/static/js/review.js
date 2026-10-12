@@ -11,7 +11,9 @@
     const yearEl = $('#review-year');
     if (!yearEl) return {};
     const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    let year = new Date().getFullYear();
+    // The header Season picker is the single source of truth — start from it,
+    // and keep it in sync when the prev/next buttons move the year.
+    let year = globalThis.Verdant.year();
 
     function statCard(icon, label, value) {
       return `<div class="rounded-xl border border-beige-300 bg-beige-50 px-4 py-3"><dt class="text-xs font-bold uppercase text-navy-500">${icon} ${label}</dt><dd class="mt-1 font-display text-2xl text-sage-700">${value}</dd></div>`;
@@ -128,11 +130,12 @@
       $('#truecost-disclaimer').textContent = tc ? tc.disclaimer : '';
     }
 
-    $('#review-prev').addEventListener('click', () => { year -= 1; load().catch((e) => toast(e.message, 'err')); });
-    $('#review-next').addEventListener('click', () => { year += 1; load().catch((e) => toast(e.message, 'err')); });
+    $('#review-prev').addEventListener('click', () => { globalThis.Verdant.setYear(year - 1); });
+    $('#review-next').addEventListener('click', () => { globalThis.Verdant.setYear(year + 1); });
     $('#review-yearbook').addEventListener('click', () => {
       window.open(`/api/yearbook?year=${year}`, '_blank');
     });
+    document.addEventListener('verdant:year', (e) => { year = Number(e.detail.year); load().catch((er) => toast(er.message, 'err')); });
     load().catch((error) => toast(`Could not load review: ${error.message}`, 'err'));
     return {};
   }
