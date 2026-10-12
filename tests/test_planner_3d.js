@@ -578,6 +578,40 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
   check('panel height clamped for wide spans', cph(12) >= 4 && cph(12) <= 8.5);
   check('panel height taller for narrow spans', cph(2) > h4);
 
+  // v2.63.0 gardener: clip matching by name fragment
+  const clips = walkApi.matchGardenerClips([
+    'Human Armature|Idle', 'Human Armature|Walk', 'Human Armature|Run',
+    'Human Armature|Jump', 'Human Armature|Working', 'Human Armature|Death',
+  ]);
+  check('clip match idle', clips.idle === 'Human Armature|Idle');
+  check('clip match walk', clips.walk === 'Human Armature|Walk');
+  check('clip match run', clips.run === 'Human Armature|Run');
+  check('clip match jump', clips.jump === 'Human Armature|Jump');
+  check('clip match working', clips.working === 'Human Armature|Working');
+  const clips2 = walkApi.matchGardenerClips(['Armature|Idle']);
+  check('clip match missing -> null', clips2.walk === null && clips2.working === null && clips2.idle === 'Armature|Idle');
+
+  // v2.63.0: third-person boom camera sits behind + above the player
+  const boom = walkApi.thirdPersonBoom(0, 0, 0, 0, 0);
+  check('boom behind player at yaw 0', boom.z > 4 && Math.abs(boom.x) < 0.01);
+  check('boom above head height', boom.y > 2);
+  const boom2 = walkApi.thirdPersonBoom(Math.PI / 2, 0, 10, 0, 5);
+  check('boom follows yaw 90deg', boom2.x > 14 && Math.abs(boom2.z - 5) < 0.01);
+  const boom3 = walkApi.thirdPersonBoom(0, 0.5, 0, 0, 0);
+  check('boom drops when looking up', boom3.y < boom.y);
+  const boom4 = walkApi.thirdPersonBoom(0, -0.5, 0, 0, 0);
+  check('boom rises when looking down', boom4.y > boom.y);
+
+  // v2.63.0: nearest container within range (cols 24, rows 16)
+  const ncs = [
+    { id: 1, grid_x: 12, grid_y: 8, grid_w: 4, grid_h: 2 }, // center (2,1)
+    { id: 2, grid_x: 0, grid_y: 0, grid_w: 2, grid_h: 2 },   // center (-11,-7)
+  ];
+  const near = walkApi.nearestContainer(ncs, 0, 0, 7, 24, 16);
+  check('nearest container found', near && near.id === 1);
+  check('nearest container out of range -> null', walkApi.nearestContainer(ncs, 0, 0, 1, 24, 16) === null);
+  check('nearest container empty list -> null', walkApi.nearestContainer([], 0, 0, 7, 24, 16) === null);
+
   console.log(failures ? `\n${failures} check(s) failed.` : '\nAll checks passed.');
   process.exit(failures ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });
