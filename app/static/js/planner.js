@@ -5,7 +5,7 @@
 
   const { $, esc, api, toast } = globalThis.Verdant;
 
-  const KIND_ICON = { 'grow bag': '🛍️', 'raised bed': '🟫', 'pot': '🪴', 'planter': '🗄️', 'arch': '🌉', 'pallet': '🪵' };
+  const KIND_ICON = { 'grow bag': '🛍️', 'raised bed': '🟫', 'pot': '🪴', 'planter': '🗄️', 'arch': '🌉', 'pallet': '🪵', 'lamp': '💡', 'fence': '⛓️', 'bucket': '🪣', 'path': '🪨' };
   const KIND_TONE = {
     'grow bag': 'bg-sage-100 ring-sage-300',
     'raised bed': 'bg-amber-100 ring-amber-300',
@@ -13,8 +13,12 @@
     'planter': 'bg-orange-100 ring-orange-300',
     'arch': 'bg-navy-100 ring-navy-300',
     'pallet': 'bg-beige-200 ring-beige-400',
+    'lamp': 'bg-yellow-100 ring-yellow-300',
+    'fence': 'bg-stone-100 ring-stone-300',
+    'bucket': 'bg-sky-50 ring-sky-200',
+    'path': 'bg-stone-200 ring-stone-400',
   };
-  const FOOTPRINTS = { 'grow bag': [2, 2], 'raised bed': [4, 4], 'pot': [1, 1], 'planter': [3, 1], 'arch': [4, 4], 'pallet': [4, 3] };
+  const FOOTPRINTS = { 'grow bag': [2, 2], 'raised bed': [4, 4], 'pot': [1, 1], 'planter': [3, 1], 'arch': [4, 4], 'pallet': [4, 3], 'lamp': [1, 1], 'fence': [1, 1], 'bucket': [1, 1], 'path': [1, 1] };
   const KIND_HEIGHT = { 'arch': 7 }; // default height in feet, used by the 3D view
 
   function initPlanner() {
@@ -568,11 +572,12 @@
     const view2dBtn = $('#view-2d');
     const view3dBtn = $('#view-3d');
     const viewWalkBtn = $('#view-walk');
+    const dayNightBtn = $('#view-daynight');
     const wrap3d = $('#planner-3d');
     const hint2d = $('#planner-2d-hint');
     const hint3d = $('#planner-3d-hint');
     const orbitHintText = 'Drag to orbit · scroll or pinch to zoom · right-drag to pan · click a container to edit it.';
-    const walkHintText = 'Click to grab the mouse · WASD walk · Shift sprint · Left-click break · Right-click place · E edit · Q blocks/plants · 1-7/wheel pick · ESC release.';
+    const walkHintText = 'Click to grab the mouse · WASD walk · Shift sprint · Left-click break · Right-click place · E edit · Q blocks/plants · 1-9/wheel pick · ESC release.';
 
     // crosshair shown in walk mode
     const crosshair = document.createElement('div');
@@ -706,6 +711,18 @@
       for (let y = 0; y < S; y += 4) {
         for (let x = 0; x < S; x += 4) px(ctx, x, y, 1, 1, '#cdd5dd'); // intersection glint
       }
+    }
+
+    function paintBucket(ctx, S, rng) {
+      // white plastic 5-gal bucket: bright body, subtle horizontal ridges
+      noiseFill(ctx, S, rng, ['#e8ecef', '#dde3e8', '#f2f5f7', '#d3d9df']);
+      for (let y = 3; y < S; y += 4) px(ctx, 0, y, S, 1, '#c3cbd2'); // ridge shadow
+    }
+
+    function paintStone(ctx, S, rng) {
+      // speckled gray flagstone
+      noiseFill(ctx, S, rng, ['#9aa0a6', '#8b9096', '#a7adb3', '#7d838a']);
+      for (let i = 0; i < 14; i++) px(ctx, (rng() * S) | 0, (rng() * S) | 0, 1, 1, '#5f656c'); // dark speckles
     }
 
     // Pixel-sprite maps: one char per pixel, '.' = transparent.
@@ -899,12 +916,58 @@
       controls.addEventListener('change', () => render3D());
 
       scene.add(new THREE.HemisphereLight(0xbdd8ff, 0x8a9a6a, 0.85));
+      const hemi = scene.children[scene.children.length - 1];
       const sun = new THREE.DirectionalLight(0xfff3d6, 0.95);
       sun.castShadow = true;
       sun.shadow.mapSize.set(2048, 2048);
       sun.shadow.camera.near = 1;
       sun.shadow.camera.far = 140;
       scene.add(sun);
+
+      // Prominent blocky sky: square sun + glow, square moon, starfield.
+      // Sprites always face the camera, so the square sun reads correctly
+      // from orbit and first person alike. Day/night toggles visibility.
+      function skySprite(core, glow, corePx) {
+        const cv = document.createElement('canvas');
+        cv.width = cv.height = 128;
+        const cx = cv.getContext('2d');
+        const grd = cx.createRadialGradient(64, 64, 8, 64, 64, 64);
+        grd.addColorStop(0, glow);
+        grd.addColorStop(1, 'rgba(0,0,0,0)');
+        cx.fillStyle = grd;
+        cx.fillRect(0, 0, 128, 128);
+        const o = 64 - corePx / 2;
+        cx.fillStyle = core;
+        cx.fillRect(o, o, corePx, corePx);
+        const tex = new THREE.CanvasTexture(cv);
+        tex.encoding = THREE.sRGBEncoding;
+        const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false }));
+        sp.scale.set(70, 70, 1);
+        return sp;
+      }
+      const sunSprite = skySprite('#ffdf5e', 'rgba(255,220,120,0.55)', 34);
+      sunSprite.position.set(-130, 62, -190);
+      const moonSprite = skySprite('#e8ecf5', 'rgba(200,215,245,0.35)', 26);
+      moonSprite.position.set(140, 60, -190);
+      moonSprite.visible = false;
+      scene.add(sunSprite);
+      scene.add(moonSprite);
+      const starGeo = new THREE.BufferGeometry();
+      const starPos = new Float32Array(360 * 3);
+      {
+        const sr = mulberry32(777);
+        for (let i = 0; i < 360; i++) {
+          const th = sr() * Math.PI * 2, ph = sr() * Math.PI * 0.48;
+          const R = 300;
+          starPos[i * 3] = R * Math.sin(ph) * Math.cos(th);
+          starPos[i * 3 + 1] = R * Math.cos(ph) + 10;
+          starPos[i * 3 + 2] = R * Math.sin(ph) * Math.sin(th);
+        }
+      }
+      starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+      const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, fog: false }));
+      stars.visible = false;
+      scene.add(stars);
 
       // click (not drag) a container to edit it — skipped in walk mode,
       // which raycasts from the crosshair instead.
@@ -943,7 +1006,8 @@
         else if (e.button === 2) placeAim();
       });
 
-      T = { THREE, renderer, scene, camera, controls, sun, group: null, TEX: null };
+      T = { THREE, renderer, scene, camera, controls, sun, group: null, TEX: null,
+        sky: { sunSprite, moonSprite, stars, hemi }, clouds: [], lamps: [], lampLights: [] };
       wrap3d._three = T; // handle for tests / debugging
       sizeThree();
       return T;
@@ -986,6 +1050,8 @@
       TEX.leafBlob = makePixTexture(THREE, 16, paintLeafBlob, 20);
       TEX.metal = makePixTexture(THREE, 16, paintMetal, 22);
       TEX.wireMesh = makePixTexture(THREE, 16, paintWireMesh, 23, [1, 1]); // [1,1] enables RepeatWrapping for UV tiling
+      TEX.bucket = makePixTexture(THREE, 16, paintBucket, 24);
+      TEX.stone = makePixTexture(THREE, 16, paintStone, 25);
       TEX.plants = {};
       Object.keys(SPRITES).forEach((name) => {
         TEX.plants[name] = makePixTexture(THREE, 16, (ctx) => paintSprite(ctx, name), 21);
@@ -1175,6 +1241,116 @@
       g.userData.topY = H;
     }
 
+    // ---- World dressing: lamp posts, chain-link fence, buckets, path slabs ----
+    // Pure: which of the 4 sides of the fence cell (gx,gy) touch another fence
+    // cell. cellSet holds "gx,gy" strings for every cell covered by a fence.
+    function fenceSides(gx, gy, cellSet) {
+      return {
+        n: cellSet.has(`${gx},${gy - 1}`),
+        s: cellSet.has(`${gx},${gy + 1}`),
+        w: cellSet.has(`${gx - 1},${gy}`),
+        e: cellSet.has(`${gx + 1},${gy}`),
+      };
+    }
+    // Pure: set of "gx,gy" cells covered by fence containers.
+    function fenceCells(list) {
+      const set = new Set();
+      (list || []).forEach((c) => {
+        if ((c.kind || '') !== 'fence') return;
+        const w = c.grid_w || 1, h = c.grid_h || 1;
+        for (let dx = 0; dx < w; dx++) for (let dy = 0; dy < h; dy++) set.add(`${(c.grid_x || 0) + dx},${(c.grid_y || 0) + dy}`);
+      });
+      return set;
+    }
+    // Pure: ids of the n lamps nearest to (cx,cz). Lamp glow is capped for perf.
+    function nearestLampIds(lamps, cx, cz, n) {
+      return (lamps || [])
+        .map((l, i) => ({ i, d: (l.x - cx) * (l.x - cx) + (l.z - cz) * (l.z - cz) }))
+        .sort((a, b) => a.d - b.d)
+        .slice(0, n)
+        .map((o) => o.i);
+    }
+
+    function buildLamp(THREE, g, w, h, TEX) {
+      // Short dark post + warm glowing lamp head (voxel lantern).
+      const post = box(THREE, 0.22, 1.5, 0.22, pixMaterial(THREE, TEX.metal));
+      post.position.y = 0.75;
+      g.add(post);
+      const headMat = new THREE.MeshStandardMaterial({
+        color: 0xffc46b, emissive: 0xff9d2e, emissiveIntensity: 0.15,
+        roughness: 0.6, metalness: 0,
+      });
+      const head = box(THREE, 0.55, 0.45, 0.55, headMat);
+      head.position.y = 1.72;
+      head.userData.lampHead = true;
+      head.userData.noShadow = true;
+      g.add(head);
+      const cap = box(THREE, 0.65, 0.12, 0.65, pixMaterial(THREE, TEX.metal));
+      cap.position.y = 2.0;
+      g.add(cap);
+      g.userData.topY = 2.1;
+      g.userData.lampPos = { x: 0, y: 1.72, z: 0 }; // local; scene build converts to world
+    }
+
+    function buildFence(THREE, g, w, h, TEX, sides) {
+      // Minecraft-style chain-link: center post + mesh planes only on sides
+      // facing another fence segment. Single fence = just a post.
+      sides = sides || {};
+      const post = box(THREE, 0.24, 1.1, 0.24, pixMaterial(THREE, TEX.metal));
+      post.position.y = 0.55;
+      g.add(post);
+      const meshMat = new THREE.MeshStandardMaterial({
+        map: TEX.wireMesh, alphaTest: 0.4, side: THREE.DoubleSide,
+        roughness: 0.7, metalness: 0.4, transparent: false,
+      });
+      const mkPanel = (pw, px, pz, rotY) => {
+        const p = new THREE.Mesh(new THREE.PlaneGeometry(pw, 0.9), meshMat);
+        p.position.set(px, 0.6, pz);
+        p.rotation.y = rotY;
+        p.userData.noShadow = true;
+        g.add(p);
+      };
+      // panels span half a cell from the post to each connected neighbor
+      if (sides.n) mkPanel(0.5, 0, -0.25, 0);
+      if (sides.s) mkPanel(0.5, 0, 0.25, 0);
+      if (sides.w) mkPanel(0.5, -0.25, 0, Math.PI / 2);
+      if (sides.e) mkPanel(0.5, 0.25, 0, Math.PI / 2);
+      g.userData.topY = 1.1;
+    }
+
+    function buildBucket(THREE, g, TEX) {
+      // White 5-gal bucket: slightly tapered box + rim + handle arc.
+      const body = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.42, 0.34, 0.85, 8),
+        pixMaterial(THREE, TEX.bucket)
+      );
+      body.position.y = 0.425;
+      g.add(body);
+      const rim = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.45, 0.45, 0.1, 8),
+        pixMaterial(THREE, TEX.bucket)
+      );
+      rim.position.y = 0.85;
+      g.add(rim);
+      const handle = new THREE.Mesh(
+        new THREE.TorusGeometry(0.4, 0.045, 6, 12, Math.PI),
+        pixMaterial(THREE, TEX.metal)
+      );
+      handle.position.y = 0.9;
+      handle.userData.noShadow = true;
+      g.add(handle);
+      g.userData.topY = 1.35;
+    }
+
+    function buildPath(THREE, g, TEX) {
+      // Flat speckled stone slab for walkways. No collider (walked over).
+      const slab = box(THREE, 0.96, 0.15, 0.96, pixMaterial(THREE, TEX.stone));
+      slab.position.y = 0.075;
+      slab.receiveShadow = true;
+      g.add(slab);
+      g.userData.topY = 0.15;
+    }
+
     function buildPlantVoxel(THREE, g, px, pz, baseY, species, seed, TEX, big, plantingId) {
       // Minecraft cross-quad: two intersecting pixel-art planes.
       const arch = plantArchetype(species);
@@ -1268,21 +1444,38 @@
     }
 
     function buildClouds(THREE, group, rng) {
+      // Chunky blocky Minecraft clouds, prominent in the sky. They drift in
+      // walk mode (see driftClouds); in orbit mode they stay static so the
+      // on-demand renderer can sleep.
+      T.clouds = [];
       const mat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-      for (let i = 0; i < 6; i++) {
-        const cw = 5 + rng() * 7, cd = 3 + rng() * 4;
+      for (let i = 0; i < 9; i++) {
+        const cw = 9 + rng() * 9, cd = 6 + rng() * 6;
         const cloud = new THREE.Group();
-        const n = 2 + ((rng() * 3) | 0);
+        const n = 3 + ((rng() * 3) | 0);
         for (let j = 0; j < n; j++) {
-          const puff = box(THREE, cw * (0.5 + rng() * 0.5), 1.4, cd * (0.5 + rng() * 0.5), mat);
-          puff.position.set((rng() - 0.5) * cw, (rng() - 0.5) * 0.6, (rng() - 0.5) * cd);
+          const puff = box(THREE, cw * (0.5 + rng() * 0.5), 1.8, cd * (0.5 + rng() * 0.5), mat);
+          puff.position.set((rng() - 0.5) * cw, (rng() - 0.5) * 0.8, (rng() - 0.5) * cd);
           cloud.add(puff);
         }
         const ext = Math.max(cols, rows) / 2 + 14;
-        cloud.position.set((rng() - 0.5) * ext * 2.4, 26 + rng() * 10, (rng() - 0.5) * ext * 2.4);
+        cloud.position.set((rng() - 0.5) * ext * 2.6, 20 + rng() * 10, (rng() - 0.5) * ext * 2.6);
         cloud.traverse((o) => { o.castShadow = false; o.receiveShadow = false; });
+        cloud.userData.drift = 0.5 + rng() * 0.5;
+        cloud.userData.cloudMat = mat;
         group.add(cloud);
+        T.clouds.push(cloud);
       }
+    }
+
+    // Called from the walk-mode loop only. Wraps clouds around the sky.
+    function driftClouds(dt) {
+      if (!T || !T.clouds) return;
+      const ext = Math.max(cols, rows) / 2 + 14;
+      T.clouds.forEach((c) => {
+        c.position.x += (c.userData.drift || 0.6) * dt;
+        if (c.position.x > ext * 1.6) c.position.x = -ext * 1.6;
+      });
     }
 
     function buildScene3D() {
@@ -1318,6 +1511,9 @@
 
       buildClouds(THREE, group, rng);
 
+      T.lamps = []; // world-space lamp head positions, for night lighting
+      const fc = fenceCells(containers);
+
       containers.forEach((c) => {
         const w = c.grid_w || 1, h = c.grid_h || 1;
         const g = new THREE.Group();
@@ -1326,6 +1522,14 @@
         const kind = c.kind || 'grow bag';
         if (kind === 'arch') buildArch(THREE, g, w, h, c.height_ft || KIND_HEIGHT.arch || 4, TEX);
         else if (kind === 'pallet') buildPallet(THREE, g, w, h, TEX);
+        else if (kind === 'lamp') {
+          buildLamp(THREE, g, w, h, TEX);
+          const lp = g.userData.lampPos || { x: 0, y: 1.72, z: 0 };
+          T.lamps.push({ x: g.position.x + lp.x, y: lp.y, z: g.position.z + lp.z });
+        }
+        else if (kind === 'fence') buildFence(THREE, g, w, h, TEX, fenceSides(c.grid_x || 0, c.grid_y || 0, fc));
+        else if (kind === 'bucket') buildBucket(THREE, g, TEX);
+        else if (kind === 'path') buildPath(THREE, g, TEX);
         else buildVessel(THREE, g, w, h, kind, TEX);
         addPlants3D(THREE, g, w, h, kind, c, TEX);
         const label = makeLabel(c.name);
@@ -1345,6 +1549,7 @@
       sun.position.set(cols * 0.6, 34, rows * 0.45);
       Object.assign(sun.shadow.camera, { left: -ext, right: ext, top: ext, bottom: -ext });
       sun.shadow.camera.updateProjectionMatrix();
+      applyDayNight(); // re-apply sky/lamp state after the rebuild
       sizeThree();
     }
 
@@ -1353,6 +1558,62 @@
       // must only render — calling update() here would recurse forever.
       if (!T || view !== '3d') return;
       T.renderer.render(T.scene, T.camera);
+    }
+
+    /* ---------------- day / night ---------------- */
+    let dayNight = 'day'; // 'day' | 'night'
+    const MAX_LAMP_LIGHTS = 8; // real PointLights; extra lamps just glow
+
+    function clearLampLights() {
+      if (!T) return;
+      (T.lampLights || []).forEach((l) => { T.scene.remove(l); if (l.dispose) l.dispose(); });
+      T.lampLights = [];
+    }
+
+    function applyDayNight() {
+      if (!T || !T.sky) return;
+      const THREE = T.THREE, night = dayNight === 'night';
+      const skyDay = 0x77a4ff, skyNight = 0x0a1230;
+      T.scene.background.set(night ? skyNight : skyDay);
+      if (T.scene.fog) T.scene.fog.color.set(night ? skyNight : skyDay);
+      T.sky.hemi.intensity = night ? 0.25 : 0.85;
+      T.sky.hemi.color.set(night ? 0x33456e : 0xbdd8ff);
+      T.sun.intensity = night ? 0.14 : 0.95; // moonlight at night
+      T.sun.color.set(night ? 0x9db4ff : 0xfff3d6);
+      T.sky.sunSprite.visible = !night;
+      T.sky.moonSprite.visible = night;
+      T.sky.stars.visible = night;
+      // clouds tint with the sky (they share one material)
+      if (T.clouds && T.clouds.length && T.clouds[0].userData.cloudMat) {
+        T.clouds[0].userData.cloudMat.color.set(night ? 0x2a3a5f : 0xffffff);
+      }
+      // lamp heads always glow a little; at night they blaze
+      if (T.group) {
+        T.group.traverse((o) => {
+          if (o.userData && o.userData.lampHead && o.material) {
+            o.material.emissiveIntensity = night ? 1.3 : 0.15;
+          }
+        });
+      }
+      // real warm point lights, capped: nearest lamps to the camera win
+      clearLampLights();
+      if (night && T.lamps && T.lamps.length && T.camera) {
+        const ids = nearestLampIds(T.lamps, T.camera.position.x, T.camera.position.z, MAX_LAMP_LIGHTS);
+        ids.forEach((i) => {
+          const p = T.lamps[i];
+          const pl = new THREE.PointLight(0xffb45e, 1.4, 14, 2);
+          pl.position.set(p.x, p.y + 0.3, p.z);
+          T.scene.add(pl);
+          T.lampLights.push(pl);
+        });
+      }
+    }
+
+    function toggleDayNight() {
+      dayNight = dayNight === 'day' ? 'night' : 'day';
+      applyDayNight();
+      paintViewButtons();
+      render3D();
     }
 
     /* ---------------- walk mode ---------------- */
@@ -1403,7 +1664,9 @@
     function walkColliders() {
       const boxes = [];
       (containers || []).forEach((c) => {
-        if ((c.kind || 'grow bag') === 'arch') return;
+        const kind = c.kind || 'grow bag';
+        if (kind === 'arch') return; // walk under
+        if (kind === 'path') return; // flat slab: walked over, not into
         const w = c.grid_w || 1, h = c.grid_h || 1;
         const cx = (c.grid_x || 0) + w / 2 - cols / 2;
         const cz = (c.grid_y || 0) + h / 2 - rows / 2;
@@ -1476,6 +1739,7 @@
       }
       movePlayer(dt);
       updateGhost();
+      driftClouds(dt); // slow cloud drift, walk mode only (battery-friendly)
       render3D();
       return true;
     }
@@ -1536,9 +1800,13 @@
     wrap3d._walk = { // handle for tests / debugging
       resolvePlayerCollision, mulberry32, plantArchetype, walkColliders, makePixTexture,
       archArcPoint, archRibCells, archRibCount, archVineOffset,
+      fenceSides, fenceCells, nearestLampIds, driftClouds,
+      get dayNight() { return dayNight; },
+      _toggleDayNight: () => toggleDayNight(),
       painters: {
         paintGrassTop, paintDirtSide, paintDirt, paintWoodPlanks, paintDarkWood,
         paintSoil, paintFabric, paintTerracotta, paintLeafBlob, paintMetal, paintWireMesh,
+        paintBucket, paintStone,
         paintSprite, SPRITES,
       },
       get mode() { return walkMode; },
@@ -1567,6 +1835,10 @@
         { key: 'pallet', emoji: '🟤', label: 'Pallet' },
         { key: 'arch', emoji: '⛩️', label: 'Arch' },
         { key: 'cold frame', emoji: '🪟', label: 'ColdFr' },
+        { key: 'lamp', emoji: '💡', label: 'Lamp' },
+        { key: 'fence', emoji: '⛓️', label: 'Fence' },
+        { key: 'bucket', emoji: '🪣', label: 'Bucket' },
+        { key: 'path', emoji: '🪨', label: 'Path' },
       ],
       plants: [
         { key: 'tomato', emoji: '🍅', label: 'Tomato', species: 'Tomato' },
@@ -1629,7 +1901,7 @@
     wrap3d.appendChild(hotbar);
 
     function paintHotbar() {
-      hotbarTab.textContent = (buildTab === 'blocks' ? '▣ BLOCKS' : '❀ PLANTS') + ' · Q switch · 1-7/wheel pick';
+      hotbarTab.textContent = (buildTab === 'blocks' ? '▣ BLOCKS' : '❀ PLANTS') + ' · Q switch · 1-9/wheel pick';
       hotbarTab.style.cssText = 'color:#fff;font-size:11px;font-weight:700;letter-spacing:1px;' +
         'text-shadow:0 1px 2px #000;margin-bottom:4px;';
       hotbarSlots.innerHTML = buildSlots().map((s, i) => {
@@ -1795,6 +2067,10 @@
       ghost = new THREE.Group();
       if (sel.key === 'arch') buildArch(THREE, ghost, 1, 1, 4, T.TEX);
       else if (sel.key === 'pallet') buildPallet(THREE, ghost, 1, 1, T.TEX);
+      else if (sel.key === 'lamp') buildLamp(THREE, ghost, 1, 1, T.TEX);
+      else if (sel.key === 'fence') buildFence(THREE, ghost, 1, 1, T.TEX, fenceSides(cell.gx, cell.gy, fenceCells(containers)));
+      else if (sel.key === 'bucket') buildBucket(THREE, ghost, T.TEX);
+      else if (sel.key === 'path') buildPath(THREE, ghost, T.TEX);
       else buildVessel(THREE, ghost, 1, 1, sel.key, T.TEX);
       const tint = new THREE.Color(ok ? 0x00cc44 : 0xcc2222);
       ghost.traverse((o) => {
@@ -1830,7 +2106,7 @@
         if (!walkMode || buildTyping()) return;
         if (e.code === 'KeyQ') buildToggleTab();
         else if (e.code === 'KeyE') editAim();
-        else if (/^Digit[1-7]$/.test(e.code)) buildSelect(Number(e.code.slice(5)) - 1);
+        else if (/^Digit[1-9]$/.test(e.code)) buildSelect(Number(e.code.slice(5)) - 1);
       });
     }
 
@@ -1853,6 +2129,10 @@
       view3dBtn.className = (view === '3d' && !walkMode) ? on : off;
       if (viewWalkBtn) {
         viewWalkBtn.className = (walkMode ? on : off) + (view === '3d' ? '' : ' hidden');
+      }
+      if (dayNightBtn) {
+        dayNightBtn.className = (view === '3d' ? '' : ' hidden') + ' ' + (dayNight === 'night' ? on : off);
+        dayNightBtn.textContent = dayNight === 'night' ? '🌙 Night' : '☀️ Day';
       }
     }
 
@@ -1890,6 +2170,9 @@
         if (walkMode) exitWalkMode();
         else enterWalkMode();
       });
+    }
+    if (dayNightBtn) {
+      dayNightBtn.addEventListener('click', () => { if (view === '3d') toggleDayNight(); });
     }
     if (typeof window !== 'undefined' && window.addEventListener) {
       window.addEventListener('resize', () => { if (view === '3d') sizeThree(); });

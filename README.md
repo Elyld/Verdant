@@ -284,7 +284,7 @@ plank-sided raised beds, terracotta pots, fabric grow bags, and cross-quad
 pixel plants (tomatoes even grow tiny red fruit). Hit **🚶 Walk** to drop to
 eye level and stroll between the beds with WASD + mouse (Shift to sprint).
 Walk mode is **⛏️ creative mode**: a Minecraft-style hotbar (Q switches between
-**BLOCKS** and **PLANTS**, 1–7 or the mouse wheel picks a slot, everything is
+**BLOCKS** and **PLANTS**, 1–9 or the mouse wheel picks a slot, everything is
 ∞) lets you build the garden by walking around it — **left-click breaks** the
 aimed planting or container (breaking a planted container asks first), and
 **right-click places** the selected block on the aimed grass cell — a green/red
@@ -948,15 +948,20 @@ server local time. Test with `POST /api/digest/send`.
 ## Changelog
 
 - **2.61.0** — **⛏️ Creative-mode building in the planner.** Walk mode grew a
-  Minecraft hotbar: 7 BLOCKS (bed, bag, pot, planter, pallet, arch, cold
-  frame) and 6 PLANTS (tomato, pepper, basil, lettuce, carrot, flower), all
-  infinite. **Left-click breaks** the aimed planting or container — breaking a
+  Minecraft hotbar: 11 BLOCKS (bed, bag, pot, planter, pallet, arch, cold
+  frame, lamp, fence, bucket, path) and 6 PLANTS (tomato, pepper, basil,
+  lettuce, carrot, flower), all infinite. **Left-click breaks** the aimed planting or container — breaking a
   container that holds plantings asks for confirmation first, and the ground
   itself can't be broken. **Right-click places** the selected block on the
   aimed 1-ft grass cell with a green/red ghost preview, or plants the selected
-  seedling into the aimed container. **Q** switches tabs, **1–7**/wheel picks
+  seedling into the aimed container. **Q** switches tabs, **1–9**/wheel picks
   slots, **E** edits the aimed container. Everything goes through the real
   API; the 3D scene refreshes after each change without leaving first person.
+  World dressing: **☀️/🌙 day/night toggle** (blocky square sun, drifting
+  clouds, starfield and glowing lamps at night), plus new placeables — **💡
+  lamp posts** (real point lights at night, capped at 8 for perf), **⛓️
+  chain-link fence** (segments auto-connect into runs), **🪣 5-gal buckets**,
+  and **🪨 stone path slabs** (flat enough to walk over).
 
 - **2.60.0** — **⛏️ The planner goes Minecraft.** The 3D view is now a voxel
   world: 16×16 pixel textures with crisp NearestFilter rendering, grass-block

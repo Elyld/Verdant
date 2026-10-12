@@ -51,7 +51,7 @@ function makeEl() {
 const named = {};
 ['panel-planner', 'planner-canvas', 'planner-3d', 'planner-empty',
  'planner-2d-hint', 'planner-3d-hint',
- 'view-2d', 'view-3d',
+ 'view-2d', 'view-3d', 'view-walk', 'view-daynight',
  'planner-year', 'planner-copy', 'planner-add',
  'grid-cols', 'grid-rows', 'grid-apply',
  'rotation-banner', 'rotation-list', 'rotation-dismiss',
@@ -261,14 +261,14 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
   check('cellFree ignoreId still blocked by others', buildApi.cellFree(9, 3, 1, 1, clist, 24, 16, 12) === false);
 
   // hotbar tabs / selection
-  check('hotbar starts on blocks tab', buildApi.tab === 'blocks' && buildApi.buildSlots().length === 7);
+  check('hotbar starts on blocks tab', buildApi.tab === 'blocks' && buildApi.buildSlots().length === 11);
   buildApi.buildSelect(2);
   check('buildSelect sets index', buildApi.index === 2 && buildApi.buildSelected().key === 'pot');
   buildApi.buildCycle(1);
   check('buildCycle forward', buildApi.index === 3);
   buildApi.buildCycle(-1);
   check('buildCycle backward', buildApi.index === 2);
-  buildApi.buildSelect(6);
+  buildApi.buildSelect(10);
   buildApi.buildCycle(1);
   check('buildCycle wraps around', buildApi.index === 0);
   buildApi.buildToggleTab();
@@ -319,6 +319,55 @@ const fire = (el, type, ev) => (el._listeners[type] || []).forEach((fn) => fn(ev
     if (Math.abs(Math.hypot(vo.x, vo.y) - 0.16) > 1e-9) vineOk = false;
   }
   check('vine blobs hug the rib (0.16 outward offset)', vineOk);
+
+  // ---- world dressing: fence auto-connect, lamp light cap, day/night ----
+  // fenceSides: single fence = post only; neighbors add mesh per side
+  const noFence = walkApi.fenceCells([]);
+  check('lone fence has no mesh sides', Object.values(walkApi.fenceSides(5, 5, noFence)).every((v) => v === false));
+  const rowCells = walkApi.fenceCells([
+    { kind: 'fence', grid_x: 4, grid_y: 5, grid_w: 1, grid_h: 1 },
+    { kind: 'fence', grid_x: 5, grid_y: 5, grid_w: 1, grid_h: 1 },
+    { kind: 'fence', grid_x: 6, grid_y: 5, grid_w: 1, grid_h: 1 },
+  ]);
+  const mid = walkApi.fenceSides(5, 5, rowCells);
+  check('middle of fence run meshes east+west only', mid.e === true && mid.w === true && mid.n === false && mid.s === false);
+  const end = walkApi.fenceSides(4, 5, rowCells);
+  check('fence run end meshes one side', end.e === true && end.w === false && end.n === false && end.s === false);
+  const cornerCells = walkApi.fenceCells([
+    { kind: 'fence', grid_x: 2, grid_y: 2, grid_w: 1, grid_h: 1 },
+    { kind: 'fence', grid_x: 3, grid_y: 2, grid_w: 1, grid_h: 1 },
+    { kind: 'fence', grid_x: 3, grid_y: 3, grid_w: 1, grid_h: 1 },
+  ]);
+  const corner = walkApi.fenceSides(3, 2, cornerCells);
+  check('fence corner meshes two adjacent sides', corner.w === true && corner.s === true && corner.n === false && corner.e === false);
+  check('non-fence kinds ignored by fenceCells', walkApi.fenceCells([{ kind: 'lamp', grid_x: 9, grid_y: 9 }]).size === 0);
+  // multi-cell fence covers its full rect
+  const big = walkApi.fenceCells([{ kind: 'fence', grid_x: 0, grid_y: 0, grid_w: 2, grid_h: 1 }]);
+  check('resized fence covers both cells', big.has('0,0') && big.has('1,0'));
+
+  // nearestLampIds: capped at N nearest, by squared distance
+  const lamps = [{ x: 0, z: 0 }, { x: 10, z: 0 }, { x: 3, z: 4 }, { x: 1, z: 1 }];
+  const near2 = walkApi.nearestLampIds(lamps, 0, 0, 2);
+  check('nearest 2 lamps win the light cap', near2.length === 2 && near2[0] === 0 && near2[1] === 3);
+  check('cap larger than lamp count returns all', walkApi.nearestLampIds(lamps, 0, 0, 20).length === 4);
+  check('no lamps, no lights', walkApi.nearestLampIds([], 0, 0, 8).length === 0);
+
+  // day/night toggle flips state (scene ops no-op without THREE in node)
+  check('starts in day mode', walkApi.dayNight === 'day');
+  walkApi._toggleDayNight();
+  check('toggle flips to night', walkApi.dayNight === 'night');
+  walkApi._toggleDayNight();
+  check('toggle flips back to day', walkApi.dayNight === 'day');
+
+  // hotbar grew: 11 blocks, new kinds present
+  const blockKeys = buildApi.buildSlots().map((s) => s.key);
+  check('BLOCKS hotbar has 11 slots', blockKeys.length === 11);
+  check('new dressing kinds in hotbar', ['lamp', 'fence', 'bucket', 'path'].every((k) => blockKeys.includes(k)));
+  buildApi._setTab('blocks');
+  buildApi.buildSelect(10);
+  check('slot 11 selectable (wheel cycles all)', buildApi.buildSelected().key === 'path');
+  buildApi.buildSelect(11);
+  check('selection wraps past the end', buildApi.buildSelected().key === 'raised bed');
 
   console.log(failures ? `\n${failures} check(s) failed.` : '\nAll checks passed.');
   process.exit(failures ? 1 : 0);
