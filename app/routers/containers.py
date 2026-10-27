@@ -359,6 +359,10 @@ def yield_map(
 
 @router.post("/", response_model=Container, status_code=201)
 def create_container(payload: dict, session: Session = Depends(get_session)) -> Container:
+    """Create a container. ``grid_x``/``grid_y`` are honoured when both are
+    supplied (clamped inside the grid, collision-checked like PATCH — an
+    overlapping spot is a 422); otherwise the container is auto-placed in
+    the first free spot, as before."""
     name = (payload.get("name") or "").strip()
     if not name:
         raise HTTPException(status_code=422, detail="name is required")
@@ -372,13 +376,25 @@ def create_container(payload: dict, session: Session = Depends(get_session)) -> 
         h = max(1, min(rows, int(payload.get("grid_h", dh))))
     except (TypeError, ValueError):
         w, h = dw, dh
-    spot = first_free_spot(session, year, w, h, cols, rows)
-    if spot is None:
-        raise HTTPException(
-            status_code=409,
-            detail="The planner grid is full — make room or enlarge the grid in Settings.",
+    raw_gx, raw_gy = payload.get("grid_x"), payload.get("grid_y")
+    if raw_gx not in (None, "") and raw_gy not in (None, ""):
+        try:
+            gx = max(0, min(cols - w, int(raw_gx)))
+            gy = max(0, min(rows - h, int(raw_gy)))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail="grid_x/grid_y must be whole numbers.")
+        _assert_no_overlap(
+            session,
+            Container(season_year=year, grid_x=gx, grid_y=gy, grid_w=w, grid_h=h),
         )
-    gx, gy = spot
+    else:
+        spot = first_free_spot(session, year, w, h, cols, rows)
+        if spot is None:
+            raise HTTPException(
+                status_code=409,
+                detail="The planner grid is full — make room or enlarge the grid in Settings.",
+            )
+        gx, gy = spot
     raw_h = payload.get("height_ft")
     try:
         height_ft = float(raw_h) if raw_h not in (None, "") else default_height(kind)

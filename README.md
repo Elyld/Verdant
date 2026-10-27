@@ -143,6 +143,46 @@ what they are.
 
 ![Match photos to plants & seed packets](docs/screenshots/match.png)
 
+#### 🏷️ Photo tagging & attribution
+A photo can be **tagged and linked at the same time** — tags never wipe a
+plant assignment. On the Match page, the **Tags, notes & container** card
+offers the seeded vocabulary as checkboxes (plus free-text tags), a
+caption/note field, and a container picker, so a bed's build photos can
+live on the bed even while they also show a plant. Tags show as chips on
+the Match page and in the slideshow, and the Match page can filter by tag.
+The vocabulary (`GET /api/album-images/vocabulary`):
+
+| Tag | What it covers |
+| --- | --- |
+| `seed-starting` | Trays, cups, grow lights, seedlings |
+| `flower` | Flowers, buds, husks (no variety recoverable) |
+| `plan` | Hand-drawn layouts, sketches, graph paper |
+| `harvest` | Harvest spreads, plates, curing crops |
+| `wide-shot` | Full-garden / yard overviews |
+| `soil-prep` | Mulch, cracked ground, bed building, fill |
+| `pest-disease` | Bugs, mildew, leaf damage, sunscald |
+| `supplies` | Soil bags, bins, pots, pallets, setups |
+| `structure` | Trellises, cages, greenhouse, raised beds |
+| `unidentified` | Nothing recoverable |
+
+The same release also lands the smaller attribution items: `POST
+/api/containers/` now honours `grid_x`/`grid_y` (clamped inside the grid,
+422 on overlap — otherwise it still auto-places); plants gain a **Culled**
+status for healthy-but-removed plants, and every status change stamps
+`status_changed_at`; observations can leave `health_scale` unset instead
+of silently recording a default 5 (averages skip unset scores); pest
+entries gain a severity and a resolved date, stamped automatically when
+you hit Resolve; the Photos page warns about duplicate album names and
+offers the merge, and Immich gains a **Sync all albums** action that
+stamps `last_synced_at` per album — and the batch import no longer
+demands `album_id` for `offset > 0`, resolving the local album from its
+Immich source instead.
+
+> Screenshots for the new tagging card, duplicate-name banner, and
+> sync-all button are still to be captured on a live instance — this
+> release was built in a sandbox with no headless browser available, so
+> no screenshots were faked for it.
+
 There's also a dedicated full-screen slideshow page — pick an album, pick an
 interval, and let the garden scroll by on a TV or tablet.
 
@@ -958,6 +998,20 @@ server local time. Test with `POST /api/digest/send`.
 
 ## Changelog
 
+- **2.64.0** — **🏷️ Photo tagging & attribution.** Photos can be tagged
+  *and* linked: `tags` (array), `notes`, and `container_id` are writable on
+  PATCH `/api/album-images/{id}` and POST `/api/album-images/bulk-assign`
+  without disturbing plant/seed-packet links, plus a `?tag=` filter (exact
+  token, case-insensitive) and `GET /api/album-images/vocabulary` with the
+  seeded 10-tag vocabulary. Match page gains tag checkboxes, a notes field,
+  a container picker, and tag chips; the slideshow shows chips + notes.
+  Also: container POST honours `grid_x`/`grid_y` (422 on overlap); plants
+  gain a Culled status + `status_changed_at`; observations allow an unset
+  `health_scale`; pests gain severity + auto-stamped resolved date; Photos
+  page warns on duplicate album names; Immich gains sync-all with
+  `last_synced_at` per album and the batch import resolves the local album
+  by source when `album_id` is omitted. Planner L/U shapes and the
+  plant-row suggestion screen are deferred (see the PR description).
 - **2.63.0** — **A gardener walks your 3D garden.** Walk mode grew a
   third-person character: a warm clay-tinted Quaternius figure (CC0, 8 real
   animation clips) in a procedural straw hat, ~5.5ft tall, strolling the

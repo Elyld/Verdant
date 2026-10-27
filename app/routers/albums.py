@@ -7,10 +7,11 @@ from typing import List, Optional
 
 import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from app.database import get_session
-from app.models import Album, AlbumImage, Plant, SeedPacket
+from app.models import Album, AlbumImage, Container, Plant, SeedPacket
 from app.routers.immich import _asset_metadata
 from app import immich as immich_client
 from app.schemas import (
@@ -108,6 +109,29 @@ async def create_album(
         session.refresh(album)
 
     return AlbumCreateResult(album=album, created=created, failed=0)
+
+
+@router.get("/api/albums/duplicate-names")
+def duplicate_album_names(session: Session = Depends(get_session)) -> List[dict]:
+    """Albums sharing a name (e.g. three "Plants 2025" from repeat imports).
+
+    Drives the duplicate-name banner on the Photos page; the existing
+    POST /api/albums/merge-duplicates folds same-source dupes together.
+    Groups are by exact name, not by source album.
+    """
+    albums = session.exec(select(Album).order_by(Album.id)).all()
+    groups: dict[str, list] = {}
+    for album in albums:
+        groups.setdefault(album.name, []).append(album)
+    return [
+        {
+            "name": name,
+            "album_ids": [a.id for a in dupes],
+            "counts": [len(a.images) for a in dupes],
+        }
+        for name, dupes in groups.items()
+        if len(dupes) > 1
+    ]
 
 
 @router.get("/api/albums/{album_id}", response_model=AlbumRead)
@@ -400,15 +424,101 @@ def add_from_album(
 
 
 # ---------------------------------------------------------------------------
-# Photo <-> plant/packet matching (the /match page)
+# Photo <-> plant/packet/container matching (the /match page)
 # ---------------------------------------------------------------------------
 
+# Controlled photo-tag vocabulary, seeded from what the 2026 album actually
+# contains (see the photo-attribution handoff). Free-text tags are still
+# accepted — this list is what the UI offers as checkboxes, not a whitelist.
+PHOTO_TAG_VOCABULARY = [
+    {"tag": "seed-starting", "description": "Trays, cups, grow lights, seedlings"},
+    {"tag": "flower", "description": "Flowers, buds, husks (no variety recoverable)"},
+    {"tag": "plan", "description": "Hand-drawn layouts, sketches, graph paper"},
+    {"tag": "harvest", "description": "Harvest spreads, plates, curing crops"},
+    {"tag": "wide-shot", "description": "Full-garden / yard overviews"},
+    {"tag": "soil-prep", "description": "Mulch, cracked ground, bed building, fill"},
+    {"tag": "pest-disease", "description": "Bugs, mildew, leaf damage, sunscald"},
+    {"tag": "supplies", "description": "Soil bags, bins, pots, pallets, setups"},
+    {"tag": "structure", "description": "Trellises, cages, greenhouse, raised beds"},
+    {"tag": "unidentified", "description": "Nothing recoverable"},
+]
 
-def _image_read(img: AlbumImage, variety: Optional[str], packet_variety: Optional[str]) -> AlbumImageRead:
+MAX_TAGS_PER_PHOTO = 20
+MAX_TAG_LENGTH = 60
+
+
+def _normalize_tags(tags: Optional[List[str]]) -> str:
+    """A tags array -> the comma-separated string stored on AlbumImage.
+
+    Lowercased, trimmed, de-duplicated (order preserved), capped — so the
+    ``?tag=`` filter can match whole tokens instead of substrings.
+    ``None``/empty clears the tags.
+    """
+    if not tags:
+        return ""
+    seen, out = set(), []
+    for raw in tags:
+        tag = (raw or "").strip().lower()
+        if not tag or tag in seen or len(tag) > MAX_TAG_LENGTH:
+            continue
+        seen.add(tag)
+        out.append(tag)
+        if len(out) >= MAX_TAGS_PER_PHOTO:
+            break
+    return ", ".join(out)[:500]
+
+
+def _tag_filter(stmt, tag: str):
+    """Restrict a statement to photos carrying one whole tag token.
+
+    Token-exact (``flower`` must not match ``flowers``) and case-insensitive,
+    implemented as LIKE patterns so it composes with the query's LIMIT/OFFSET.
+    """
+    token = tag.strip().lower()
+    if not token:
+        return stmt
+    escaped = (
+        token.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    )
+    col = func.lower(AlbumImage.tags)
+    return stmt.where(
+        (col == token)
+        | col.like(f"{escaped}, %", escape="\\")
+        | col.like(f"%, {escaped}, %", escape="\\")
+        | col.like(f"%, {escaped}", escape="\\")
+    )
+
+
+def _image_read(
+    img: AlbumImage,
+    variety: Optional[str],
+    packet_variety: Optional[str],
+    container_name: Optional[str] = None,
+) -> AlbumImageRead:
     read = AlbumImageRead.model_validate(img)
     read.plant_variety = variety
     read.packet_variety = packet_variety
+    read.container_name = container_name
     return read
+
+
+def _image_read_full(session: Session, img: AlbumImage) -> AlbumImageRead:
+    """Build an AlbumImageRead with all link names filled in."""
+    plant = session.get(Plant, img.plant_id) if img.plant_id else None
+    packet = session.get(SeedPacket, img.seed_packet_id) if img.seed_packet_id else None
+    container = session.get(Container, img.container_id) if img.container_id else None
+    return _image_read(
+        img,
+        plant.variety_name if plant else None,
+        packet.variety_name if packet else None,
+        container.name if container else None,
+    )
+
+
+@router.get("/api/album-images/vocabulary")
+def photo_tag_vocabulary() -> dict:
+    """The seeded photo-tag vocabulary (descriptions included for UI tooltips)."""
+    return {"tags": PHOTO_TAG_VOCABULARY}
 
 
 @router.get("/api/album-images/", response_model=List[AlbumImageRead])
@@ -416,23 +526,28 @@ def list_album_images(
     album_id: Optional[int] = None,
     plant_id: Optional[int] = None,
     seed_packet_id: Optional[int] = None,
+    container_id: Optional[int] = None,
+    tag: Optional[str] = None,
     unassigned_only: bool = False,
     limit: int = 200,
     offset: int = 0,
     session: Session = Depends(get_session),
 ) -> List[AlbumImageRead]:
-    """List album photos, oldest-taken first, with their plant/packet assignment.
+    """List album photos, oldest-taken first, with their plant/packet/container assignment.
 
     Filters: ``album_id``, ``plant_id`` (photos of one plant),
-    ``seed_packet_id`` (photos of one seed packet), or ``unassigned_only``
-    for the matching workflow (neither a plant nor a packet assigned).
+    ``seed_packet_id`` (photos of one seed packet), ``container_id``
+    (photos of one container), ``tag`` (photos carrying one tag token), or
+    ``unassigned_only`` for the matching workflow (neither a plant nor a
+    packet assigned — tags alone do not count as assigned).
     """
     limit = max(1, min(limit, 1000))
     offset = max(0, offset)
     stmt = (
-        select(AlbumImage, Plant.variety_name, SeedPacket.variety_name)
+        select(AlbumImage, Plant.variety_name, SeedPacket.variety_name, Container.name)
         .outerjoin(Plant, Plant.id == AlbumImage.plant_id)
         .outerjoin(SeedPacket, SeedPacket.id == AlbumImage.seed_packet_id)
+        .outerjoin(Container, Container.id == AlbumImage.container_id)
         .order_by(
             AlbumImage.taken_at.is_(None),
             AlbumImage.taken_at,
@@ -447,10 +562,55 @@ def list_album_images(
         stmt = stmt.where(AlbumImage.plant_id == plant_id)
     if seed_packet_id is not None:
         stmt = stmt.where(AlbumImage.seed_packet_id == seed_packet_id)
+    if container_id is not None:
+        stmt = stmt.where(AlbumImage.container_id == container_id)
+    if tag is not None:
+        stmt = _tag_filter(stmt, tag)
     if unassigned_only:
         stmt = stmt.where(AlbumImage.plant_id.is_(None), AlbumImage.seed_packet_id.is_(None))
     rows = session.exec(stmt).all()
-    return [_image_read(img, variety, pkt_variety) for img, variety, pkt_variety in rows]
+    return [
+        _image_read(img, variety, pkt_variety, container_name)
+        for img, variety, pkt_variety, container_name in rows
+    ]
+
+
+def _apply_target_fields(session: Session, img: AlbumImage, body, provided: set) -> None:
+    """Apply plant/packet/container/tags/notes from an assign request.
+
+    Only fields explicitly present in the request are touched — this is what
+    makes tags independent of the plant link: a tag-only PATCH or bulk-assign
+    must never wipe a plant assignment. Plant and packet stay mutually
+    exclusive with each other (both explicitly null unassigns, as before).
+    """
+    if "plant_id" in provided or "seed_packet_id" in provided:
+        if body.seed_packet_id is not None:
+            packet = session.get(SeedPacket, body.seed_packet_id)
+            if packet is None:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Seed packet not found")
+            img.seed_packet_id = body.seed_packet_id
+            img.plant_id = None
+        elif body.plant_id is not None:
+            plant = session.get(Plant, body.plant_id)
+            if plant is None:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Plant not found")
+            img.plant_id = body.plant_id
+            img.seed_packet_id = None
+        else:
+            img.plant_id = None
+            img.seed_packet_id = None
+    if "container_id" in provided:
+        if body.container_id is None:
+            img.container_id = None
+        else:
+            container = session.get(Container, body.container_id)
+            if container is None:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Container not found")
+            img.container_id = body.container_id
+    if "tags" in provided:
+        img.tags = _normalize_tags(body.tags)
+    if "notes" in provided:
+        img.notes = (body.notes or "")[:2000]
 
 
 @router.patch("/api/album-images/{image_id}", response_model=AlbumImageRead)
@@ -459,36 +619,16 @@ def assign_album_image(
     body: ImageAssignRequest,
     session: Session = Depends(get_session),
 ) -> AlbumImageRead:
-    """Assign a photo to a plant or a seed packet (both null unassigns it).
-
-    Plant and packet are mutually exclusive — assigning one clears the other.
-    """
+    """Assign a photo to a plant, a seed packet, and/or a container, and/or
+    set its tags and notes. Only fields present in the request change."""
     img = session.get(AlbumImage, image_id)
     if img is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Photo not found")
-    variety: Optional[str] = None
-    packet_variety: Optional[str] = None
-    if body.seed_packet_id is not None:
-        packet = session.get(SeedPacket, body.seed_packet_id)
-        if packet is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Seed packet not found")
-        packet_variety = packet.variety_name
-        img.seed_packet_id = body.seed_packet_id
-        img.plant_id = None
-    elif body.plant_id is not None:
-        plant = session.get(Plant, body.plant_id)
-        if plant is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Plant not found")
-        variety = plant.variety_name
-        img.plant_id = body.plant_id
-        img.seed_packet_id = None
-    else:
-        img.plant_id = None
-        img.seed_packet_id = None
+    _apply_target_fields(session, img, body, body.model_fields_set)
     session.add(img)
     session.commit()
     session.refresh(img)
-    return _image_read(img, variety, packet_variety)
+    return _image_read_full(session, img)
 
 
 @router.post("/api/album-images/bulk-assign")
@@ -496,23 +636,20 @@ def bulk_assign_album_images(
     body: ImageBulkAssignRequest,
     session: Session = Depends(get_session),
 ) -> dict:
-    """Assign many photos to one plant or one seed packet at once (both null unassigns)."""
+    """Assign many photos at once. Tags, notes and container links are
+    independent of the plant/packet link — a tag-only call leaves existing
+    plant assignments exactly as they were."""
+    provided = body.model_fields_set
     if body.seed_packet_id is not None and session.get(SeedPacket, body.seed_packet_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Seed packet not found")
     if body.plant_id is not None and session.get(Plant, body.plant_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Plant not found")
+    if body.container_id is not None and session.get(Container, body.container_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Container not found")
     ids = list(dict.fromkeys(body.image_ids))
     images = session.exec(select(AlbumImage).where(AlbumImage.id.in_(ids))).all()
     for img in images:
-        if body.seed_packet_id is not None:
-            img.seed_packet_id = body.seed_packet_id
-            img.plant_id = None
-        elif body.plant_id is not None:
-            img.plant_id = body.plant_id
-            img.seed_packet_id = None
-        else:
-            img.plant_id = None
-            img.seed_packet_id = None
+        _apply_target_fields(session, img, body, provided)
         session.add(img)
     session.commit()
     return {"updated": len(images)}

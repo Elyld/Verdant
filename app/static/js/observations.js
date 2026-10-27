@@ -90,6 +90,13 @@
     wireDraft(fertForm, 'verdant.draft.fert', ['#fert-date', '#fert-name', '#fert-npk', '#fert-amount', '#fert-amount-value', '#fert-amount-unit', '#fert-notes', '#fert-plant-link']);
     wireDraft(obsForm, 'verdant.draft.obs', ['#obs-date', '#obs-plant', '#obs-plant-link', '#obs-health', '#obs-water', '#obs-pests', '#obs-notes']);
     $('#obs-health').addEventListener('input', () => { $('#obs-health-out').textContent = $('#obs-health').value; });
+    const obsHealthNone = $('#obs-health-none');
+    if (obsHealthNone) {
+      obsHealthNone.addEventListener('change', () => {
+        $('#obs-health').disabled = obsHealthNone.checked;
+        $('#obs-health-out').textContent = obsHealthNone.checked ? '—' : $('#obs-health').value;
+      });
+    }
 
     async function loadPlantLinks() {
       try {
@@ -148,10 +155,10 @@
     obsForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       try {
-        const payload = { date: $('#obs-date').value, plant_name: $('#obs-plant').value.trim(), plant_id: $('#obs-plant-link')?.value ? Number($('#obs-plant-link').value) : null, health_scale: Number($('#obs-health').value), watering_status: $('#obs-water').value === 'true', pest_sightings: $('#obs-pests').value.trim(), notes: $('#obs-notes').value };
+        const payload = { date: $('#obs-date').value, plant_name: $('#obs-plant').value.trim(), plant_id: $('#obs-plant-link')?.value ? Number($('#obs-plant-link').value) : null, health_scale: $('#obs-health-none').checked ? null : Number($('#obs-health').value), watering_status: $('#obs-water').value === 'true', pest_sightings: $('#obs-pests').value.trim(), notes: $('#obs-notes').value };
         const observation = editingObs ? await api.patch(`/api/observations/${editingObs}`, payload) : await api.post('/api/observations', payload);
         if (!editingObs) await uploadFiles(`/api/observations/${observation.id}/images`, $('#obs-images').files);
-        editingObs = null; obsForm.reset(); localStorage.removeItem('verdant.draft.obs'); $('#obs-date').value = today; $('#obs-health-out').textContent = '5';
+        editingObs = null; obsForm.reset(); localStorage.removeItem('verdant.draft.obs'); $('#obs-date').value = today; $('#obs-health-out').textContent = '5'; $('#obs-health').disabled = false;
         $('button[type="submit"]', obsForm).textContent = 'Add observation';
         toast('Observation saved 🔍', 'ok'); obsPage = 0; await Promise.all([loadObs(), renderStats()]);
       } catch (error) { toast(`Could not save: ${error.message}`, 'err'); }
@@ -166,7 +173,7 @@
       }
       if (obsButton) {
         const item = observations.find((entry) => entry.id === Number(obsButton.dataset.editObs));
-        editingObs = item.id; $('#obs-date').value = item.date; $('#obs-plant').value = item.plant_name; const obsLink = $('#obs-plant-link'); if (obsLink && item.plant_id) obsLink.value = String(item.plant_id); $('#obs-health').value = item.health_scale; $('#obs-health-out').textContent = item.health_scale; $('#obs-water').value = String(item.watering_status); $('#obs-pests').value = item.pest_sightings; $('#obs-notes').value = item.notes;
+        editingObs = item.id; $('#obs-date').value = item.date; $('#obs-plant').value = item.plant_name; const obsLink = $('#obs-plant-link'); if (obsLink && item.plant_id) obsLink.value = String(item.plant_id); const noneBox = $('#obs-health-none'); if (noneBox) { noneBox.checked = item.health_scale == null; $('#obs-health').disabled = item.health_scale == null; } $('#obs-health').value = item.health_scale ?? 5; $('#obs-health-out').textContent = item.health_scale == null ? '—' : item.health_scale; $('#obs-water').value = String(item.watering_status); $('#obs-pests').value = item.pest_sightings; $('#obs-notes').value = item.notes;
         $('button[type="submit"]', obsForm).textContent = 'Save changes'; obsForm.scrollIntoView({ behavior: 'smooth' });
       }
     });

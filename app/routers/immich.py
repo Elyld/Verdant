@@ -18,7 +18,7 @@ from sqlmodel import Session, select
 
 from app import immich
 from app.database import UPLOAD_DIR, get_session
-from app.models import Album, AlbumImage
+from app.models import Album, AlbumImage, utcnow
 from app.schemas import ImmichBatchImportResult
 from app.storage import ALLOWED_TYPES, _sniff
 
@@ -132,6 +132,12 @@ def import_immich_album(
     ``done`` is true, so albums of any size import without hitting request
     timeouts. Batches are idempotent: assets already imported (matched by
     ``source_url``) are skipped, so a retried batch never creates dupes.
+
+    ``album_id`` is optional: when omitted, the local album is resolved from
+    the Immich album's ``source_url`` (an album imported before keeps its
+    identity across batches, so later batches no longer need the caller to
+    remember the local id). When the final batch completes, the album's
+    ``last_synced_at`` is stamped.
     """
     if offset < 0 or limit < 1 or limit > BATCH_MAX:
         raise HTTPException(
@@ -145,16 +151,11 @@ def import_immich_album(
     if total == 0:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="That Immich album has no assets.")
 
+    source = f"immich:{immich_album_id}"
     if album_id is None:
-        if offset != 0:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail="album_id is required when offset > 0",
-            )
         # Re-importing the same Immich album must land in the existing local
         # album, not create a duplicate (Plants 2025 x3). The per-asset skip
         # below keeps it idempotent.
-        source = f"immich:{immich_album_id}"
         album = session.exec(select(Album).where(Album.source_url == source)).first()
         if album is not None:
             remote_name = remote.get("albumName") or "Immich import"
@@ -163,6 +164,14 @@ def import_immich_album(
                 session.add(album)
                 session.commit()
         else:
+            if offset != 0:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "No local album found for this Immich album yet — "
+                        "start the import at offset 0 first."
+                    ),
+                )
             album = Album(
                 name=remote.get("albumName") or "Immich import",
                 source_url=source,
@@ -177,13 +186,113 @@ def import_immich_album(
         # Don't mix Immich imports into an album that came from somewhere
         # else (URL import, manual uploads): photos would land in the wrong
         # album with no way back.
-        expected_source = f"immich:{immich_album_id}"
-        if album.source_url and album.source_url != expected_source:
+        if album.source_url and album.source_url != source:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
                 detail=f"Album '{album.name}' was not imported from this Immich album.",
             )
 
+    created, errors = _import_batch(session, album, photos, offset, limit)
+    done = offset + limit >= total
+    if done:
+        album.last_synced_at = utcnow()
+        session.add(album)
+        session.commit()
+    session.refresh(album)
+    if errors:
+        # Per-asset failures used to be invisible (the UI only showed the
+        # created count), so log them where `docker logs` can see them.
+        log.warning(
+            "Immich import batch (album %s, offset %d): %d failed, %d created. First errors: %s",
+            immich_album_id,
+            offset,
+            len(errors),
+            created,
+            "; ".join(errors[:5]),
+        )
+    return ImmichBatchImportResult(
+        album_id=album.id,
+        album_name=album.name,
+        total=total,
+        imported=len(album.images),
+        done=done,
+        created=created,
+        failed=len(errors),
+        errors=errors[:10],
+    )
+
+
+@router.post("/albums/sync-all")
+def sync_all_immich_albums(session: Session = Depends(get_session)) -> dict:
+    """Re-import every local album that came from Immich, in batches.
+
+    Each album's ``last_synced_at`` is stamped when its sync completes.
+    An album whose batches fail wholesale is reported with ``done: false``
+    and keeps its old timestamp, so a bad sync is visible instead of
+    silently looking fresh.
+    """
+    local = session.exec(
+        select(Album).where(Album.source_url.like("immich:%")).order_by(Album.id)
+    ).all()
+    results = []
+    for album in local:
+        immich_album_id = album.source_url.split("immich:", 1)[1]
+        try:
+            assets = immich.list_album_assets(immich_album_id)
+        except Exception as exc:
+            results.append(
+                {
+                    "album_id": album.id,
+                    "album_name": album.name,
+                    "done": False,
+                    "created": 0,
+                    "failed": 0,
+                    "error": str(exc),
+                }
+            )
+            continue
+        photos = [a for a in assets if a.get("type") in (None, "IMAGE")]
+        total = len(photos)
+        created, failed, errors = 0, 0, []
+        offset, ok = 0, True
+        while offset < total:
+            batch_created, batch_errors = _import_batch(
+                session, album, photos, offset, BATCH_DEFAULT
+            )
+            created += batch_created
+            failed += len(batch_errors)
+            errors.extend(batch_errors)
+            if batch_created == 0 and batch_errors:
+                ok = False  # nothing got through — don't spin through every batch
+                break
+            offset += BATCH_DEFAULT
+        done = ok and offset >= total
+        if done:
+            album.last_synced_at = utcnow()
+            session.add(album)
+            session.commit()
+        results.append(
+            {
+                "album_id": album.id,
+                "album_name": album.name,
+                "total": total,
+                "created": created,
+                "failed": failed,
+                "done": done,
+                "errors": errors[:5],
+            }
+        )
+    return {"albums": results}
+
+
+def _import_batch(
+    session: Session, album: Album, photos: list, offset: int, limit: int
+) -> tuple[int, List[str]]:
+    """Download and store one batch of album photos (idempotent on source_url).
+
+    Returns (created, errors). Per-asset failures are collected, never raised,
+    so one bad asset doesn't abort the batch.
+    """
     target_dir = UPLOAD_DIR / f"albums/{album.id}"
     target_dir.mkdir(parents=True, exist_ok=True)
 
@@ -234,26 +343,4 @@ def import_immich_album(
         created += 1
 
     session.commit()
-    session.refresh(album)
-    if errors:
-        # Per-asset failures used to be invisible (the UI only showed the
-        # created count), so log them where `docker logs` can see them.
-        log.warning(
-            "Immich import batch (album %s, offset %d): %d failed, %d created. First errors: %s",
-            immich_album_id,
-            offset,
-            len(errors),
-            created,
-            "; ".join(errors[:5]),
-        )
-    done = offset + limit >= total
-    return ImmichBatchImportResult(
-        album_id=album.id,
-        album_name=album.name,
-        total=total,
-        imported=len(album.images),
-        done=done,
-        created=created,
-        failed=len(errors),
-        errors=errors[:10],
-    )
+    return created, errors
