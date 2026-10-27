@@ -156,7 +156,8 @@ named['#toasts'].append = (c) => { seenToasts.push(c.textContent); };
   check('first photo rendered', named['#match-photo'].src === '/uploads/albums/7/p0.jpg');
   check('metadata line shows date/camera/gps', named['#match-meta'].textContent.includes('Google Pixel')
     && named['#match-meta'].textContent.includes('39.1000'));
-  check('xmp tags shown', named['#match-tags'].textContent === '🏷️ pepper');
+  check('xmp tags shown as chips', named['#match-tags'].innerHTML.includes('pill')
+    && named['#match-tags'].innerHTML.includes('pepper'));
   check('counter shows position', named['#match-counter'].textContent.startsWith('1 / 2'));
   check('plants listed alphabetically', named['#match-plant'].innerHTML.indexOf('Habanero') < named['#match-plant'].innerHTML.indexOf('Sungold'));
   check('seed packets listed in their own group', named['#match-plant'].innerHTML.includes('Seed packets')

@@ -255,6 +255,7 @@
   }
 
   function healthBar(score) {
+    if (score == null) return '<span class="text-navy-400">—</span>';
     const color = score >= 8 ? 'bg-sage-600' : score >= 5 ? 'bg-beige-500' : 'bg-red-600';
     return `<div class="flex items-center gap-2"><div class="h-2 w-16 rounded bg-beige-200"><div class="h-full ${color}" style="width:${score * 10}%"></div></div><b>${score}</b></div>`;
   }

@@ -15,6 +15,24 @@
     let index = 0;
     let plants = [];
     let packets = [];
+    let containers = [];
+    let vocabulary = [];
+
+    // Split a photo's stored tags into vocabulary tags and free-text ones.
+    function splitTags(img) {
+      const all = (img.tags || '').split(',').map((t) => t.trim()).filter(Boolean);
+      const vocabSet = new Set(vocabulary.map((v) => v.tag));
+      return {
+        vocab: all.filter((t) => vocabSet.has(t)),
+        custom: all.filter((t) => !vocabSet.has(t)),
+      };
+    }
+
+    function currentDetailTags() {
+      const checked = $$('#match-vocab input[type="checkbox"]:checked').map((el) => el.dataset.vocabTag);
+      const custom = ($('#match-tags-input').value || '').split(',').map((t) => t.trim()).filter(Boolean);
+      return [...new Set([...checked, ...custom])];
+    }
 
     async function loadAlbums() {
       const albums = await api.get('/api/albums');
@@ -26,14 +44,19 @@
     }
 
     async function loadTargets() {
-      const [plantList, packetList] = await Promise.all([
+      const [plantList, packetList, containerList, vocab] = await Promise.all([
         api.get('/api/plants/').catch(() => []),
         api.get('/api/seed-packets/').catch(() => []),
+        api.get('/api/containers/').catch(() => []),
+        api.get('/api/album-images/vocabulary').catch(() => ({ tags: [] })),
       ]);
       plants = (Array.isArray(plantList) ? plantList : []).slice()
         .sort((a, b) => String(a.variety_name || '').localeCompare(String(b.variety_name || '')));
       packets = (Array.isArray(packetList) ? packetList : []).slice()
         .sort((a, b) => String(a.variety_name || '').localeCompare(String(b.variety_name || '')));
+      containers = (Array.isArray(containerList) ? containerList : []).slice()
+        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+      vocabulary = (vocab && Array.isArray(vocab.tags)) ? vocab.tags : [];
       const plantOpts = plants
         .map((p) => `<option value="p:${p.id}">${esc(p.variety_name)}</option>`).join('');
       const packetOpts = packets
@@ -41,6 +64,24 @@
       targetSel.innerHTML = '<option value="">Choose a plant or seed packet…</option>'
         + `<optgroup label="🌿 Plants">${plantOpts}</optgroup>`
         + `<optgroup label="🫘 Seed packets">${packetOpts}</optgroup>`;
+      const containerSel = $('#match-container');
+      if (containerSel) {
+        const current = containerSel.value;
+        containerSel.innerHTML = '<option value="">No container…</option>'
+          + containers.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+        containerSel.value = current;
+      }
+      const vocabBox = $('#match-vocab');
+      if (vocabBox) {
+        vocabBox.innerHTML = vocabulary.map((v) => `<label class="flex items-center gap-1 rounded-full border border-beige-200 bg-beige-50 px-2 py-1 text-xs text-navy-700" title="${esc(v.description || '')}"><input type="checkbox" data-vocab-tag="${esc(v.tag)}" class="h-3.5 w-3.5 accent-sage-600" />${esc(v.tag)}</label>`).join('');
+      }
+      const tagFilter = $('#match-tag-filter');
+      if (tagFilter) {
+        const current = tagFilter.value;
+        tagFilter.innerHTML = '<option value="">All tags</option>'
+          + vocabulary.map((v) => `<option value="${esc(v.tag)}">${esc(v.tag)}</option>`).join('');
+        tagFilter.value = current;
+      }
     }
 
     function packetLabel(p) {
@@ -77,6 +118,8 @@
         unassigned_only: unassignedOnly.checked ? 'true' : 'false',
       });
       if (albumSel.value) params.set('album_id', albumSel.value);
+      const tagFilter = $('#match-tag-filter');
+      if (tagFilter && tagFilter.value) params.set('tag', tagFilter.value);
       images = await api.get(`/api/album-images/?${params.toString()}`).catch(() => []);
       if (!Array.isArray(images)) images = [];
       index = 0;
@@ -91,6 +134,7 @@
       if (img.latitude != null && img.longitude != null) {
         bits.push(`📍 ${Number(img.latitude).toFixed(4)}, ${Number(img.longitude).toFixed(4)}`);
       }
+      if (img.container_name) bits.push('🪴 ' + img.container_name);
       return bits.join(' · ');
     }
 
@@ -113,7 +157,21 @@
       $('#match-photo').alt = img.title || img.original_name || 'Photo';
       $('#match-caption').textContent = img.title || img.original_name || `Photo #${img.id}`;
       $('#match-meta').textContent = metaLine(img);
-      $('#match-tags').textContent = img.tags ? '🏷️ ' + img.tags : '';
+      const tagsEl = $('#match-tags');
+      const allTags = (img.tags || '').split(',').map((t) => t.trim()).filter(Boolean);
+      tagsEl.innerHTML = allTags.length
+        ? allTags.map((t) => `<span class="pill">${esc(t)}</span>`).join(' ')
+        : '';
+      const split = splitTags(img);
+      $$('#match-vocab input[type="checkbox"]').forEach((el) => {
+        el.checked = split.vocab.includes(el.dataset.vocabTag);
+      });
+      const customInput = $('#match-tags-input');
+      if (customInput) customInput.value = split.custom.join(', ');
+      const notesEl = $('#match-notes');
+      if (notesEl) notesEl.value = img.notes || '';
+      const containerSel = $('#match-container');
+      if (containerSel) containerSel.value = img.container_id ? String(img.container_id) : '';
       const assigned = images.filter(isAssigned).length;
       $('#match-counter').textContent = `${index + 1} / ${images.length} · ${assigned} assigned in this view`;
       progress.textContent = images.length === 1000 ? 'Showing first 1000 photos' : '';
@@ -229,12 +287,48 @@
       }
     }
 
+    async function saveDetails() {
+      const img = images[index];
+      if (!img) return;
+      const containerSel = $('#match-container');
+      const payload = {
+        tags: currentDetailTags(),
+        notes: ($('#match-notes').value || ''),
+        container_id: containerSel && containerSel.value ? Number(containerSel.value) : null,
+      };
+      try {
+        const updated = await api.patch(`/api/album-images/${img.id}`, payload);
+        images[index] = updated;
+        render();
+        toast('Details saved.');
+      } catch (error) {
+        toast(`Could not save details: ${error.message}`, 'err');
+      }
+    }
+
+    async function clearTags() {
+      const img = images[index];
+      if (!img) return;
+      try {
+        const updated = await api.patch(`/api/album-images/${img.id}`, { tags: [] });
+        images[index] = updated;
+        render();
+        toast('Tags cleared.');
+      } catch (error) {
+        toast(`Could not clear tags: ${error.message}`, 'err');
+      }
+    }
+
     $('#match-assign').addEventListener('click', assignCurrent);
     $('#match-skip').addEventListener('click', advance);
     $('#match-unassign').addEventListener('click', unassignCurrent);
     $('#match-bulk').addEventListener('click', bulkAssign);
+    $('#match-save-details').addEventListener('click', saveDetails);
+    $('#match-clear-tags').addEventListener('click', clearTags);
     $('#match-reload').addEventListener('click', () => loadImages().catch((e) => toast(e.message, 'err')));
     albumSel.addEventListener('change', () => loadImages().catch((e) => toast(e.message, 'err')));
+    const tagFilterEl = $('#match-tag-filter');
+    if (tagFilterEl) tagFilterEl.addEventListener('change', () => loadImages().catch((e) => toast(e.message, 'err')));
     unassignedOnly.addEventListener('change', () => loadImages().catch((e) => toast(e.message, 'err')));
     targetSel.addEventListener('change', updateBulkButton);
     $('#match-prev').addEventListener('click', () => go(-1));

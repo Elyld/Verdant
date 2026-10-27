@@ -97,7 +97,8 @@ class ObservationCreate(BaseModel):
     date: Date
     plant_name: str = Field(min_length=1, max_length=120)
     plant_id: Optional[int] = None
-    health_scale: int = Field(default=5, ge=1, le=10)
+    # None = the observer had no opinion (no longer silently recorded as 5).
+    health_scale: Optional[int] = Field(default=None, ge=1, le=10)
     watering_status: bool = False
     pest_sightings: str = ""
     notes: str = ""
@@ -119,7 +120,7 @@ class ObservationRead(BaseModel):
     id: int
     date: Date
     plant_name: str
-    health_scale: int
+    health_scale: Optional[int] = None
     watering_status: bool
     pest_sightings: Optional[str] = ""
     notes: str
@@ -307,7 +308,7 @@ class CalendarEntry(BaseModel):
     id: int
     date: Date
     plant_name: str
-    health_scale: int
+    health_scale: Optional[int] = None
     watering_status: bool
     pest_sightings: Optional[str] = None
     notes: Optional[str] = None
@@ -329,14 +330,18 @@ class AlbumImageRead(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     tags: str = ""
+    notes: str = ""
     plant_id: Optional[int] = None
     seed_packet_id: Optional[int] = None
-    # Filled in by endpoints that join plants / seed packets; not model columns.
+    container_id: Optional[int] = None
+    # Filled in by endpoints that join plants / seed packets / containers;
+    # not model columns.
     plant_variety: Optional[str] = None
     packet_variety: Optional[str] = None
+    container_name: Optional[str] = None
 
     _null_str = field_validator(
-        "source_url", "camera_make", "camera_model", "tags", mode="before"
+        "source_url", "camera_make", "camera_model", "tags", "notes", mode="before"
     )(_none_to_str)
 
 
@@ -354,6 +359,7 @@ class AlbumRead(BaseModel):
     name: str
     created_at: datetime
     source_url: str = ""
+    last_synced_at: Optional[datetime] = None
     images: List[AlbumImageRead] = []
 
     _null_str = field_validator("source_url", mode="before")(_none_to_str)
@@ -379,18 +385,34 @@ class ImageAssignRequest(BaseModel):
     """Assign a photo to a plant or a seed packet (or unassign with both null).
 
     The two targets are mutually exclusive — setting one clears the other.
+    ``tags``, ``notes`` and ``container_id`` are independent of the plant /
+    packet link: a photo can be tagged *and* linked, and can live on a
+    container while showing a plant. Only fields explicitly present in the
+    request are changed; omitted fields are left alone.
     """
 
     plant_id: Optional[int] = None
     seed_packet_id: Optional[int] = None
+    tags: Optional[List[str]] = None
+    notes: Optional[str] = None
+    container_id: Optional[int] = None
 
 
 class ImageBulkAssignRequest(BaseModel):
-    """Assign many photos to one plant or one seed packet at once (both null unassigns)."""
+    """Assign many photos at once.
+
+    Plant / packet targets are only touched when explicitly present (both
+    explicitly null unassigns, as before); ``tags``, ``notes`` and
+    ``container_id`` are independent and never clear a plant/packet link
+    when sent on their own.
+    """
 
     image_ids: List[int] = Field(min_length=1, max_length=2000)
     plant_id: Optional[int] = None
     seed_packet_id: Optional[int] = None
+    tags: Optional[List[str]] = None
+    notes: Optional[str] = None
+    container_id: Optional[int] = None
 
 
 class AlbumCreateResult(BaseModel):
@@ -493,6 +515,9 @@ class PestLogCreate(BaseModel):
     plant_id: Optional[int] = None
     treatment: str = ""
     notes: str = ""
+    resolved: bool = False
+    resolved_date: Optional[Date] = None
+    severity: str = ""
 
 
 class PestLogRead(BaseModel):
@@ -505,8 +530,10 @@ class PestLogRead(BaseModel):
     treatment: str = ""
     notes: str = ""
     resolved: bool = False
+    resolved_date: Optional[Date] = None
+    severity: str = ""
 
-    _null_str = field_validator("treatment", "notes", mode="before")(_none_to_str)
+    _null_str = field_validator("treatment", "notes", "severity", mode="before")(_none_to_str)
 
 
 # ------------------------------ Yield & sowing ------------------------------ #

@@ -14,13 +14,13 @@
   }
 
   function dayModalHtml(iso, entries) {
-    const list = entries.slice().sort((a, b) => b.health_scale - a.health_scale);
+    const list = entries.slice().sort((a, b) => (b.health_scale ?? -1) - (a.health_scale ?? -1));
     const pretty = new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
     const cards = list.map((item) => `
       <article class="rounded-xl border border-beige-200 bg-white p-4">
         <div class="flex items-center justify-between gap-2">
           <h4 class="font-semibold text-navy-800">${esc(item.plant_name)}</h4>
-          <span class="pill">${esc(String(item.health_scale))}/10 health</span>
+          <span class="pill">${item.health_scale == null ? 'no health rating' : `${esc(String(item.health_scale))}/10 health`}</span>
         </div>
         ${item.pest_sightings ? `<p class="mt-2 text-sm">&#x1F41B; <span class="font-semibold">Pests:</span> ${esc(item.pest_sightings)}</p>` : ''}
         ${item.notes ? `<p class="mt-1 text-sm text-navy-600">${esc(item.notes)}</p>` : ''}
@@ -96,7 +96,8 @@
           const iso = `${forYear}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           const entries = byDate.get(iso) || [];
           const level = heatLevel(entries.length);
-          const average = entries.length ? Math.round(entries.reduce((sum, item) => sum + item.health_scale, 0) / entries.length) : null;
+          const scored = entries.filter((item) => item.health_scale != null);
+          const average = scored.length ? Math.round(scored.reduce((sum, item) => sum + item.health_scale, 0) / scored.length) : null;
           const tip = entries.length
             ? `${entries.length} observation${entries.length === 1 ? '' : 's'} on ${iso}${average ? `, average health ${average}/10` : ''} — view in Garden Logs`
             : `No observations on ${iso}`;

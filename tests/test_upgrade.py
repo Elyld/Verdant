@@ -263,9 +263,11 @@ def test_immich_import_batches_and_is_idempotent(monkeypatch):
         assert (b2["created"], b2["done"], b2["imported"]) == (2, True, 4)
         assert b2["album_name"] == "Batch Garden"
 
-        # offset without album_id is rejected
-        bad = client.post("/api/immich/albums/big/import?offset=2&limit=2")
-        assert bad.status_code == 400
+        # offset without album_id now resolves the local album by source_url
+        # (the old "album_id is required when offset > 0" contract is gone)
+        again = client.post("/api/immich/albums/big/import?offset=2&limit=2")
+        assert again.status_code == 200, again.text[:200]
+        assert (again.json()["created"], again.json()["done"], again.json()["imported"]) == (0, True, 4)
 
 
 def _denied_transport():

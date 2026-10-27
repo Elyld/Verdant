@@ -108,6 +108,8 @@
           </div>
         </div>
         ${log.treatment ? `<p class="mt-1 text-sm text-navy-600">🧪 ${esc(log.treatment)}</p>` : ''}
+        ${log.severity ? `<p class="mt-1 text-sm text-navy-600">Severity: ${esc(log.severity)}</p>` : ''}
+        ${log.resolved_date ? `<p class="mt-1 text-sm text-navy-500">Resolved ${fmtDate(log.resolved_date)}</p>` : ''}
         ${log.notes ? `<p class="mt-1 text-sm text-navy-500">${esc(log.notes)}</p>` : ''}
       </li>`;
     }
@@ -141,11 +143,13 @@
           pest_name: name,
           plant_id: $('#pest-plant').value ? Number($('#pest-plant').value) : null,
           treatment: $('#pest-treatment').value.trim(),
+          severity: $('#pest-severity').value,
           notes: $('#pest-notes').value.trim(),
         });
         toast('Pest logged 🐛', 'ok');
         $('#pest-name').value = '';
         $('#pest-treatment').value = '';
+        $('#pest-severity').value = '';
         $('#pest-notes').value = '';
         load();
       } catch (error) { toast(`Could not save: ${error.message}`, 'err'); }

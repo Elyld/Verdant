@@ -107,8 +107,11 @@ def season_review(
             continue
         if 1 <= month <= 12:
             by_month[month - 1] += 1
-            health_sum[month - 1] += obs.health_scale
-            health_n[month - 1] += 1
+            # Null health (observer had no opinion) is excluded from the
+            # average, not counted as zero.
+            if obs.health_scale is not None:
+                health_sum[month - 1] += obs.health_scale
+                health_n[month - 1] += 1
         per_plant[obs.plant_name] = per_plant.get(obs.plant_name, 0) + 1
         day = str(obs.date)[:10]
         per_day[day] = per_day.get(day, 0) + 1

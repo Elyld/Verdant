@@ -91,7 +91,9 @@ class ObservationLog(SQLModel, table=True):
     date: str = Field(index=True, default="")
     plant_name: str = Field(index=True)  # keep for backward compat
     plant_id: Optional[int] = Field(default=None, foreign_key="plants.id", index=True)
-    health_scale: int = Field(default=5, ge=1, le=10)
+    # 1-10 health score, or None when the observer had no opinion. A null
+    # is honest; the old default of 5 silently recorded a middling score.
+    health_scale: Optional[int] = Field(default=None, ge=1, le=10)
     watering_status: bool = Field(default=True)
     pest_sightings: Optional[str] = None
     notes: Optional[str] = None
@@ -116,6 +118,8 @@ class Album(SQLModel, table=True):
     name: str = Field(index=True)
     created_at: datetime = Field(default_factory=utcnow)
     source_url: str = ""  # e.g. "immich:<album-id>" for Immich imports (enables metadata re-sync)
+    # Last time an Immich sync completed for this album (None = never synced).
+    last_synced_at: Optional[datetime] = None
 
     images: List["AlbumImage"] = Relationship(
         back_populates="album",
@@ -142,16 +146,25 @@ class AlbumImage(SQLModel, table=True):
     longitude: Optional[float] = None
     # XMP/keyword tags from Immich (comma-separated). Immich ingests XMP
     # sidecar keywords as tags, so this is where sideloaded XMP data lands.
+    # Also writable via the album-image API (see PHOTO_TAG_VOCABULARY in
+    # app/routers/albums.py) — a photo can be tagged AND linked to a plant.
     tags: str = ""
+    # Free-text caption/note on the photo (label text, verdicts, caveats).
+    notes: str = ""
     # The plant this photo shows, assigned by hand on the /match page.
     plant_id: Optional[int] = Field(default=None, foreign_key="plants.id", index=True)
     # The seed packet this photo shows, assigned by hand on the /match page.
     # Mutually exclusive with plant_id — a photo is matched to one or the other.
     seed_packet_id: Optional[int] = Field(default=None, foreign_key="seed_packets.id", index=True)
+    # The container (bed, bag, pot) this photo shows. Independent of
+    # plant_id/seed_packet_id, so a bed's build photos can live on the bed
+    # even when they also show a plant.
+    container_id: Optional[int] = Field(default=None, foreign_key="containers.id", index=True)
 
     album: Optional["Album"] = Relationship(back_populates="images")
     plant: Optional["Plant"] = Relationship(back_populates="album_images")
     seed_packet: Optional["SeedPacket"] = Relationship(back_populates="album_images")
+    container: Optional["Container"] = Relationship(back_populates="album_images")
 
 class Location(SQLModel, table=True):
     __tablename__ = "locations"
@@ -171,7 +184,10 @@ class Plant(SQLModel, table=True):
     species_type: str
     family_genus: Optional[str] = None
     category: str = Field(default="Annual")
-    status: str = Field(default="Growing")
+    status: str = Field(default="Growing")  # Growing / Harvested / Dead / Planned / Culled
+    # Date the status last changed (stamped by the plant PATCH endpoint).
+    # Distinguishes "when did this die" from "when was it culled healthy".
+    status_changed_at: Optional[Date] = None
     location_id: Optional[int] = Field(default=None, foreign_key="locations.id", index=True)
     date_started_indoors: Optional[Date] = None
     date_planted: Optional[Date] = None
@@ -400,6 +416,12 @@ class PestLog(SQLModel, table=True):
     treatment: Optional[str] = None
     notes: Optional[str] = None
     resolved: bool = Field(default=False)
+    # Date the entry was marked resolved (stamped by the pest PATCH endpoint
+    # when resolved flips False -> True, unless explicitly provided).
+    resolved_date: Optional[str] = None  # ISO YYYY-MM-DD
+    # Free text, usually Low / Moderate / High / Severe — makes entries
+    # useful next season when deciding what to watch for.
+    severity: str = ""
 
     plant: Optional[Plant] = Relationship()
 
@@ -532,6 +554,8 @@ class Container(SQLModel, table=True):
 
     plant: Optional["Plant"] = Relationship()
     location: Optional["Location"] = Relationship()
+    # Album photos linked to this container (bed build shots, etc.).
+    album_images: List["AlbumImage"] = Relationship(back_populates="container")
 
 
 # --------------------------------------------------------------------------- #

@@ -20,6 +20,12 @@
         <a href="/match" class="btn-ghost text-sm">🎯 Match photos to plants</a>
       </div>
 
+      <div id="photo-dupe-banner" class="card hidden border-amber-300 bg-amber-50">
+        <p class="text-sm text-amber-900"><strong>Duplicate album names:</strong> <span id="photo-dupe-text"></span></p>
+        <p class="mt-1 text-xs text-amber-800">Merging folds same-source duplicates into one album; albums imported from different sources keep their names and need a manual rename.</p>
+        <button type="button" id="photo-dupe-merge" class="btn-ghost mt-2 text-sm">🧹 Merge duplicates</button>
+      </div>
+
       <div id="immich-section" class="hidden card">
         <span class="lbl">Import from Immich</span>
         <div class="flex flex-wrap items-center gap-2">
@@ -27,6 +33,7 @@
             <option value="">Choose an Immich album…</option>
           </select>
           <button type="button" id="immich-import" class="btn-ghost text-sm">Import album</button>
+          <button type="button" id="immich-sync-all" class="btn-ghost text-sm">🔄 Sync all albums</button>
           <button type="button" id="immich-merge" class="btn-ghost text-sm">🧹 Merge duplicates</button>
         </div>
         <p class="mt-1 text-xs text-navy-400">Copies the album's photos into Verdant so the slideshow works even when your Immich server is offline. Re-importing an album reuses its existing Verdant album; <strong>Merge duplicates</strong> folds older double-imports into one.</p>
@@ -47,6 +54,8 @@
             <a id="slide-dedicated" href="/slideshow" class="btn-ghost text-sm">⛶ Slideshow page</a>
           </div>
         </div>
+        <p id="slide-tags" class="mt-2"></p>
+        <p id="slide-notes" class="mt-1 text-sm text-navy-600"></p>
       </div>
 
       <p id="photos-empty" class="card text-center text-navy-500">Choose an album above to start the slideshow.</p>

@@ -46,7 +46,7 @@ def _coerce_dates(plant: Plant) -> Plant:
 @router.get("/", response_model=List[Plant])
 def list_plants(
     location_id: Optional[int] = Query(None, description="Filter by location"),
-    status: Optional[str] = Query(None, description="Filter by status (Growing, Harvested, Dead)"),
+    status: Optional[str] = Query(None, description="Filter by status (Growing, Harvested, Dead, Planned, Culled)"),
     species_type: Optional[str] = Query(None, description="Filter by type (Pepper, Tomato, etc.)"),
     session: Session = Depends(get_session)
 ) -> List[Plant]:
@@ -142,6 +142,13 @@ def update_plant(
                 status_code=404,
                 detail=f"Seed packet {payload['seed_packet_id']} not found",
             )
+    # A status change stamps its date (unless the caller supplies one), so
+    # "when did this die" — and "when was it culled while healthy" — is
+    # answerable. Statuses: Growing / Harvested / Dead / Planned / Culled.
+    if payload.get("status") is not None and payload["status"] != plant.status:
+        from datetime import date as _date
+
+        payload.setdefault("status_changed_at", _date.today().isoformat())
     apply_patch(plant, payload, exclude=("plant_id",))
     session.add(plant)
     session.commit()

@@ -99,6 +99,34 @@
     });
   }
 
+  function initSyncAllButton() {
+    $$('#immich-sync-all').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const label = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Syncing…';
+        try {
+          const result = await api.post('/api/immich/albums/sync-all');
+          const albums = (result && result.albums) || [];
+          const done = albums.filter((a) => a.done);
+          const failed = albums.filter((a) => !a.done);
+          const created = albums.reduce((sum, a) => sum + (a.created || 0), 0);
+          toast(`Synced ${done.length} of ${albums.length} album${albums.length === 1 ? '' : 's'}`
+            + (created ? `, ${created} new photo${created === 1 ? '' : 's'}` : '')
+            + (failed.length ? ` — ${failed.length} failed: ${failed.map((a) => a.album_name).join(', ')}` : '')
+            + '.');
+          document.dispatchEvent(new CustomEvent('verdant:albums-changed', {}));
+        } catch (error) {
+          toast(`Sync all failed: ${error.message}`, 'err');
+        } finally {
+          btn.disabled = false;
+          btn.textContent = label;
+        }
+      });
+    });
+  }
+
   globalThis.Verdant.onBoot(initImmich);
   globalThis.Verdant.onBoot(initMergeButton);
+  globalThis.Verdant.onBoot(initSyncAllButton);
 })();

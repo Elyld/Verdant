@@ -24,6 +24,20 @@
       picker.innerHTML = '<option value="">Choose an album…</option>'
         + albums.map((a) => `<option value="${a.id}">${esc(a.name)} (${(a.images || []).length})</option>`).join('');
       if (selectId) picker.value = String(selectId);
+      loadDupeBanner().catch(() => {});
+    }
+
+    async function loadDupeBanner() {
+      const banner = $('#photo-dupe-banner');
+      if (!banner) return;
+      const groups = await api.get('/api/albums/duplicate-names').catch(() => []);
+      if (!Array.isArray(groups) || !groups.length) {
+        banner.classList.add('hidden');
+        return;
+      }
+      const text = groups.map((g) => `“${g.name}” ×${g.album_ids.length}`).join(', ');
+      $('#photo-dupe-text').textContent = text;
+      banner.classList.remove('hidden');
     }
 
     function render() {
@@ -40,6 +54,13 @@
       img.alt = slide.title || slide.original_name || 'Garden photo';
       caption.textContent = slide.title || slide.original_name || '';
       counter.textContent = `${index + 1} / ${slides.length}`;
+      const tagsEl = $('#slide-tags');
+      if (tagsEl) {
+        const tags = (slide.tags || '').split(',').map((t) => t.trim()).filter(Boolean);
+        tagsEl.innerHTML = tags.map((t) => `<span class="pill">${esc(t)}</span>`).join(' ');
+      }
+      const notesEl = $('#slide-notes');
+      if (notesEl) notesEl.textContent = slide.notes || '';
       [1, slides.length - 1].forEach((offset) => {
         const preload = new Image();
         preload.src = slides[(index + offset) % slides.length].file_path;
@@ -82,6 +103,28 @@
 
     picker.addEventListener('change', () => openAlbum(picker.value));
     $('#photo-refresh').addEventListener('click', () => loadAlbums().catch((error) => toast(`Could not load albums: ${error.message}`, 'err')));
+    const dupeMergeBtn = $('#photo-dupe-merge');
+    if (dupeMergeBtn) {
+      dupeMergeBtn.addEventListener('click', async () => {
+        const label = dupeMergeBtn.textContent;
+        dupeMergeBtn.disabled = true;
+        dupeMergeBtn.textContent = 'Merging…';
+        try {
+          const result = await api.post('/api/albums/merge-duplicates');
+          if (!result || !result.groups_merged) {
+            toast('No same-source duplicates to merge — the remaining name clashes need a manual rename.');
+          } else {
+            toast(`Merged ${result.albums_removed} duplicate album${result.albums_removed === 1 ? '' : 's'}.`);
+            await loadAlbums();
+          }
+        } catch (error) {
+          toast(`Merge failed: ${error.message}`, 'err');
+        } finally {
+          dupeMergeBtn.disabled = false;
+          dupeMergeBtn.textContent = label;
+        }
+      });
+    }
     $('#photo-delete-album').addEventListener('click', async (event) => {
       const btn = event.currentTarget;
       const id = picker.value;

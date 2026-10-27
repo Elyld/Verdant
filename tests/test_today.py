@@ -148,12 +148,23 @@ def test_sow_by_verdicts(frost_date):
     body = client.get("/api/crops/sow-by", params={"days_to_maturity": 75}).json()
     assert body["verdict"] == "too_late"
     assert body["days_left"] == -59
-    # garlic: annualized frost keeps the fall-planted answer sane —
-    # 240d maturity can't beat an Oct frost for a *fall* harvest
+    # garlic: the stored Oct 15 annualizes to the NEXT Oct 15, and the
+    # verdict follows that annualized date — so it is seasonal by
+    # design: too_late while this year's Oct 15 is still ahead and
+    # within 240d + buffer, still_time once it rolls to next year.
+    # (This case used to hard-code the 2026 date and both assertions,
+    # which went red the day after Oct 15, 2026.) The pure sow math
+    # is covered by test_sow_verdict_boundaries; this checks the
+    # endpoint's annualization + wiring.
+    oct15 = date(TODAY.year, 10, 15)
+    expected_frost = oct15 if oct15 >= TODAY else date(TODAY.year + 1, 10, 15)
+    expected_sow_by = expected_frost - timedelta(days=240 + 14)
     _set_frost("2026-10-15")
     body = client.get("/api/crops/sow-by", params={"days_to_maturity": 240}).json()
-    assert body["verdict"] == "too_late"
-    assert body["frost_date"] == "2026-10-15"
+    assert body["frost_date"] == expected_frost.isoformat()
+    assert body["sow_by"] == expected_sow_by.isoformat()
+    assert body["days_left"] == (expected_sow_by - TODAY).days
+    assert body["verdict"] == planting.sow_verdict(expected_sow_by, TODAY)
 
 
 # ── /api/today ─────────────────────────────────────────────────────

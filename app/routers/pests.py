@@ -1,4 +1,5 @@
 """API router for the pest & treatment log."""
+from datetime import date
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
@@ -41,6 +42,9 @@ def create_pest_log(
         plant_id=payload.plant_id,
         treatment=payload.treatment,
         notes=payload.notes,
+        resolved=payload.resolved,
+        resolved_date=payload.resolved_date.isoformat() if payload.resolved_date else None,
+        severity=payload.severity,
     )
     session.add(log)
     session.commit()
@@ -57,6 +61,12 @@ def update_pest_log(
     log = _get_or_404(session, pest_id)
     if payload.get("plant_id") is not None and not session.get(Plant, payload["plant_id"]):
         raise HTTPException(status_code=404, detail=f"Plant {payload['plant_id']} not found")
+    # Resolving stamps the resolved date (unless explicitly provided);
+    # un-resolving clears it again, so the date always means "resolved on".
+    if payload.get("resolved") is True and not log.resolved:
+        payload.setdefault("resolved_date", date.today().isoformat())
+    elif payload.get("resolved") is False and log.resolved:
+        payload.setdefault("resolved_date", None)
     apply_patch(log, payload)
     session.add(log)
     session.commit()
