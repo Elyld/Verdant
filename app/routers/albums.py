@@ -1,17 +1,19 @@
 """Albums: imported photo collections (upload or from URL) + import helpers."""
 from __future__ import annotations
 
+import hashlib
 import os
 from pathlib import Path
 from typing import List, Optional
 
 import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
 from app.database import get_session
 from app.models import Album, AlbumImage, Container, Plant, SeedPacket
+from app.photo_dates import is_generated_filename, parse_filename_date
 from app.routers.immich import _asset_metadata
 from app import immich as immich_client
 from app.schemas import (
@@ -19,6 +21,7 @@ from app.schemas import (
     AlbumImportFromAlbum,
     AlbumMergeResult,
     AlbumMetadataSyncResult,
+    AlbumPatchRequest,
     AlbumRead,
     AlbumImageRead,
     AlbumImageRef,
@@ -134,6 +137,31 @@ def duplicate_album_names(session: Session = Depends(get_session)) -> List[dict]
     ]
 
 
+@router.get("/api/albums/{album_id}/duplicate-shots")
+def duplicate_shots(album_id: int, session: Session = Depends(get_session)) -> List[dict]:
+    """Same-timestamp photo groups in one album (e.g. a low-res + full-res
+    copy of the same shot). Reporting only — nothing is deleted or merged
+    here; burst photos can share a timestamp legitimately, so a human
+    decides what each group means."""
+    album = session.get(Album, album_id)
+    if album is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Album not found")
+    groups: dict = {}
+    for img in album.images:
+        if img.taken_at is None:
+            continue
+        groups.setdefault(img.taken_at, []).append(img)
+    return [
+        {
+            "taken_at": taken.isoformat(),
+            "image_ids": [i.id for i in imgs],
+            "file_paths": [i.file_path for i in imgs],
+        }
+        for taken, imgs in sorted(groups.items())
+        if len(imgs) > 1
+    ]
+
+
 @router.get("/api/albums/{album_id}", response_model=AlbumRead)
 def get_album(album_id: int, session: Session = Depends(get_session)) -> Album:
     album = session.get(Album, album_id)
@@ -142,12 +170,89 @@ def get_album(album_id: int, session: Session = Depends(get_session)) -> Album:
     return album
 
 
+@router.patch("/api/albums/{album_id}", response_model=AlbumRead)
+def update_album(
+    album_id: int,
+    body: AlbumPatchRequest,
+    session: Session = Depends(get_session),
+) -> Album:
+    """Rename an album, or (re)point it at its Immich source.
+
+    The source_url case is the adoption path for albums created before
+    source tracking existed: stamping it here (or via an Immich import
+    naming the album) is what makes sync-metadata work for them again.
+    Only fields explicitly present change; source_url "" clears it.
+    """
+    album = session.get(Album, album_id)
+    if album is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Album not found")
+    if "name" in body.model_fields_set:
+        name = (body.name or "").strip()
+        if not name:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Album name is required.")
+        album.name = name[:120]
+    if "source_url" in body.model_fields_set:
+        source = body.source_url or ""
+        if source and not source.startswith("immich:"):
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="source_url must look like 'immich:<album-id>' (or be empty to clear it).",
+            )
+        album.source_url = source
+    session.add(album)
+    session.commit()
+    session.refresh(album)
+    return album
+
+
+def _backfill_filename_dates(session: Session, album: Album) -> int:
+    """Fill blank taken_at from photo filenames + flag generated names.
+
+    Only fills blanks, never overwrites — the same rule as sync-metadata.
+    Returns the number of images changed."""
+    updated = 0
+    for img in album.images:
+        changed = False
+        if img.taken_at is None:
+            taken = parse_filename_date(img.original_name or img.title or "")
+            if taken is not None:
+                img.taken_at = taken
+                changed = True
+        if not img.is_generated and is_generated_filename(
+            img.original_name or img.title or ""
+        ):
+            img.is_generated = True
+            changed = True
+        if changed:
+            session.add(img)
+            updated += 1
+    return updated
+
+
+@router.post("/api/albums/{album_id}/backfill-dates", response_model=AlbumMetadataSyncResult)
+def backfill_album_dates(album_id: int, session: Session = Depends(get_session)) -> AlbumMetadataSyncResult:
+    """Fill blank taken_at dates from photo filenames (no Immich needed).
+
+    For legacy albums whose assets never carried a date: parses
+    YYYYMMDD_HHMMSS and epoch-millis filenames, and flags chatgpt-* names
+    as generated. Only fills blanks, never overwrites.
+    """
+    album = session.get(Album, album_id)
+    if album is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Album not found")
+    updated = _backfill_filename_dates(session, album)
+    session.commit()
+    return AlbumMetadataSyncResult(album_id=album.id, total=len(album.images), updated=updated)
+
+
 @router.post("/api/albums/{album_id}/sync-metadata", response_model=AlbumMetadataSyncResult)
 def sync_album_metadata(album_id: int, session: Session = Depends(get_session)) -> AlbumMetadataSyncResult:
     """Backfill photo metadata (date taken, camera, GPS, XMP tags) from Immich.
 
     Only fills blank fields — never overwrites. Meant for photos imported
-    before metadata capture existed.
+    before metadata capture existed. Images still dateless after the Immich
+    pass fall back to the date in their filename (same rule as
+    backfill-dates), so legacy albums recover a chronology either way.
     """
     album = session.get(Album, album_id)
     if album is None:
@@ -188,6 +293,7 @@ def sync_album_metadata(album_id: int, session: Session = Depends(get_session)) 
         if changed:
             session.add(img)
             updated += 1
+    updated += _backfill_filename_dates(session, album)
     session.commit()
     return AlbumMetadataSyncResult(album_id=album.id, total=len(album.images), updated=updated)
 
@@ -245,8 +351,106 @@ def merge_duplicate_albums(session: Session = Depends(get_session)) -> AlbumMerg
             f"Merged {', '.join(merged_names)} into \u201C{keeper.name}\u201D "
             f"({counts[keeper.id]} photos)."
         )
+
+    # Albums with no source at all (created before source tracking) can
+    # never join a source group above. Group those by exact name instead:
+    # a same-name album whose photos are all already in a bigger same-name
+    # album (compared by file content) is safe to drop; anything else is
+    # reported and left alone, with the reason in `detail`.
+    sourceless = session.exec(
+        select(Album).where(
+            or_(Album.source_url == "", Album.source_url.is_(None))
+        ).order_by(Album.id)
+    ).all()
+    name_groups: dict[str, list] = {}
+    for album in sourceless:
+        name_groups.setdefault(album.name, []).append(album)
+    saw_name_group = False
+    removed_ids: set = set()
+    for name, dupes in name_groups.items():
+        if len(dupes) < 2:
+            continue
+        saw_name_group = True
+        dupes.sort(key=lambda a: (len(a.images), a.id))
+        group_resolved = False
+        for candidate in list(dupes):
+            if candidate.id in removed_ids:
+                continue
+            n_cand = len(candidate.images)
+            cand_hashes, cand_unhashable = _album_content_hashes(candidate)
+            if cand_unhashable:
+                continue  # can't prove a subset with unreadable files
+            for bigger in dupes:
+                if bigger.id in removed_ids or bigger.id == candidate.id:
+                    continue
+                n_big = len(bigger.images)
+                if n_big <= n_cand:
+                    continue
+                big_hashes, big_unhashable = _album_content_hashes(bigger)
+                if big_unhashable:
+                    continue
+                if cand_hashes <= big_hashes:
+                    for img in list(candidate.images):
+                        delete_stored(img.file_path)
+                        result.files_removed += 1
+                    session.delete(candidate)
+                    removed_ids.add(candidate.id)
+                    result.albums_removed += 1
+                    group_resolved = True
+                    result.detail.append(
+                        f"Removed \u201C{name}\u201D ({n_cand} photos) — "
+                        f"every photo already in \u201C{bigger.name}\u201D "
+                        f"({n_big} photos) by file content."
+                    )
+                    break
+            else:
+                shared = 0
+                for other in dupes:
+                    if other.id in removed_ids or other.id == candidate.id:
+                        continue
+                    other_hashes, _ = _album_content_hashes(other)
+                    shared = max(shared, len(cand_hashes & other_hashes))
+                if shared:
+                    result.detail.append(
+                        f"Albums named \u201C{name}\u201D share {shared} photos by content "
+                        f"but neither contains the other — left alone."
+                    )
+                else:
+                    result.detail.append(
+                        f"Albums named \u201C{name}\u201D share no photos by content — left alone."
+                    )
+        if group_resolved:
+            result.groups_merged += 1
+    if result.groups_merged == 0 and result.albums_removed == 0 and not saw_name_group:
+        result.detail.append(
+            "No duplicates merged: no two albums share an Immich source or a name."
+        )
     session.commit()
     return result
+
+
+def _album_content_hashes(album: Album) -> tuple[set, int]:
+    """(sha256 set, unhashable count) for an album's stored files.
+
+    Unhashable means the file is missing or unreadable; such images can
+    never support a strict-subset claim, so callers treat them conservatively.
+    """
+    hashes = set()
+    unhashable = 0
+    for img in album.images:
+        path = _resolve_image_path(img.file_path)
+        if path is None or not path.is_file():
+            unhashable += 1
+            continue
+        try:
+            h = hashlib.sha256()
+            with open(path, "rb") as f:
+                for chunk in iter(lambda: f.read(1024 * 256), b""):
+                    h.update(chunk)
+            hashes.add(h.hexdigest())
+        except OSError:
+            unhashable += 1
+    return hashes, unhashable
 
 
 @router.delete("/api/albums/{album_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
@@ -363,6 +567,8 @@ async def _import_urls(
                     title=last,
                     original_name=last,
                     source_url=url[:500],
+                    taken_at=parse_filename_date(last),
+                    is_generated=is_generated_filename(last),
                 )
             )
             created += 1
@@ -539,7 +745,8 @@ def list_album_images(
     ``seed_packet_id`` (photos of one seed packet), ``container_id``
     (photos of one container), ``tag`` (photos carrying one tag token), or
     ``unassigned_only`` for the matching workflow (neither a plant nor a
-    packet assigned — tags alone do not count as assigned).
+    packet assigned — tags alone do not count as assigned). The matching
+    workflow skips AI-generated images: they are not garden records.
     """
     limit = max(1, min(limit, 1000))
     offset = max(0, offset)
@@ -568,6 +775,8 @@ def list_album_images(
         stmt = _tag_filter(stmt, tag)
     if unassigned_only:
         stmt = stmt.where(AlbumImage.plant_id.is_(None), AlbumImage.seed_packet_id.is_(None))
+        # Triage matching skips AI-generated images: not garden records.
+        stmt = stmt.where(AlbumImage.is_generated.is_(False))
     rows = session.exec(stmt).all()
     return [
         _image_read(img, variety, pkt_variety, container_name)

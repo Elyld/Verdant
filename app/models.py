@@ -140,6 +140,10 @@ class AlbumImage(SQLModel, table=True):
     imported_at: datetime = Field(default_factory=utcnow)
     # Photo metadata pulled from Immich EXIF (populated on import or via sync).
     taken_at: Optional[datetime] = None
+    # AI-generated image (chatgpt-* filenames at import, backfilled by
+    # sync-metadata). Generated images are excluded from triage matching
+    # and the yearbook — they are not garden records.
+    is_generated: bool = False
     camera_make: str = ""
     camera_model: str = ""
     latitude: Optional[float] = None
@@ -191,6 +195,9 @@ class Plant(SQLModel, table=True):
     location_id: Optional[int] = Field(default=None, foreign_key="locations.id", index=True)
     date_started_indoors: Optional[Date] = None
     date_planted: Optional[Date] = None
+    # Explicit season override (e.g. a reconstructed 2025 roster). Null
+    # means "derive it" — see effective_season_year in routers/plants.py.
+    season_year: Optional[int] = Field(default=None, index=True)
     days_to_maturity: Optional[int] = None
     light: str = Field(default="Full Sun")
     notes: Optional[str] = None

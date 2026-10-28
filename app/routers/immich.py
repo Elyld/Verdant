@@ -19,6 +19,7 @@ from sqlmodel import Session, select
 from app import immich
 from app.database import UPLOAD_DIR, get_session
 from app.models import Album, AlbumImage, utcnow
+from app.photo_dates import is_generated_filename, parse_filename_date
 from app.schemas import ImmichBatchImportResult
 from app.storage import ALLOWED_TYPES, _sniff
 
@@ -136,8 +137,10 @@ def import_immich_album(
     ``album_id`` is optional: when omitted, the local album is resolved from
     the Immich album's ``source_url`` (an album imported before keeps its
     identity across batches, so later batches no longer need the caller to
-    remember the local id). When the final batch completes, the album's
-    ``last_synced_at`` is stamped.
+    remember the local id). When ``album_id`` names an album with no
+    ``source_url`` yet (created before source tracking existed), the album
+    is adopted — ``source_url`` is stamped — so later syncs work. When the
+    final batch completes, the album's ``last_synced_at`` is stamped.
     """
     if offset < 0 or limit < 1 or limit > BATCH_MAX:
         raise HTTPException(
@@ -191,6 +194,12 @@ def import_immich_album(
                 status.HTTP_409_CONFLICT,
                 detail=f"Album '{album.name}' was not imported from this Immich album.",
             )
+        # Adopt a sourceless album (created before source_url existed):
+        # without this stamp it can never sync metadata.
+        if not album.source_url:
+            album.source_url = source
+            session.add(album)
+            session.commit()
 
     created, errors = _import_batch(session, album, photos, offset, limit)
     done = offset + limit >= total
@@ -331,7 +340,10 @@ def _import_batch(
                 title=original_name[:200],
                 original_name=original_name[:200],
                 source_url=source,
-                taken_at=meta["taken_at"],
+                # Asset date wins; a legacy asset with no date falls back
+                # to the date in its filename (never invents one).
+                taken_at=meta["taken_at"] or parse_filename_date(original_name),
+                is_generated=is_generated_filename(original_name),
                 camera_make=meta["camera_make"],
                 camera_model=meta["camera_model"],
                 latitude=meta["latitude"],

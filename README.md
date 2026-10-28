@@ -183,6 +183,31 @@ Immich source instead.
 > release was built in a sandbox with no headless browser available, so
 > no screenshots were faked for it.
 
+#### 🗄️ Legacy albums & seasons
+Albums created before source tracking existed used to be permanently
+orphaned: no `source_url`, so sync-metadata refused them and there was no
+way to fix that. Now an Immich import that names such an album stamps its
+`source_url` onto it, and `PATCH /api/albums/{id}` accepts `source_url`
+directly (empty clears it) — either adoption makes sync-metadata work
+again. Imports also recover dates: when an Immich asset carries no date,
+the filename is parsed instead (`YYYYMMDD_HHMMSS`, including mid-name,
+and epoch-millis names), and `POST /api/albums/{id}/backfill-dates` does
+the same for existing rows without needing Immich at all. Only blank
+dates are filled, never overwritten, and filenames with no recoverable
+date stay dateless rather than getting an invented one. **🧹 Merge
+duplicates** now folds same-name albums with no source too — by file
+content, so an album whose photos are all already in a bigger same-name
+album is dropped as safe to delete — and when it merges nothing it says
+why instead of reporting a clean no-op. `GET
+/api/albums/{id}/duplicate-shots` lists same-timestamp groups in one album
+(the low-res + full-res copies of one shot) for a human to judge. Photos
+named `chatgpt-*` are flagged AI-generated on import and excluded from
+the Match triage queue and the yearbook. Plants gain a `season_year`
+field (set it via PATCH) and the plant list takes `?season_year=`, which
+matches the explicit value, else the earliest planting season, else the
+`date_planted` year — so a reconstructed season (say 2025) separates from
+the live roster.
+
 There's also a dedicated full-screen slideshow page — pick an album, pick an
 interval, and let the garden scroll by on a TV or tablet.
 

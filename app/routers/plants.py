@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from sqlmodel import or_, select
 
 from app.database import get_session
-from app.models import Plant, Location, SeedPacket, apply_patch
+from app.models import Plant, Planting, Location, SeedPacket, apply_patch
 from app.schemas import (
     ImageRead,
     PlantTimelineRead,
@@ -43,11 +43,40 @@ def _coerce_dates(plant: Plant) -> Plant:
     return plant
 
 
+def effective_season_year(session: Session, plant: Plant) -> Optional[int]:
+    """The season a plant belongs to: its explicit season_year, else its
+    earliest planting's season_year, else its date_planted year, else None.
+
+    This is what the ?season_year= filter matches, so a reconstructed
+    season (2025) separates from the live roster even when the plants
+    were never given an explicit season.
+    """
+    if plant.season_year is not None:
+        return plant.season_year
+    seasons = [
+        p.season_year
+        for p in session.query(Planting).filter(Planting.plant_id == plant.id).all()
+        if p.season_year is not None
+    ]
+    if seasons:
+        return min(seasons)
+    planted = plant.date_planted
+    if isinstance(planted, str):
+        try:
+            return Date.fromisoformat(planted.strip()).year
+        except ValueError:
+            return None
+    if planted is not None:
+        return planted.year
+    return None
+
+
 @router.get("/", response_model=List[Plant])
 def list_plants(
     location_id: Optional[int] = Query(None, description="Filter by location"),
     status: Optional[str] = Query(None, description="Filter by status (Growing, Harvested, Dead, Planned, Culled)"),
     species_type: Optional[str] = Query(None, description="Filter by type (Pepper, Tomato, etc.)"),
+    season_year: Optional[int] = Query(None, description="Filter by season year (explicit season_year, else earliest planting season, else date_planted year)"),
     session: Session = Depends(get_session)
 ) -> List[Plant]:
     query = session.query(Plant)
@@ -57,7 +86,10 @@ def list_plants(
         query = query.filter(Plant.status == status)
     if species_type:
         query = query.filter(Plant.species_type == species_type)
-    return query.all()
+    plants = query.all()
+    if season_year is not None:
+        plants = [p for p in plants if effective_season_year(session, p) == season_year]
+    return plants
 
 
 @router.post("/", response_model=Plant, status_code=201)
