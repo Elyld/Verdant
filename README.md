@@ -288,7 +288,11 @@ Also available as the `frost_gamble` chat tool.
 ### 📕 Season yearbook — the keepsake PDF
 The Review page's **📕 Yearbook** button downloads a keepsake PDF of the
 season: year stats, per-variety tables, and photo pages. Print it, shelve it
-next to the seed catalogs.
+next to the seed catalogs. The season story is grounded in the journal: it
+summarises your actual observations, pest log, plant notes, and harvests,
+and never invents a pest, a weather event, or a cause of death. Harvest
+weights show "no weights recorded" where a harvest was logged without a
+weight — a missing weight is never printed as 0 oz.
 
 ![Yearbook button on the Review page](docs/screenshots/review-yearbook.png)
 
