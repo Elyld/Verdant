@@ -99,7 +99,11 @@ def yearbook_photos(session: Session, year: int, n: int = MAX_YEARBOOK_PHOTOS) -
             if path:
                 candidates.append({"file_path": img.file_path, "date": None, "path": path})
         for img in session.exec(
-            select(AlbumImage).where(AlbumImage.taken_at.like(f"{prefix}%"))
+            select(AlbumImage).where(
+                AlbumImage.taken_at.like(f"{prefix}%"),
+                # AI-generated images are not garden records.
+                AlbumImage.is_generated.is_(False),
+            )
         ).all():
             path = recap_mod._real_path(img.file_path)
             if path:
