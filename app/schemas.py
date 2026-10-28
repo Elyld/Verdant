@@ -325,6 +325,7 @@ class AlbumImageRead(BaseModel):
     source_url: str
     imported_at: datetime
     taken_at: Optional[datetime] = None
+    is_generated: bool = False
     camera_make: str = ""
     camera_model: str = ""
     latitude: Optional[float] = None
@@ -363,6 +364,17 @@ class AlbumRead(BaseModel):
     images: List[AlbumImageRead] = []
 
     _null_str = field_validator("source_url", mode="before")(_none_to_str)
+
+
+class AlbumPatchRequest(BaseModel):
+    """Partial album update: rename, or (re)point at an Immich source.
+
+    Only fields explicitly present change. ``source_url`` "" clears it;
+    a non-empty value must look like ``immich:<album-id>``.
+    """
+
+    name: Optional[str] = None
+    source_url: Optional[str] = None
 
 
 class AlbumMetadataSyncResult(BaseModel):
