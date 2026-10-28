@@ -206,7 +206,11 @@ the Match triage queue and the yearbook. Plants gain a `season_year`
 field (set it via PATCH) and the plant list takes `?season_year=`, which
 matches the explicit value, else the earliest planting season, else the
 `date_planted` year — so a reconstructed season (say 2025) separates from
-the live roster.
+the live roster. 2.65.1 hardens the generated flag for upgraded
+databases: startup backfills any NULL flags to 0, and the API coerces a
+NULL flag to false instead of rejecting the response — v2.65.0 500'd
+every album endpoint on databases upgraded from before the flag existed,
+because `ALTER TABLE ADD COLUMN` leaves existing rows NULL.
 
 There's also a dedicated full-screen slideshow page — pick an album, pick an
 interval, and let the garden scroll by on a TV or tablet.

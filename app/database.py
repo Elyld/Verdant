@@ -41,7 +41,11 @@ def init_db() -> None:
 # from an older release would 500 on the new fields. Instead of a
 # hand-maintained list (which inevitably misses some), we sync automatically:
 # for every mapped table, ADD COLUMN for each model column absent on disk.
-# All Verdant columns are nullable, so ADD COLUMN is always safe (SQLite).
+# ADD COLUMN is schema-safe (SQLite) but it leaves existing rows NULL — so
+# a response model over a new column must ALSO tolerate NULL (see
+# _none_to_bool in schemas.py), and columns whose NULL would be wrong get a
+# backfill below. v2.65.0 skipped both for is_generated and 500'd every
+# album endpoint on upgrade; do not repeat that.
 
 
 def _apply_column_migrations(target_engine=None) -> None:
@@ -79,6 +83,7 @@ def _apply_column_migrations(target_engine=None) -> None:
                     )
     _relax_not_null_constraints(target_engine, present)
     _backfill_packet_vendor_names(target_engine)
+    _backfill_is_generated_flag(target_engine)
 
 
 def _backfill_packet_vendor_names(target_engine) -> None:
@@ -103,6 +108,35 @@ def _backfill_packet_vendor_names(target_engine) -> None:
             "UPDATE seed_packets SET vendor_name = "
             "(SELECT source FROM seed_sources WHERE seed_sources.id = seed_packets.vendor_id) "
             "WHERE (vendor_name IS NULL OR vendor_name = '') AND vendor_id IS NOT NULL"
+        )
+        conn.commit()
+
+
+def _backfill_is_generated_flag(target_engine) -> None:
+    """Backfill NULL is_generated rows to 0 (not AI-generated).
+
+    ALTER TABLE ADD COLUMN leaves existing rows NULL, and the v2.65.0
+    album response model rejected NULL as a non-boolean — every album
+    endpoint 500'd on upgrade until the live rows were backfilled by hand.
+    The response model now coerces NULL to False as well; this keeps the
+    data itself clean so the flag is never NULL on disk. Idempotent: only
+    NULL rows are touched, so it is safe to run on every startup."""
+    with target_engine.connect() as conn:
+        tables = {
+            row[0]
+            for row in conn.exec_driver_sql(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+        if "album_images" not in tables:
+            return
+        cols = {
+            row[1] for row in conn.exec_driver_sql('PRAGMA table_info("album_images")').fetchall()
+        }
+        if "is_generated" not in cols:
+            return
+        conn.exec_driver_sql(
+            "UPDATE album_images SET is_generated = 0 WHERE is_generated IS NULL"
         )
         conn.commit()
 
