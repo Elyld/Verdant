@@ -16,7 +16,7 @@ from sqlmodel import Session, select
 from app import llm as llm_mod
 from app import season_recap as recap_mod
 from app.database import UPLOAD_DIR
-from app.models import AlbumImage, ObservationImage, ObservationLog
+from app.models import AlbumImage, Harvest, ObservationImage, ObservationLog, PestLog, Plant
 from app.routers.stats import season_scorecard
 
 # Verdant palette
@@ -46,12 +46,33 @@ def build_yearbook_stats(session: Session, year: int | None = None) -> dict:
                     "direct_cost": row.get("direct_cost", 0.0),
                 }
             )
+        # A null harvest weight means "never weighed", not "0 oz" — the
+        # scorecard sums those as 0.0, so recover the distinction here
+        # from the harvest rows themselves.
+        try:
+            plants_by_id = {p.id: p for p in session.exec(select(Plant)).all()}
+            weighed_varieties = set()
+            for h in session.exec(
+                select(Harvest).where(Harvest.date.like(f"{year}-%"))
+            ).all():
+                if h.weight is not None:
+                    plant = plants_by_id.get(h.plant_id)
+                    weighed_varieties.add(
+                        plant.variety_name if plant else f"Plant {h.plant_id}"
+                    )
+            for v in varieties:
+                v["has_weight"] = v["variety"] in weighed_varieties
+        except Exception:
+            for v in varieties:
+                v["has_weight"] = v["total_oz"] > 0
         return {
             "year": year,
             "varieties": varieties,
             "total_spent": scorecard.get("total_spent", 0.0),
             "unassigned_spent": scorecard.get("unassigned_spent", 0.0),
             "total_oz": scorecard.get("total_oz", 0.0),
+            "total_qty": sum(v.get("total_qty", 0) for v in varieties),
+            "has_weight_any": any(v.get("has_weight") for v in varieties),
             "scorecard": scorecard,
             "has_data": bool(varieties or scorecard.get("total_spent", 0)),
         }
@@ -109,30 +130,160 @@ def yearbook_photos(session: Session, year: int, n: int = MAX_YEARBOOK_PHOTOS) -
         return []
 
 
+MAX_CONTEXT_OBSERVATIONS = 80
+MAX_CONTEXT_PLANTS = 100
+
+
+def _weight_cell(variety: dict) -> str:
+    """One variety's Weight cell: never render a missing weight as 0 oz."""
+    if not variety.get("harvest_events"):
+        return "—"
+    if variety.get("has_weight"):
+        return f"{variety.get('total_oz', 0)} oz"
+    return "no weights recorded"
+
+
+def _summary_line(stats: dict) -> str:
+    """Title-page summary: counts only varieties with harvest entries,
+    and never prints a 0 oz total for unweighed harvests."""
+    varieties = stats.get("varieties", [])
+    with_harvests = [v for v in varieties if v.get("harvest_events")]
+    total_events = sum(v.get("harvest_events", 0) for v in varieties)
+    if not total_events:
+        weight_text = "no harvests logged"
+    elif stats.get("has_weight_any"):
+        weight_text = f"{stats.get('total_oz', 0):.1f} oz harvested"
+    else:
+        weight_text = "no weights recorded"
+    total_qty = stats.get(
+        "total_qty", sum(v.get("total_qty", 0) for v in varieties)
+    )
+    return (
+        f"{len(with_harvests)} varieties with harvest entries · "
+        f"{total_qty} items picked · {weight_text} · "
+        f"${stats.get('total_spent', 0):.2f} spent"
+    )
+
+
+def build_story_context(session: Session, year: int, stats: dict) -> str:
+    """Structured season records for the story prompt. Never raises —
+    returns "" when the records can't be gathered."""
+    try:
+        prefix = f"{year}-"
+        plants = session.exec(select(Plant)).all()
+        by_id = {p.id: p for p in plants}
+        sections: list[str] = []
+
+        # Plant status + notes carry the only honest death causes.
+        plant_lines = []
+        for p in plants[:MAX_CONTEXT_PLANTS]:
+            note = (p.notes or "").strip()
+            plant_lines.append(
+                f"- {p.variety_name} ({p.status})" + (f": {note}" if note else "")
+            )
+        if plant_lines:
+            sections.append("Plants:\n" + "\n".join(plant_lines))
+            if len(plants) > MAX_CONTEXT_PLANTS:
+                sections.append(
+                    f"(+{len(plants) - MAX_CONTEXT_PLANTS} more plants not listed)"
+                )
+
+        obs = session.exec(
+            select(ObservationLog).where(ObservationLog.date.like(f"{prefix}%"))
+        ).all()
+        obs.sort(key=lambda o: (o.date or "", o.id or 0))
+        obs_lines = []
+        for o in obs[:MAX_CONTEXT_OBSERVATIONS]:
+            if o.plant_id in by_id:
+                who = by_id[o.plant_id].variety_name
+            else:
+                who = o.plant_name or "unknown plant"
+            bits = [o.date, who]
+            if (o.notes or "").strip():
+                bits.append(o.notes.strip())
+            if (o.pest_sightings or "").strip():
+                bits.append(f"pests seen: {o.pest_sightings.strip()}")
+            if (o.weather_summary or "").strip():
+                bits.append(f"weather: {o.weather_summary.strip()}")
+            obs_lines.append("- " + " — ".join(bits))
+        if obs_lines:
+            sections.append("Observations:\n" + "\n".join(obs_lines))
+            if len(obs) > MAX_CONTEXT_OBSERVATIONS:
+                sections.append(
+                    f"(+{len(obs) - MAX_CONTEXT_OBSERVATIONS} more observations not listed)"
+                )
+
+        pests = session.exec(
+            select(PestLog).where(PestLog.date.like(f"{prefix}%"))
+        ).all()
+        pests.sort(key=lambda p: (p.date or "", p.id or 0))
+        pest_lines = []
+        for p in pests:
+            if p.plant_id in by_id:
+                who = by_id[p.plant_id].variety_name
+            elif p.plant_id:
+                who = f"plant {p.plant_id}"
+            else:
+                who = "garden-wide"
+            line = f"- {p.date} {p.pest_name} on {who}"
+            if (p.treatment or "").strip():
+                line += f" (treated: {p.treatment.strip()})"
+            pest_lines.append(line)
+        if pest_lines:
+            sections.append("Pest log:\n" + "\n".join(pest_lines))
+
+        harvest_lines = []
+        for v in stats.get("varieties", []):
+            if not v.get("harvest_events"):
+                continue
+            if v.get("has_weight"):
+                harvest_lines.append(
+                    f"- {v['variety']}: {v['harvest_events']} harvests, "
+                    f"{v['total_qty']} items picked, {v['total_oz']} oz weighed"
+                )
+            else:
+                harvest_lines.append(
+                    f"- {v['variety']}: {v['harvest_events']} harvests, "
+                    f"{v['total_qty']} items picked, no weights recorded"
+                )
+        if harvest_lines:
+            sections.append("Harvests:\n" + "\n".join(harvest_lines))
+        sections.append(
+            f"Spending: ${stats.get('total_spent', 0):.2f} total, "
+            f"${stats.get('unassigned_spent', 0):.2f} unassigned to any plant."
+        )
+        return "\n\n".join(sections)
+    except Exception:
+        return ""
+
+
 def write_story(session: Session, stats: dict) -> Optional[str]:
     """Ask the configured LLM for a warm 3-5 paragraph season story.
 
-    Returns the story text, or None on any failure (AI off, call failed,
-    empty answer). Never raises."""
+    The prompt is built from the season's actual records — plants (with
+    their status and notes), observations, pest log, harvests, spending —
+    plus an explicit grounding rule, so the story summarises the journal
+    instead of inventing pests, weather, or causes of death. Returns the
+    story text, or None on any failure (AI off, call failed, empty
+    answer). Never raises."""
     try:
         year = stats.get("year", Date.today().year)
-        varieties = stats.get("varieties", [])
-        if varieties:
-            lines = ", ".join(
-                f"{v['variety']} ({v['total_oz']} oz over {v['harvest_events']} harvests)"
-                for v in varieties[:12]
-            )
-            harvest_note = f"Harvests this year: {lines}."
-        else:
-            harvest_note = "No harvests were logged this year — a quiet year in the garden."
+        context = build_story_context(session, year, stats) or (
+            "No season records were available."
+        )
         prompt = (
             f"You are Verdant, the warm gardening-neighbor assistant inside a gardener's "
             f"personal garden journal. Write the story of their {year} garden season as "
-            f"3-5 short, warm paragraphs — a yearbook entry. Facts: {harvest_note} "
-            f"Total garden spending: ${stats.get('total_spent', 0):.2f}. "
-            f"Total harvest weight: {stats.get('total_oz', 0):.1f} oz. "
-            f"Celebrate what grew, be honest and kind about what didn't, and end with "
-            f"encouragement for next season. Plain paragraphs, no markdown tables."
+            f"3-5 short, warm paragraphs — a yearbook entry.\n\n"
+            f"Season records:\n{context}\n\n"
+            f"Grounding rules — these outrank warmth: state only what the records above "
+            f"support. Where a value is absent (for example, a harvest with no recorded "
+            f"weight), say so plainly — never present a missing value as zero. Never "
+            f"invent a pest, a weather event, or a cause of death. A plant's cause of "
+            f"death comes only from that plant's own notes; if the notes are empty, say "
+            f"the cause is unknown. Celebrate what grew, be honest and kind about what "
+            f"didn't, and end with encouragement for next season. Plain paragraphs, no "
+            f"markdown tables."
         )
         text = llm_mod.chat(session, [{"role": "user", "content": prompt}], timeout=120)
         text = (text or "").strip()
@@ -212,11 +363,7 @@ def render_pdf(stats: dict, story: Optional[str], photos: list[dict]) -> bytes:
     story_flow.append(Paragraph(f"The {year} Garden Yearbook", title_style))
     story_flow.append(Paragraph("Verdant Garden Journal", sub_style))
     varieties = stats.get("varieties", [])
-    summary_line = (
-        f"{len(varieties)} varieties · {stats.get('total_oz', 0):.1f} oz harvested · "
-        f"${stats.get('total_spent', 0):.2f} spent"
-    )
-    story_flow.append(Paragraph(summary_line, sub_style))
+    story_flow.append(Paragraph(_summary_line(stats), sub_style))
     story_flow.append(PageBreak())
 
     # ---- Stats ----
@@ -225,6 +372,7 @@ def render_pdf(stats: dict, story: Optional[str], photos: list[dict]) -> bytes:
         data = [
             [Paragraph("<b>Variety</b>", cell_b),
              Paragraph("<b>Harvests</b>", cell_b),
+             Paragraph("<b>Picked</b>", cell_b),
              Paragraph("<b>Weight</b>", cell_b),
              Paragraph("<b>Cost</b>", cell_b)]
         ]
@@ -232,16 +380,25 @@ def render_pdf(stats: dict, story: Optional[str], photos: list[dict]) -> bytes:
             data.append([
                 Paragraph(v["variety"], cell),
                 Paragraph(str(v["harvest_events"]), cell),
-                Paragraph(f"{v['total_oz']} oz", cell),
+                Paragraph(str(v.get("total_qty", 0)), cell),
+                Paragraph(_weight_cell(v), cell),
                 Paragraph(f"${v['direct_cost']:.2f}", cell),
             ])
+        total_events = sum(v.get("harvest_events", 0) for v in varieties)
+        if not total_events:
+            total_weight = "—"
+        elif stats.get("has_weight_any"):
+            total_weight = f"{stats.get('total_oz', 0):.1f} oz"
+        else:
+            total_weight = "no weights recorded"
         data.append([
             Paragraph("<b>Total</b>", cell),
             Paragraph("", cell),
-            Paragraph(f"<b>{stats.get('total_oz', 0):.1f} oz</b>", cell),
+            Paragraph(f"<b>{stats.get('total_qty', sum(v.get('total_qty', 0) for v in varieties))}</b>", cell),
+            Paragraph(f"<b>{total_weight}</b>", cell),
             Paragraph(f"<b>${stats.get('total_spent', 0):.2f}</b>", cell),
         ])
-        tbl = Table(data, colWidths=[3.0 * inch, 1.2 * inch, 1.4 * inch, 1.4 * inch])
+        tbl = Table(data, colWidths=[2.2 * inch, 0.9 * inch, 0.9 * inch, 1.3 * inch, 1.2 * inch])
         tbl.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), navy),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
@@ -253,9 +410,16 @@ def render_pdf(stats: dict, story: Optional[str], photos: list[dict]) -> bytes:
             ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
         ]))
         story_flow.append(tbl)
-        story_flow.append(Paragraph(
+        footnote = (
             "Weight in ounces · costs include per-variety expenses; "
-            f"unassigned spending: ${stats.get('unassigned_spent', 0):.2f}.", body))
+            f"unassigned spending: ${stats.get('unassigned_spent', 0):.2f}."
+        )
+        if any(v.get("harvest_events") and not v.get("has_weight") for v in varieties):
+            footnote += (
+                " 'No weights recorded' means the harvest was logged without a "
+                "weight, not that nothing was picked."
+            )
+        story_flow.append(Paragraph(footnote, body))
     else:
         story_flow.append(Paragraph(
             "A quiet year. No harvests or costs were logged for this season — "
