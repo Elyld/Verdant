@@ -13,6 +13,16 @@ def _none_to_str(value):
     return "" if value is None else value
 
 
+def _none_to_bool(value):
+    """Coerce NULLs from old databases to False so reads never 500.
+
+    The bool equivalent of _none_to_str: a column added by ALTER TABLE
+    leaves existing rows NULL, and a non-Optional bool field rejects None
+    (v2.65.0 shipped exactly this for is_generated and 500'd every album
+    endpoint on upgrade)."""
+    return False if value is None else value
+
+
 def _none_to_false(value):
     """Coerce NULLs from old databases (pre-column rows) to False."""
     return False if value is None else bool(value)
@@ -344,6 +354,7 @@ class AlbumImageRead(BaseModel):
     _null_str = field_validator(
         "source_url", "camera_make", "camera_model", "tags", "notes", mode="before"
     )(_none_to_str)
+    _null_bool = field_validator("is_generated", mode="before")(_none_to_bool)
 
 
 class AlbumImageRef(BaseModel):

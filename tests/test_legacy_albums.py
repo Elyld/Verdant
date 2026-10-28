@@ -403,3 +403,104 @@ def test_migration_adds_season_and_generated_columns(tmp_path):
         con.close()
     assert "season_year" in plant_cols
     assert "is_generated" in image_cols
+
+
+# --------------------------------------------------------------------------- #
+# 2.65.1: the is_generated NULL regression (v2.65.0 shipped it)
+#
+# ALTER TABLE ADD COLUMN leaves existing rows NULL, and the v2.65.0
+# AlbumImageRead required a bool — so every album endpoint 500'd on a real
+# upgraded database. Sandbox tests never caught it: fresh tables get the
+# model default, only an upgraded DB has NULLs. These tests reproduce the
+# live failure mode (NULL rows on disk) and the backfill that heals it.
+# --------------------------------------------------------------------------- #
+def test_album_image_read_coerces_null_generated():
+    from types import SimpleNamespace
+
+    from app.schemas import AlbumImageRead
+
+    img = AlbumImageRead.model_validate(
+        SimpleNamespace(
+            id=1, file_path="/x.jpg", title="t", original_name="o",
+            source_url=None, imported_at="2026-09-25T00:00:00",
+            taken_at=None, is_generated=None, camera_make=None,
+            camera_model=None, latitude=None, longitude=None, tags=None,
+            plant_id=None,
+        )
+    )
+    assert img.is_generated is False
+
+
+def test_albums_endpoint_survives_null_generated(client):
+    with Session(engine) as s:
+        album_id = _make_album(s, "LegacyNullGen", "")
+        img_id = _make_image(s, album_id, fname="n.jpg",
+                             original_name="null.jpg")
+    # Reproduce the upgraded live DB: the column exists, the row is NULL.
+    # On a fresh create_all database the column is NOT NULL, but ALTER
+    # TABLE ADD COLUMN on an upgraded DB leaves it nullable — drop and
+    # re-add it nullable first, exactly the shape the live DB was in.
+    with engine.connect() as conn:
+        conn.exec_driver_sql("ALTER TABLE album_images DROP COLUMN is_generated")
+        conn.exec_driver_sql("ALTER TABLE album_images ADD COLUMN is_generated BOOLEAN")
+        conn.exec_driver_sql(
+            "UPDATE album_images SET is_generated = NULL WHERE id = %d" % img_id
+        )
+        conn.commit()
+
+    resp = client.get(f"/api/albums/{album_id}")
+    assert resp.status_code == 200, resp.text
+    images = resp.json()["images"]
+    assert len(images) == 1
+    assert images[0]["is_generated"] is False
+
+    resp = client.get("/api/albums")
+    assert resp.status_code == 200, resp.text
+
+
+def test_migration_backfills_null_generated(tmp_path):
+    """Old DBs gain the column AND a 0 for existing rows, in one startup."""
+    from sqlmodel import create_engine
+
+    from app.database import _apply_column_migrations
+
+    # Path 1: pre-2.65.0 table without the column at all.
+    db = str(tmp_path / "old.db")
+    con = sqlite3.connect(db)
+    con.execute(
+        "CREATE TABLE album_images (id INTEGER PRIMARY KEY, album_id INTEGER,"
+        " file_path TEXT)"
+    )
+    con.execute("INSERT INTO album_images (id, album_id, file_path) VALUES (1, 1, '/x.jpg')")
+    con.commit()
+    con.close()
+    _apply_column_migrations(create_engine(f"sqlite:///{db}"))
+    con = sqlite3.connect(db)
+    try:
+        cols = {r[1] for r in con.execute("PRAGMA table_info(album_images)")}
+        val = con.execute("SELECT is_generated FROM album_images WHERE id = 1").fetchone()[0]
+    finally:
+        con.close()
+    assert "is_generated" in cols
+    assert val == 0
+
+    # Path 2: column present but NULL (the exact v2.65.0-upgrade state).
+    db2 = str(tmp_path / "nulled.db")
+    con = sqlite3.connect(db2)
+    con.execute(
+        "CREATE TABLE album_images (id INTEGER PRIMARY KEY, album_id INTEGER,"
+        " file_path TEXT, is_generated INTEGER)"
+    )
+    con.execute(
+        "INSERT INTO album_images (id, album_id, file_path, is_generated)"
+        " VALUES (1, 1, '/x.jpg', NULL)"
+    )
+    con.commit()
+    con.close()
+    _apply_column_migrations(create_engine(f"sqlite:///{db2}"))
+    con = sqlite3.connect(db2)
+    try:
+        val = con.execute("SELECT is_generated FROM album_images WHERE id = 1").fetchone()[0]
+    finally:
+        con.close()
+    assert val == 0
